@@ -1,4 +1,5 @@
 from tom_nonlocalizedevents.alertstream_handlers.igwn_event_handler import handle_igwn_message
+from tom_nonlocalizedevents.alertstream_handlers.gcn_event_handler import handle_message
 from django.contrib.auth.models import Group
 from django.conf import settings
 from twilio.rest import Client
@@ -216,3 +217,11 @@ def handle_message_and_send_alerts(message, metadata):
                 skymap = Table.read(BytesIO(skymap_bytes))
                 calculate_credible_region(skymap, localization)
                 calculate_footprint_probabilities(skymap, localization)
+
+
+    
+
+   
+  
+ 
+

@@ -348,7 +348,7 @@ REST_FRAMEWORK = {
 
 ALERT_STREAMS = [
     {
-        'ACTIVE': True,
+        'ACTIVE': False,
         'NAME': 'tom_alertstreams.alertstreams.hopskotch.HopskotchAlertStream',
         'OPTIONS': {
             'URL': 'kafka://kafka.scimma.org/',
@@ -357,12 +357,13 @@ ALERT_STREAMS = [
             'USERNAME': os.getenv('SCIMMA_AUTH_USERNAME', SCIMMA_AUTH_USERNAME),
             'PASSWORD': os.getenv('SCIMMA_AUTH_PASSWORD', SCIMMA_AUTH_PASSWORD),
             'TOPIC_HANDLERS': {
-                'igwn.gwalert': 'custom_code.alertstream_handlers.handle_message_and_send_alerts'
+                'igwn.gwalert': 'custom_code.alertstream_handlers.handle_message_and_send_alerts',
+		#'fermi.grbalert':'custon_code.alertstream_handlers_Fermi.handle_message_fermi'
             },
         },
     },
     {
-        'ACTIVE': False,
+        'ACTIVE': True,
         'NAME': 'tom_alertstreams.alertstreams.gcn.GCNClassicAlertStream',
         # The keys of the OPTIONS dictionary become (lower-case) properties of the AlertStream instance.
         'OPTIONS': {
@@ -376,9 +377,12 @@ ALERT_STREAMS = [
                 # 'enable.auto.commit': False
             },
             'TOPIC_HANDLERS': {
-                'gcn.classic.text.LVC_PRELIMINARY': 'tom_nonlocalizedevents.alertstream_handlers.gcn_event_handler.handle_message',
-                'gcn.classic.text.LVC_INITIAL': 'tom_nonlocalizedevents.alertstream_handlers.gcn_event_handler.handle_message',
-                'gcn.classic.text.LVC_RETRACTION': 'tom_nonlocalizedevents.alertstream_handlers.gcn_event_handler.handle_retraction',
+	        'gcn.classic.text.FERMI_GBM_ALERT':'custom_code.alertstream_handlers_Fermi.handle_message_Fermi',
+	        'gcn.classic.text.FERMI_GBM_FLT_POS':'custom_code.alertstream_handlers_Fermi.handle_message_Fermi',
+                'gcn.classic.text.FERMI_GBM_GND_POS':'custom_code.alertstream_handlers_Fermi.handle_message_Fermi'
+             #   'gcn.classic.text.LVC_PRELIMINARY': 'tom_nonlocalizedevents.alertstream_handlers.gcn_event_handler.handle_message',
+             #   'gcn.classic.text.LVC_INITIAL': 'tom_nonlocalizedevents.alertstream_handlers.gcn_event_handler.handle_message',
+             #   'gcn.classic.text.LVC_RETRACTION': 'tom_nonlocalizedevents.alertstream_handlers.gcn_event_handler.handle_retraction',
             },
         },
     }

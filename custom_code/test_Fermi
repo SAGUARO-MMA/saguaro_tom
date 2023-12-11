@@ -1,0 +1,36 @@
+//////////////////////////////////////////////////////////////////////
+TITLE:           GCN/FERMI NOTICE
+NOTICE_DATE:     Wed 29 Nov 23 19:11:06 UT
+NOTICE_TYPE:     Fermi-GBM Ground Position
+RECORD_NUM:      58
+TRIGGER_NUM:     722977823
+GRB_RA:            2.460d {+00h 09m 50s} (J2000),
+                   2.723d {+00h 10m 53s} (current),
+                   1.898d {+00h 07m 36s} (1950)
+GRB_DEC:         -82.190d {-82d 11' 23"} (J2000),
+                 -82.057d {-82d 03' 24"} (current),
+                 -82.468d {-82d 28' 05"} (1950)
+GRB_ERROR:       1.00 [deg radius, statistical only]
+DATA_SIGNIF:     610.20 [sigma]
+DATA_INTERVAL:   2.048 [sec]
+GRB_DATE:        20277 TJD;   333 DOY;   23/11/29
+GRB_TIME:        69018.11 SOD {19:10:18.11} UT
+GRB_PHI:         278.00 [deg]
+GRB_THETA:        49.00 [deg]
+E_RANGE:         44.032 - 279.965 [keV]
+LOC_ALGORITHM:   4173 (Gnd S/W Version number)
+SUN_POSTN:       245.49d {+16h 21m 58s}  -21.52d {-21d 31' 29"}
+SUN_DIST:         72.27 [deg]   Sun_angle= -7.8 [hr] (East of Sun)
+MOON_POSTN:       97.45d {+06h 29m 48s}  +28.18d {+28d 10' 50"}
+MOON_DIST:       118.54 [deg]
+MOON_ILLUM:      94 [%]
+GAL_COORDS:      304.64,-34.80 [deg] galactic lon,lat of the burst (or transient)
+ECL_COORDS:      289.25,-65.68 [deg] ecliptic lon,lat of the burst (or transient)
+LC_URL:          http://heasarc.gsfc.nasa.gov/FTP/fermi/data/gbm/triggers/2023/bn231129799/quicklook/glg_lc_medres34_bn231129799.gif
+POS_MAP_URL:     http://gcn.gsfc.nasa.gov/notices_f/gbm_gnd_loc_map_722977823.fits
+COMMENTS:        Fermi-GBM Ground-calculated Coordinates.  
+COMMENTS:        In the LAT Field-of-view.  
+COMMENTS:        Bright hard burst in the GBM.  
+COMMENTS:        This Notice was ground-generated -- not flight-generated.  
+COMMENTS:        The LC_URL file will not be created/available until ~15 min after the trigger.  
+COMMENTS:        The POS_MAP_URL file will not be created/available until ~1.5 min after the notice.  
