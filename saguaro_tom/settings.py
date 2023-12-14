@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     'custom_code',
     'tom_surveys',
     'tom_treasuremap',
+    'tom_tns',
     'phonenumber_field',
 ]
 
@@ -275,6 +276,8 @@ BROKERS = {
         'api_key': TNS_API_KEY,
         'bot_id': '60911',
         'bot_name': 'SAGUARO_Bot1',
+        'tns_base_url': 'https://www.wis-tns.org/api',
+        'group_name': 'SAGUARO',
     }
 }
 
