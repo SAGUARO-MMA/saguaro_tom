@@ -1,7 +1,7 @@
 from django.urls import path
 
 from tom_targets.views import TargetGroupingView, TargetGroupingDeleteView
-from .views import TargetGroupingCreateView, CandidateListView, TargetReportView, TargetClassifyView, TargetVettingView
+from .views import TargetGroupingCreateView, CandidateListView, TargetVettingView
 from .views import ObservationCreateView, TargetNameSearchView, TargetListView, TargetATLASForcedPhot
 from .views import CSSFieldListView, NonLocalizedEventListView
 from .views import CSSFieldExportView, CSSFieldSubmitView, EventCandidateCreateView, ProfileUpdateView
@@ -17,8 +17,6 @@ urlpatterns = [
     path('targetgrouping/create/', TargetGroupingCreateView.as_view(), name='create-group'),
     path('targetgrouping/<int:pk>/delete/', TargetGroupingDeleteView.as_view(), name='delete-group'),
     path('candidates/', CandidateListView.as_view(), name='candidates'),
-    path('targets/<int:pk>/report/', TargetReportView.as_view(), name='report'),
-    path('targets/<int:pk>/classify/', TargetClassifyView.as_view(), name='classify'),
     path('targets/<int:pk>/vet/', TargetVettingView.as_view(), name='vet'),
     path('targets/<int:pk>/runatlasfp/', TargetATLASForcedPhot.as_view(), name='runatlasfp'),
     path('targets/search/', TargetNameSearchView.as_view(), name='search'),
