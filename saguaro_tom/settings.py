@@ -377,9 +377,10 @@ ALERT_STREAMS = [
                 # 'enable.auto.commit': False
             },
             'TOPIC_HANDLERS': {
-	        'gcn.classic.text.FERMI_GBM_ALERT':'custom_code.alertstream_handlers_Fermi.handle_message_Fermi',
-	        'gcn.classic.text.FERMI_GBM_FLT_POS':'custom_code.alertstream_handlers_Fermi.handle_message_Fermi',
-                'gcn.classic.text.FERMI_GBM_GND_POS':'custom_code.alertstream_handlers_Fermi.handle_message_Fermi'
+#	        'gcn.classic.text.FERMI_GBM_ALERT':'custom_code.alertstream_handlers_Fermi.handle_message_Fermi',
+	        #'gcn.classic.text.FERMI_GBM_FLT_POS':'custom_code.alertstream_handlers_Fermi.handle_message_Fermi',
+            'gcn.classic.text.FERMI_GBM_GND_POS':'custom_code.alertstream_handlers_Fermi.handle_message_Fermi',
+	        'gcn.classic.text.SWIFT_XRT_POSITION':'custom_code.alertstream_handlers_Swift.handle_message_Swift'
              #   'gcn.classic.text.LVC_PRELIMINARY': 'tom_nonlocalizedevents.alertstream_handlers.gcn_event_handler.handle_message',
              #   'gcn.classic.text.LVC_INITIAL': 'tom_nonlocalizedevents.alertstream_handlers.gcn_event_handler.handle_message',
              #   'gcn.classic.text.LVC_RETRACTION': 'tom_nonlocalizedevents.alertstream_handlers.gcn_event_handler.handle_retraction',

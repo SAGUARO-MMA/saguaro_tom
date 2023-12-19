@@ -6,6 +6,7 @@ import os
 import traceback
 import requests
 from django.conf import settings
+import time
 
 from tom_nonlocalizedevents.alertstream_handlers.gcn_event_handler import handle_message
 from tom_nonlocalizedevents.models import NonLocalizedEvent, EventSequence
@@ -84,22 +85,27 @@ def handle_message_Fermi(message):
         if nle_created:
             logger.info(f"Ingested a new Fermi GRB event with id {fields['trigger_num']} from alertstream")
         # Next attempt to ingest and build the localization of the event
+       
         skymap_url = get_moc_url_from_skymap_fits_url(fields['pos_map_url'])
-        try:
-            skymap_resp = requests.get(skymap_url)
-            skymap_resp.raise_for_status()
-            localization = create_localization_for_skymap(
-                nonlocalizedevent=nonlocalizedevent,
-                skymap_bytes=skymap_resp.content,
-                skymap_url=skymap_url
-            )
-        except Exception as e:
-            localization = None
-            logger.error(
-                f"Failed to retrieve and process localization from skymap file at {skymap_url}. Exception: {e}"
-            )
-            logger.error(traceback.format_exc())
-
+        counter =0
+        while counter<5:
+            try:
+                skymap_resp = requests.get(skymap_url)
+                skymap_resp.raise_for_status()
+                localization = create_localization_for_skymap(
+                    nonlocalizedevent=nonlocalizedevent,
+                    skymap_bytes=skymap_resp.content,
+                    skymap_url=skymap_url
+                )
+                break
+            except Exception as e:
+                localization = None
+                logger.error(
+                    f"Failed to retrieve and process localization from skymap file at {skymap_url}. Exception: {e}"
+                )
+                logger.error(traceback.format_exc())
+                time.sleep(30)
+                counter +=1
         # Now ingest the sequence for that event
         sequence_number = 1 # get_sequence_number(alert['superevent_id'])
         event_sequence, es_created = EventSequence.objects.update_or_create(
