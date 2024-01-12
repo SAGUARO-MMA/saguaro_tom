@@ -6,5 +6,5 @@ class CustomCodeConfig(AppConfig):
     name = 'custom_code'
     integration_points = {'target_detail_button': {'namespace': 'custom_code:vet',
                                                    'title': 'Run kilonova candidate vetting',
-                                                   'class': "btn btn-info",
+                                                   'class': "btn btn-pink",
                                                    'text': 'Vet'}}
