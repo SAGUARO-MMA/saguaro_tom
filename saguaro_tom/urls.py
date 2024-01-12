@@ -21,4 +21,5 @@ urlpatterns = [
     path('treasuremap/', include('tom_treasuremap.urls', namespace='treasuremap')),
     path('', include('tom_common.urls')),
     path('nonlocalizedevents/', include('tom_nonlocalizedevents.urls', namespace='nonlocalizedevents')),
+    path('tns/', include('tom_tns.urls', namespace='tns')),
 ]
