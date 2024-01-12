@@ -236,6 +236,10 @@ FACILITIES = {
             'MMIRS': MMT_MMIRS_PROGRAMS,
         },
     },
+    'SWIFT': {
+        'SWIFT_USERNAME': SWIFT_USERNAME,
+        'SWIFT_SHARED_SECRET': SWIFT_SHARED_SECRET,
+    },
 }
 
 # Define the valid data product types for your TOM. Be careful when removing items, as previously valid types will no
@@ -244,12 +248,14 @@ DATA_PRODUCT_TYPES = {
     'photometry': ('photometry', 'Photometry'),
     'fits_file': ('fits_file', 'FITS File'),
     'spectroscopy': ('spectroscopy', 'Spectroscopy'),
-    'image_file': ('image_file', 'Image File')
+    'image_file': ('image_file', 'Image File'),
+    'MMT': ('MMT', 'MMT File'),
 }
 
 DATA_PROCESSORS = {
     'photometry': 'tom_dataproducts.processors.photometry_processor.PhotometryProcessor',
     'spectroscopy': 'custom_code.processors.spectroscopy_processor.SpectroscopyProcessor',
+    'MMT': 'tom_mmt.mmt.MMTDataProcessor',
 }
 
 TOM_FACILITY_CLASSES = [
@@ -258,6 +264,7 @@ TOM_FACILITY_CLASSES = [
     'tom_observations.facilities.soar.SOARFacility',
     'tom_observations.facilities.lt.LTFacility',
     'custom_code.facilities.CustomMMTFacility',
+    'tom_swift.swift.SwiftFacility',
 ]
 
 TOM_ALERT_CLASSES = [
