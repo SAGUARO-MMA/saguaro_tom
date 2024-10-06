@@ -24,6 +24,7 @@ from .forms import TargetListExtraFormset, TargetReportForm, TargetClassifyForm,
 from .forms import NonLocalizedEventFormHelper, CandidateFormHelper
 from .forms import TNS_FILTER_CHOICES, TNS_INSTRUMENT_CHOICES, TNS_CLASSIFICATION_CHOICES
 from .hooks import target_post_save, update_or_create_target_extra
+from .tasks import target_run_mpc
 
 import json
 import requests
@@ -332,6 +333,35 @@ class TargetVettingView(LoginRequiredMixin, RedirectView):
         if tns_query_status is not None:
             messages.add_message(request,99,tns_query_status)
             
+        return HttpResponseRedirect(self.get_redirect_url())
+
+    def get_redirect_url(self):
+        """
+        Returns redirect URL as specified in the HTTP_REFERER field of the request.
+
+        :returns: referer
+        :rtype: str
+        """
+        referer = self.request.META.get('HTTP_REFERER', '/')
+        return referer
+
+class TargetMPCView(LoginRequiredMixin, RedirectView):
+    """
+    View that runs or reruns the kilonova candidate vetting code and stores the results
+    """
+    def get(self, request, *args, **kwargs):
+        """
+        Method that handles the GET requests for this view. Calls the kilonova vetting code.
+        """
+        messages.info(request, "Checking MPC, this takes about a minute...")
+        dramatiq_msg = target_run_mpc.send(target_pk=kwargs["pk"])
+        messages.warning(
+            request,
+            "REMEMBER to return in ~1 minute to check for an updated classification!"
+        )
+
+        logger.info(dramatiq_msg)
+        
         return HttpResponseRedirect(self.get_redirect_url())
 
     def get_redirect_url(self):
