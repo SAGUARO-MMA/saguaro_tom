@@ -20,7 +20,7 @@ import traceback
 
 logger = logging.getLogger(__name__)
 
-twilio_client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
+#twilio_client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
 
 ALERT_TEXT_INTRO = """{{most_likely_class}} {{seq.event_subtype}} v{{seq.sequence_id}}
 {{nle.event_id}} ({{significance}})
@@ -298,5 +298,63 @@ def handle_einstein_probe_alert(message, metadata):
     slack_alert = f'Received Einstein Probe trigger <{settings.NLE_LINKS[0][0]}|{{nle.event_id}}>'
     json_data = json.dumps({'text': slack_alert.format(nle=nonlocalizedevent)}).encode('ascii')
     requests.post(settings.SLACK_EP_URL, data=json_data, headers={'Content-Type': 'application/json'})
+
+    logger.info(f'Finished processing alert for {nonlocalizedevent.event_id}')
+
+def handle_icecube_alert(message, metadata):
+    alert = message.content[0]
+    logger.warning(f"Handling IceCube alert: {alert}")
+
+    nonlocalizedevent, nle_created = NonLocalizedEvent.objects.get_or_create(
+        #event_id=alert['id'][0],
+        event_id = alert['event_name'][0],
+        event_type=NonLocalizedEvent.NonLocalizedEventType.NEUTRINO,
+    )
+    if nle_created:
+        logger.info(f"Ingested a new neutrino event with id {nonlocalizedevent.event_id} from IceCube alert stream")
+
+    # create the localization from ra, dec, radius
+    try:
+        localization, skymap = create_elliptical_localization(
+            nonlocalizedevent=nonlocalizedevent,
+            center=[alert.get('ra'), alert.get('dec')], radius=alert.get('ra_dec_error'),
+        )
+    except Exception as e:
+        localization = None
+        skymap = None
+        logger.error(f'Could not create EventLocalization for event: {nonlocalizedevent.event_id}. Exception: {e}')
+        logger.error(traceback.format_exc())
+
+    logger.debug(f"Storing IceCube alert: {alert}")
+
+    # Now ingest the sequence for that event
+    details = {key: alert.get(key) for key in
+               ['nu_energy', 'far']}
+    details['time'] = alert.get('trigger_time')  # to match IGWN alerts
+    event_sequence, es_created = EventSequence.objects.update_or_create(
+        nonlocalizedevent=nonlocalizedevent,
+        localization=localization,
+        sequence_id=nonlocalizedevent.sequences.count() + 1,
+        details=details,
+    )
+    if es_created and localization is None:
+        warning_msg = (
+            f'{"Creating" if es_created else "Updating"} EventSequence without EventLocalization:'
+            f'{event_sequence} for NonLocalizedEvent: {nonlocalizedevent}'
+        )
+        logger.warning(warning_msg)
+
+    if CredibleRegionContour.objects.filter(localization=localization).exists():
+        logger.info(f'Localization {localization.id} already exists')
+    else:
+        update_all_credible_region_percents_for_survey_fields(localization)
+        if skymap is not None:
+            skymap['PROBDENSITY'].unit = '1 / sr'
+            calculate_credible_region(skymap, localization)
+            calculate_footprint_probabilities(skymap, localization)
+
+    slack_alert = f'Received IceCube trigger <{settings.NLE_LINKS[0][0]}|{{nle.event_id}}>'
+    json_data = json.dumps({'text': slack_alert.format(nle=nonlocalizedevent)}).encode('ascii')
+    requests.post(settings.SLACK_IC_URL, data=json_data, headers={'Content-Type': 'application/json'})
 
     logger.info(f'Finished processing alert for {nonlocalizedevent.event_id}')

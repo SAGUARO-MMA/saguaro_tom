@@ -247,7 +247,7 @@ FACILITIES = {
         'programs': {
             'Binospec': MMT_BINOSPEC_PROGRAMS,
             'MMIRS': MMT_MMIRS_PROGRAMS,
-            'MMTCam': MMT_MMTCAM_PROGRAMS,
+            'MMTCam': MMT_MMTCam_PROGRAMS,
         },
     },
     'SWIFT': {
@@ -401,8 +401,9 @@ ALERT_STREAMS = [
             'USERNAME': os.getenv('SCIMMA_AUTH_USERNAME', SCIMMA_AUTH_USERNAME),
             'PASSWORD': os.getenv('SCIMMA_AUTH_PASSWORD', SCIMMA_AUTH_PASSWORD),
             'TOPIC_HANDLERS': {
-                'gcn.notices.einstein_probe.wxt.alert': 'custom_code.alertstream_handlers.handle_einstein_probe_alert',
-                'igwn.gwalert': 'custom_code.alertstream_handlers.handle_message_and_send_alerts'
+               # 'gcn.notices.einstein_probe.wxt.alert': 'custom_code.alertstream_handlers.handle_einstein_probe_alert',
+               # 'igwn.gwalert': 'custom_code.alertstream_handlers.handle_message_and_send_alerts',
+                'gcn.classic.voevent.ICECUBE_ASTROTRACK_GOLD':'custom_code.alertstream_handlers.handle_icecube_alert'
             },
         },
     },
