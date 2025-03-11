@@ -27,6 +27,10 @@ class Migration(migrations.Migration):
         ('tom_targets', '0024_basetarget_permissions'),
     ]
 
+    run_before = [
+        ('tom_targets', '0025_auto_20250206_2017'),  # not strictly necessary, but makes that migration much faster
+    ]
+
     operations = [
         migrations.RunPython(make_all_targets_public, lambda *args, **kwargs: None),
     ]
