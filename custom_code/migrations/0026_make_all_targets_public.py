@@ -2,6 +2,7 @@
 
 from django.db import migrations
 from django.conf import settings
+from guardian.models import UserObjectPermission
 
 def get_target_model():
     try:
@@ -14,6 +15,7 @@ def make_all_targets_public(apps):
     target_app, target_model = get_target_model()
     Target = apps.get_model(target_app, target_model)
     Target.objects.update(permissions=Target.Permissions.PUBLIC)
+    UserObjectPermission.objects.filter(model='target').delete()  # all targets are public, so these are not needed
 
 
 class Migration(migrations.Migration):
