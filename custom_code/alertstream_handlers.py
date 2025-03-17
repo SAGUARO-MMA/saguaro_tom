@@ -16,8 +16,17 @@ from io import BytesIO
 import astropy_healpix as ah
 import numpy as np
 import traceback
+from tom_targets.models import Target
 
 logger = logging.getLogger(__name__)
+
+# for einstein probe
+ALERT_TEXT_INTRO_EP = """EinsteinProbe id={t_ep.name}
+RA =  {t_ep.ra}
+Dec = {t_ep.dec}
+Error = {ep_error}
+"""
+
 
 ALERT_TEXT_INTRO = """{{most_likely_class}} {{seq.event_subtype}} v{{seq.sequence_id}}
 {{nle.event_id}} ({{significance}})
@@ -62,11 +71,6 @@ Duration = {{duration_ms:.0f}} ms
 Frequency = {{central_frequency:.0f}} Hz
 """ + ALERT_LINKS
 
-ALERT_TEXT_SSM = ALERT_TEXT_INTRO + ALERT_TEXT_LOCALIZATION + """Has NS = {{HasNS:.0%}}
-Has Mass Gap = {{HasMassGap:.0%}}
-Has SSM = {{HasSSM:.0%}}
-""" + ALERT_LINKS
-
 ALERT_TEXT = [  # index = number of localizations available
     ALERT_TEXT_INTRO + ALERT_TEXT_CLASSIFICATION + ALERT_LINKS,
     ALERT_TEXT_INTRO + ALERT_TEXT_LOCALIZATION + ALERT_TEXT_CLASSIFICATION + ALERT_LINKS,
@@ -78,7 +82,7 @@ ALERT_TEXT = [  # index = number of localizations available
 def send_slack(body, format_kwargs, is_test_alert=False, is_significant=True, is_burst=False, has_ns=True,
                all_workspaces=True, at=None):
     if is_test_alert:
-        channel = None
+        return
     elif not is_significant:
         channel = 0
     elif is_burst:
@@ -93,8 +97,6 @@ def send_slack(body, format_kwargs, is_test_alert=False, is_significant=True, is
     for url_list, (nle_link, service), (target_link, _) in zip(settings.SLACK_URLS, settings.NLE_LINKS, settings.TARGET_LINKS):
         body_slack = body.format(nle_link=nle_link, service=service, target_link=target_link).format(**format_kwargs)
         logger.info(f'Sending GW alert: {body_slack}')
-        if channel is None:
-            break  # just print out test alerts for debugging
         json_data = json.dumps({'text': body_slack})
         requests.post(url_list[channel], data=json_data.encode('ascii'), headers=headers)
         if not all_workspaces:
@@ -183,10 +185,7 @@ def prepare_and_send_alerts(nle, seq):
             alert_text = ALERT_TEXT_BURST
             format_kwargs['duration_ms'] = seq.details['duration'] * 1000.
         else:
-            if seq.details['search'] == 'SSM':
-                alert_text = ALERT_TEXT_SSM
-            else:
-                alert_text = ALERT_TEXT[len(localizations)]
+            alert_text = ALERT_TEXT[len(localizations)]
             if localizations:
                 format_kwargs['distance'] = format_distance(localizations[0])
                 format_kwargs['area_50'] = format_area(localizations[0].area_50)
@@ -301,9 +300,26 @@ def handle_einstein_probe_alert(message, metadata):
             skymap['PROBDENSITY'].unit = '1 / sr'
             calculate_credible_region(skymap, localization)
             calculate_footprint_probabilities(skymap, localization)
+    
+    ep_ra = alert.get('ra')
+    ep_dec = alert.get('dec')
+    ep_name = alert['id'][0]
+    ep_error = alert.get('ra_dec_error')
+    t_ep = Target.objects.create(name=ep_name, type='SIDEREAL', ra = ep_ra, dec = ep_dec)
 
-    slack_alert = f'Received Einstein Probe trigger <{settings.NLE_LINKS[0][0]}|{{nle.event_id}}>'
-    json_data = json.dumps({'text': slack_alert.format(nle=nonlocalizedevent)}).encode('ascii')
-    requests.post(settings.SLACK_EP_URL, data=json_data, headers={'Content-Type': 'application/json'})
+    # send SMS, Slack, and email alerts
+    ALERT_TEXT_URL_EP = "https://sand.as.arizona.edu/saguaro_tom/targets/{t_ep.id}/"
+    targ_link = f'Target Created <{ALERT_TEXT_URL_EP}|{{t_ep.id}}>'
+    non_localized_link = f'Localization <{settings.NLE_LINKS[0][0]}|{{nle.event_id}}>'
+    alert_text = ALERT_TEXT_INTRO_EP + non_localized_link + targ_link
+    logger.info(f'Sending EP alert: {alert_text}')
+
+
+    json_data = json.dumps({'text': alert_text.format(nle=nonlocalizedevent,t_ep=t_ep,ep_error=ep_error)}).encode('ascii')
+    requests.post(settings.SLACK_EP_URL, data=json_data, headers={'Content-Type': 'applic1Gation/json'})
+
 
     logger.info(f'Finished processing alert for {nonlocalizedevent.event_id}')
+
+
+    
