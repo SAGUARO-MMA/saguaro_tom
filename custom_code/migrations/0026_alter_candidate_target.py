@@ -7,7 +7,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('tom_targets', '0024_basetarget_permissions'),
+        ('tom_targets', '0026_alter_basetarget_permissions'),
         ('custom_code', '0025_delete_profile'),
     ]
 
