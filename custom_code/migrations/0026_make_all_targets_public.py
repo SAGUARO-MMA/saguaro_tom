@@ -23,7 +23,7 @@ def make_all_targets_public(apps):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('custom_code', '0026_alter_candidate_target'),
+        ('custom_code', '0025_delete_profile'),
         ('tom_targets', '0024_basetarget_permissions'),
     ]
 

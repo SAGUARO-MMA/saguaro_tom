@@ -8,7 +8,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('tom_targets', '0026_alter_basetarget_permissions'),
-        ('custom_code', '0025_delete_profile'),
+        ('custom_code', '0026_make_all_targets_public'),
     ]
 
     operations = [
