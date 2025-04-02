@@ -3,7 +3,7 @@ from dateutil.parser import parse
 
 from django.db import models
 from django.contrib.auth.models import User
-from tom_targets.models import BaseTarget, TargetList
+from tom_targets.models import Target, TargetList
 from tom_nonlocalizedevents.models import EventLocalization
 from tom_surveys.models import SurveyField, SurveyObservationRecord
 
@@ -122,7 +122,7 @@ class Candidate(models.Model):
     cx = models.FloatField(null=True)
     cy = models.FloatField(null=True)
     cz = models.FloatField(null=True)
-    target = models.ForeignKey(BaseTarget, null=True, on_delete=models.SET_NULL, db_column='targetid')
+    target = models.ForeignKey(Target, null=True, on_delete=models.SET_NULL, db_column='targetid')
     mlscore = models.FloatField(null=True)
     mlscore_real = models.FloatField(null=True)
     mlscore_bogus = models.FloatField(null=True)
