@@ -6,7 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('custom_code', '0024_remove_surveyfieldcredibleregion_treasuremap_id_and_more'),
+        ('custom_code', '0025_rename_target_basetarget_alter_basetarget_options'),
     ]
 
     operations = [
