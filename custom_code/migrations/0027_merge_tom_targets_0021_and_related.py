@@ -7,6 +7,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('tom_targets', '0021_rename_target_basetarget_alter_basetarget_options'),
+        ('tom_nonlocalizedevents', '0018_alter_eventcandidate_target'),
         ('custom_code', '0026_alter_candidate_target'),
     ]
 
