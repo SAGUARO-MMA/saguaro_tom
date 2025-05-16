@@ -19,6 +19,11 @@ import traceback
 
 logger = logging.getLogger(__name__)
 
+# for einstein probe
+ALERT_TEXT_INTRO_EP = """EinsteinProbe id={t_ep.name}
+"""
+
+
 ALERT_TEXT_INTRO = """{{most_likely_class}} {{seq.event_subtype}} v{{seq.sequence_id}}
 {{nle.event_id}} ({{significance}})
 {{time}}
@@ -250,7 +255,6 @@ def handle_message_and_send_alerts(message, metadata):
 
     logger.info(f'Finished processing alert for {nle.event_id}')
 
-
 def handle_einstein_probe_alert(message, metadata):
     alert = message.content
     logger.warning(f"Handling Einstein Probe alert: {alert}")
@@ -301,9 +305,21 @@ def handle_einstein_probe_alert(message, metadata):
             skymap['PROBDENSITY'].unit = '1 / sr'
             calculate_credible_region(skymap, localization)
             calculate_footprint_probabilities(skymap, localization)
+    
+    ep_ra = alert.get('ra')
+    ep_dec = alert.get('dec')
+    ep_name = alert['id'][0]
+    ep_error = alert.get('ra_dec_error')
+    t_ep = Target.objects.create(name=ep_name, type='SIDEREAL', ra = ep_ra, dec = ep_dec)
 
-    slack_alert = f'Received Einstein Probe trigger <{settings.NLE_LINKS[0][0]}|{{nle.event_id}}>'
-    json_data = json.dumps({'text': slack_alert.format(nle=nonlocalizedevent)}).encode('ascii')
+    # send SMS, Slack, and email alerts
+    ALERT_TEXT_URL_EP =settings.TARGET_LINKS[0][0] #"https://sand.as.arizona.edu/saguaro_tom/targets/{t_ep.id}/"
+    alert_text = ALERT_TEXT_INTRO_EP + f'Localization <{settings.NLE_LINKS[0][0]}|{{nle.event_id}}>' + f'Target Created <{ALERT_TEXT_URL_EP}|{{t_ep.id}}>'
+    logger.info(f'Sending EP alert: {alert_text}')
+
+
+    json_data = json.dumps({'text': alert_text.format(nle=nonlocalizedevent,t_ep=t_ep,ep_error=ep_error)}).encode('ascii')
     requests.post(settings.SLACK_EP_URL, data=json_data, headers={'Content-Type': 'application/json'})
+
 
     logger.info(f'Finished processing alert for {nonlocalizedevent.event_id}')
