@@ -3,6 +3,7 @@ import logging
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db.models import Count
 from django.urls import reverse_lazy
 from django.http import HttpResponseRedirect, StreamingHttpResponse
 from django.views.generic.base import RedirectView
@@ -10,9 +11,9 @@ from django.views.generic.edit import CreateView, TemplateResponseMixin, FormMix
 from django_filters.views import FilterView
 from django.shortcuts import redirect
 from guardian.mixins import PermissionListMixin
-from guardian.shortcuts import get_objects_for_user
 
 from tom_targets.models import Target, TargetList
+from tom_targets.permissions import targets_for_user
 from tom_dataproducts.models import ReducedDatum
 from tom_targets.views import TargetNameSearchView as OldTargetNameSearchView, TargetListView as OldTargetListView
 from tom_observations.views import ObservationCreateView as OldObservationCreateView
@@ -116,8 +117,8 @@ class CandidateListView(FilterView):
         :rtype: QuerySet
         """
         return super().get_queryset().filter(
-            target__in=get_objects_for_user(self.request.user, 'tom_targets.view_target')
-        )
+            target__in=targets_for_user(self.request.user, Target.objects.all(), 'view_target')
+        ).annotate(detections=Count('target__candidate'))
 
 
 def upload_files_to_tns(files):
@@ -358,8 +359,7 @@ class TargetMPCView(LoginRequiredMixin, RedirectView):
                                            value__magnitude__isnull=False)
         if phot.exists():
             messages.info(request, "Running minor planet checker. Refresh after ~1 minute to see matches.")
-            dramatiq_msg = target_run_mpc.send(phot.latest().id)  # check the latest detection
-            logger.info(dramatiq_msg)
+            target_run_mpc.enqueue(phot.latest().id)  # check the latest detection
         else:
             messages.error(request, "Must have at least one photometric detection to run minor planet checker.")
 
@@ -491,7 +491,13 @@ class CSSFieldExportView(CSSFieldListView):
     def post(self, request, *args, **kwargs):
         css_credible_regions = self.get_selected_fields(request)
         text = ''.join([generate_prog_file(group) for group in css_credible_regions])
-        return self.render_to_response(text)
+        file_buffer = StringIO(text)
+        file_buffer.seek(0)  # goto the beginning of the buffer
+        response = StreamingHttpResponse(file_buffer, content_type="text/ascii")
+        nle = self.get_nonlocalizedevent()
+        filename = f"Saguaro_{nle.event_id}.prog"
+        response['Content-Disposition'] = 'attachment; filename="{}"'.format(filename)
+        return response
 
     def get_selected_fields(self, request):
         target_ids = None if request.POST.get('isSelectAll') == 'True' else request.POST.getlist('selected-target')
@@ -503,21 +509,6 @@ class CSSFieldExportView(CSSFieldListView):
         # evaluate this as a list now to maintain the order
         groups = [list(credible_regions.filter(group=g).order_by('rank_in_group')) for g in group_numbers]
         return groups
-
-    def render_to_response(self, text, **response_kwargs):
-        """
-        Returns a response containing the exported .prog file(s) of selected fields.
-
-        :returns: response class with ASCII
-        :rtype: StreamingHttpResponse
-        """
-        file_buffer = StringIO(text)
-        file_buffer.seek(0)  # goto the beginning of the buffer
-        response = StreamingHttpResponse(file_buffer, content_type="text/ascii")
-        nle = self.get_nonlocalizedevent()
-        filename = f"Saguaro_{nle.event_id}.prog"
-        response['Content-Disposition'] = 'attachment; filename="{}"'.format(filename)
-        return response
 
 
 class CSSFieldSubmitView(LoginRequiredMixin, RedirectView, CSSFieldExportView):

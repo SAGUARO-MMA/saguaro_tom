@@ -9,7 +9,7 @@ import logging
 import json
 from .templatetags.nonlocalizedevent_extras import format_inverse_far, format_distance, format_area, get_most_likely_class
 from .healpix_utils import update_all_credible_region_percents_for_survey_fields, create_elliptical_localization
-from .cssfield_selection import calculate_footprint_probabilities
+from .cssfield_selection import calculate_footprint_probabilities, rank_css_fields
 from .models import CredibleRegionContour
 from astropy.table import Table
 from io import BytesIO
@@ -246,6 +246,7 @@ def handle_message_and_send_alerts(message, metadata):
                 skymap = Table.read(BytesIO(skymap_bytes))
                 calculate_credible_region(skymap, localization)
                 calculate_footprint_probabilities(skymap, localization)
+                rank_css_fields(localization.surveyfieldcredibleregions)
 
     logger.info(f'Finished processing alert for {nle.event_id}')
 
@@ -300,6 +301,7 @@ def handle_einstein_probe_alert(message, metadata):
             skymap['PROBDENSITY'].unit = '1 / sr'
             calculate_credible_region(skymap, localization)
             calculate_footprint_probabilities(skymap, localization)
+            rank_css_fields(localization.surveyfieldcredibleregions)
     
     ep_ra = alert.get('ra')
     ep_dec = alert.get('dec')
@@ -318,8 +320,4 @@ def handle_einstein_probe_alert(message, metadata):
     json_data = json.dumps({'text': alert_text.format(nle=nonlocalizedevent,t_ep=t_ep,ep_error=ep_error)}).encode('ascii')
     requests.post(settings.SLACK_EP_URL, data=json_data, headers={'Content-Type': 'applic1Gation/json'})
 
-
     logger.info(f'Finished processing alert for {nonlocalizedevent.event_id}')
-
-
-    

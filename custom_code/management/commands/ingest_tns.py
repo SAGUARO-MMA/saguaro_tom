@@ -17,9 +17,10 @@ import logging
 import traceback
 import numpy as np
 
-
 logger = logging.getLogger(__name__)
-
+new_format = logging.Formatter('[%(asctime)s] %(levelname)s : s%(message)s')
+for handler in logger.handlers:
+    handler.setFormatter(new_format)
 
 def vet_or_post_error(target):
     try:
@@ -32,9 +33,9 @@ def vet_or_post_error(target):
             requests.post(settings.SLACK_TNS_URL, data=json_data, headers={'Content-Type': 'application/json'})
         detections = target.reduceddatum_set.filter(data_type="photometry", value__magnitude__isnull=False)
         if detections.exists():
-            target_run_mpc.send(detections.latest().id)
+            target_run_mpc.enqueue(detections.latest().id)
         mjd_now = Time.now().mjd
-        atlas_query.send(mjd_now - 20., mjd_now, target.id, 'atlas_photometry')
+        atlas_query.enqueue(mjd_now - 20., mjd_now, target.id, 'atlas_photometry')
                          
     except Exception as e:
         slack_alert = f'Error vetting TNS target {target.name}:\n{e}'
@@ -57,12 +58,13 @@ class Command(BaseCommand):
         
         updated_targets_coords = Target.objects.raw(
             """
-            --STEP 0: update coordinates of existing targets with TNS names
+            --STEP 0: update coordinates and prefix of existing targets with TNS names
             UPDATE tom_targets_basetarget AS tt
             SET name=CONCAT(tns.name_prefix, tns.name), ra=tns.ra, dec=tns.declination, modified=NOW()
             FROM tns_q3c as tns
             WHERE REGEXP_REPLACE(tt.name, '^[^0-9]*', '')=tns.name
-            AND q3c_dist(tt.ra, tt.dec, tns.ra, tns.declination) > 0
+            AND (q3c_dist(tt.ra, tt.dec, tns.ra, tns.declination) > 0
+                 OR tt.name != CONCAT(tns.name_prefix, tns.name))
             RETURNING tt.*;
             """
         )
@@ -86,11 +88,13 @@ class Command(BaseCommand):
                 ) AS t ON true
                 WHERE t.tns_name IS NOT NULL;
                 
+                -- the top_tns_matches table tells you the target names and coordinates we are going to adopt
                 CREATE TEMPORARY TABLE top_tns_matches AS
                 SELECT DISTINCT ON (tns_name) *
                 FROM tns_matches
-                ORDER BY tns_name, sep, name; -- if there are duplicates in the TNS, use the earlier one
+                ORDER BY tns_name, name=tns_name desc, sep; -- prefer the one that already has the TNS name, if any
                 
+                -- after this, the tns_matches table tells you which targets need to be merged and deleted
                 DELETE FROM tns_matches
                 WHERE name IN (
                     SELECT name from top_tns_matches
@@ -100,7 +104,7 @@ class Command(BaseCommand):
 
         updated_targets = Target.objects.raw(
             """
-            --STEP 2: update existing targets (if needed) to match closest TNS transient
+            --STEP 2: update existing non-TNS targets within 2" of a TNS transient to have the TNS name and coordinates
             UPDATE tom_targets_basetarget AS tt
             SET name=tm.tns_name, ra=tm.ra, dec=tm.dec, modified=NOW()
             FROM top_tns_matches AS tm
@@ -184,49 +188,49 @@ class Command(BaseCommand):
         new_targets = Target.objects.raw(
             """
             --STEP 4: add all other unmatched TNS transients to the targets table (removing duplicate names)
-            INSERT INTO tom_targets_basetarget (name, type, created, modified, ra, dec, epoch, scheme)
-            SELECT CONCAT(name_prefix, name), 'SIDEREAL', NOW(), NOW(), ra, declination, 2000, ''
-            FROM tns_q3c WHERE name_prefix != 'FRB' AND name != '2023hzc' -- this is a duplicate in the TNS
+            INSERT INTO tom_targets_basetarget (name, type, created, modified, permissions, ra, dec, epoch, scheme)
+            SELECT CONCAT(name_prefix, name), 'SIDEREAL', NOW(), NOW(), 'PUBLIC', ra, declination, 2000, ''
+            FROM tns_q3c WHERE name_prefix != 'FRB' AND name != '2023hzc' -- this is a duplicate of AT2016jlf in the TNS
             ON CONFLICT (name) DO NOTHING
             RETURNING *;
             """
         )
         logger.info(f"Added {len(new_targets):d} new targets from the TNS.")
 
-        new_or_updated_targets = [updated_targets_coords, updated_targets, new_targets]
-
-        for targets in new_or_updated_targets:
+        for targets in [new_targets, updated_targets]:
             for target in targets:
                 vet_or_post_error(target)
 
-        for target in new_targets:
-            # check if any of the possible host galaxies are within 40 Mpc
-            target_extra = target.targetextra_set.filter(key='Host Galaxies').first()
-            if target_extra is None:
-                continue
-            for galaxy in json.loads(target_extra.value):
-                if galaxy['Source'] in ['GLADE', 'GWGC', 'HECATE'] and galaxy['Dist'] <= 40.:  # catalogs that have dist
-                    slack_alert = (f'<{settings.TARGET_LINKS[0][0]}|{target.name}> is {galaxy["Offset"]:.1f}" from '
-                                   f'galaxy {galaxy["ID"]} at {galaxy["Dist"]:.1f} Mpc.').format(target=target)
-                    break
-            else:
-                continue
+                # check if any of the possible host galaxies are within 40 Mpc
+                target_extra = target.targetextra_set.filter(key='Host Galaxies').first()
+                if target_extra is None:
+                    continue
+                for galaxy in json.loads(target_extra.value):
+                    if galaxy['Source'] in ['GLADE', 'GWGC', 'HECATE'] and galaxy['Dist'] <= 40.:  # catalogs that have dist
+                        slack_alert = (f'<{settings.TARGET_LINKS[0][0]}|{target.name}> is {galaxy["Offset"]:.1f}" from '
+                                       f'galaxy {galaxy["ID"]} at {galaxy["Dist"]:.1f} Mpc.').format(target=target)
+                        break
+                else:
+                    continue
 
-            # if there was nearby host galaxy found, check the last nondetection
-            photometry = target.reduceddatum_set.filter(data_type='photometry')
-            first_det = photometry.filter(value__magnitude__isnull=False).order_by('timestamp').first()
-            last_nondet = photometry.filter(value__magnitude__isnull=True,
-                                            timestamp__lt=first_det.timestamp).order_by('timestamp').last()
-            if first_det and last_nondet:
-                time_lnondet = (first_det.timestamp - last_nondet.timestamp).total_seconds() / 3600.
-                dmag_lnondet = (last_nondet.value['limit'] - first_det.value['magnitude']) / (time_lnondet / 24.)
-                slack_alert += (f' The last nondetection was {time_lnondet:.1f} hours before detection,'
-                                f' during which time it rose >{dmag_lnondet:.1f} mag/day.')
-            else:
-                slack_alert += ' No nondetection was reported.'
+                # if there was nearby host galaxy found, check the last nondetection
+                photometry = target.reduceddatum_set.filter(data_type='photometry')
+                first_det = photometry.filter(value__magnitude__isnull=False).order_by('timestamp').first()
+                last_nondet = photometry.filter(value__magnitude__isnull=True,
+                                                timestamp__lt=first_det.timestamp).order_by('timestamp').last()
+                if first_det and last_nondet:
+                    time_lnondet = (first_det.timestamp - last_nondet.timestamp).total_seconds() / 3600.
+                    dmag_lnondet = (last_nondet.value['limit'] - first_det.value['magnitude']) / (time_lnondet / 24.)
+                    slack_alert += (f' The last nondetection was {time_lnondet:.1f} hours before detection,'
+                                    f' during which time it rose >{dmag_lnondet:.1f} mag/day.')
+                else:
+                    slack_alert += ' No nondetection was reported.'
 
-            json_data = json.dumps({'text': slack_alert}).encode('ascii')
-            requests.post(settings.SLACK_TNS_URL, data=json_data, headers={'Content-Type': 'application/json'})
+                json_data = json.dumps({'text': slack_alert}).encode('ascii')
+                requests.post(settings.SLACK_TNS_URL, data=json_data, headers={'Content-Type': 'application/json'})
+
+        for target in updated_targets_coords:
+            vet_or_post_error(target)
 
         # automatically associate with nonlocalized events
         for nle in get_active_nonlocalizedevents(lookback_days=lookback_days_nle):
@@ -234,7 +238,7 @@ class Command(BaseCommand):
             localization = get_preferred_localization(nle)
             nle_time = datetime.strptime(seq.details['time'], '%Y-%m-%dT%H:%M:%S.%f%z')
             target_ids = []
-            for targets in new_or_updated_targets:
+            for targets in [new_targets, updated_targets, updated_targets_coords]:
                 for target in targets:
                     first_det = target.reduceddatum_set.filter(data_type='photometry', value__magnitude__isnull=False
                                                                ).order_by('timestamp').first()
