@@ -27,8 +27,8 @@ from tom_targets.models import Target
 logger = logging.getLogger(__name__)
 
 # for einstein probe
-ALERT_TEXT_EP = """Einstein Probe trigger <{target_link}|{{target.name}}>
- — <{survey_obs_link}|Survey Observations>
+ALERT_TEXT_EP = f"""Einstein Probe trigger <{settings.TARGET_LINKS[0][0]}|{{target.name}}>
+ — <https://{settings.ALLOWED_HOST}{reverse('surveys:observations')}?{{query}}|Survey Observations>
 """
 
 ALERT_TEXT_INTRO = """{{most_likely_class}} {{seq.event_subtype}} v{{seq.sequence_id}}
@@ -345,9 +345,7 @@ def handle_einstein_probe_alert(message, metadata):
     EventCandidate.objects.create(target=t_ep, nonlocalizedevent=nonlocalizedevent)
     vet_or_post_error(t_ep, slack_url=settings.SLACK_EP_URL)
     query = {'localization_event': nonlocalizedevent.event_id, 'localization_prob': 95, 'localization_dt': 3}
-    survey_obs_link = f"https://{settings.ALLOWED_HOST}{reverse('surveys:observations')}?{urllib.parse.urlencode(query)}"
-    alert_text = ALERT_TEXT_EP.format(survey_obs_link=survey_obs_link, target_link=settings.TARGET_LINKS[0][0]
-                                     ).format(target=t_ep)
+    alert_text = ALERT_TEXT_EP.format(target=t_ep, query=urllib.parse.urlencode(query))
 
     # send SMS, Slack, and email alerts
     logger.info(f'Sending EP alert: {alert_text}')
