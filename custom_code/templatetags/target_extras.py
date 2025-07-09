@@ -27,7 +27,12 @@ def split_name(name):
     """Splits the name into a prefix, consisting of no digits, and a basename, which starts with its first digit"""
     res = re.match('(?P<prefix>\D*)(?P<basename>.*)', name)
     name = res.groupdict()
-    name['has_tns_prefix'] = name['prefix'] in TNS_PREFIXES
+    if name['prefix'] == 'FRB':
+        name['tns_objname'] = name
+    elif name['prefix'] in TNS_PREFIXES:
+        name['tns_objname'] = name['basename']
+    else:
+        name['tns_objname'] = None
     return name
 
 
