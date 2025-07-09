@@ -126,7 +126,7 @@ def target_post_save(target, created, tns_time_limit: float=5.):
                     value = {'filter': candidate['filters']['name']}
                     if candidate['flux']:  # detection
                         value['magnitude'] = float(candidate['flux'])
-                    else:
+                    elif candidate['limflux']:
                         value['limit'] = float(candidate['limflux'])
                     if candidate['fluxerr']:  # not empty or zero
                         value['error'] = float(candidate['fluxerr'])
