@@ -6,7 +6,7 @@ import re
 
 register = template.Library()
 
-TNS_PREFIXES = ["AT", "SN", "TDE"]
+TNS_PREFIXES = ["AT", "SN", "TDE", "FRB"]
 
 
 @register.filter
