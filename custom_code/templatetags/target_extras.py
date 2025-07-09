@@ -28,7 +28,7 @@ def split_name(name):
     res = re.match('(?P<prefix>\D*)(?P<basename>.*)', name)
     name_info = res.groupdict()
     if name_info['prefix'] == 'FRB':
-        name_info['tns_objname'] = name_info
+        name_info['tns_objname'] = name
     elif name_info['prefix'] in TNS_PREFIXES:
         name_info['tns_objname'] = name_info['basename']
     else:
