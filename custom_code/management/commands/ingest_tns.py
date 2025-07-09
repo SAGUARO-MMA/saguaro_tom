@@ -60,7 +60,7 @@ class Command(BaseCommand):
                         tns.ra,
                         tns.declination as dec
                     FROM tns_q3c AS tns
-                    WHERE q3c_join(target.ra, target.dec, tns.ra, tns.declination, 2. / 3600) AND name_prefix != 'FRB'
+                    WHERE q3c_join(target.ra, target.dec, tns.ra, tns.declination, 2. / 3600)
                     ORDER BY sep, discoverydate LIMIT 1 -- if there are duplicates in the TNS, use the earlier one
                 ) AS t ON true
                 WHERE t.tns_name IS NOT NULL;
@@ -167,7 +167,7 @@ class Command(BaseCommand):
             --STEP 4: add all other unmatched TNS transients to the targets table (removing duplicate names)
             INSERT INTO tom_targets_basetarget (name, type, created, modified, permissions, ra, dec, epoch, scheme)
             SELECT CONCAT(name_prefix, name), 'SIDEREAL', NOW(), NOW(), 'PUBLIC', ra, declination, 2000, ''
-            FROM tns_q3c WHERE name_prefix != 'FRB' AND name != '2023hzc' -- this is a duplicate of AT2016jlf in the TNS
+            FROM tns_q3c WHERE name != '2023hzc' -- this is a duplicate of AT2016jlf in the TNS
             ON CONFLICT (name) DO NOTHING
             RETURNING *;
             """
