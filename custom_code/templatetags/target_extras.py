@@ -26,14 +26,14 @@ def ecliptic_lat(target):
 def split_name(name):
     """Splits the name into a prefix, consisting of no digits, and a basename, which starts with its first digit"""
     res = re.match('(?P<prefix>\D*)(?P<basename>.*)', name)
-    name = res.groupdict()
-    if name['prefix'] == 'FRB':
-        name['tns_objname'] = name
-    elif name['prefix'] in TNS_PREFIXES:
-        name['tns_objname'] = name['basename']
+    name_info = res.groupdict()
+    if name_info['prefix'] == 'FRB':
+        name_info['tns_objname'] = name_info
+    elif name_info['prefix'] in TNS_PREFIXES:
+        name_info['tns_objname'] = name_info['basename']
     else:
-        name['tns_objname'] = None
-    return name
+        name_info['tns_objname'] = None
+    return name_info
 
 
 @register.inclusion_tag('tom_targets/partials/aladin_custom.html')
