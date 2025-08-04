@@ -44,15 +44,15 @@ def send_alert_if_nearby(target, max_dist, target_link, slack_client=None):
         time_fdet = (datetime.now(tz=first_det.timestamp.tzinfo) - first_det.timestamp).total_seconds() / 3600. / 24.
         absmag = first_det.value['magnitude'] - 5. * (np.log10(target.distance) + 5.)
         slack_alert += (f' If this is the host, the transient was detected {time_fdet:.1f} days ago at '
-                        f'M<sub>{first_det.value["filter"]}</sub> = {absmag:.1f} mag.')
+                        f'an absolute magnitude of {absmag:.1f} mag in {first_det.value["filter"]}.')
 
         # if there was a nondetection, calculate the rise rate
         last_nondet = photometry.filter(value__magnitude__isnull=True,
                                         timestamp__lt=first_det.timestamp).order_by('timestamp').last()
         if last_nondet:
-            time_lnondet = (first_det.timestamp - last_nondet.timestamp).total_seconds() / 3600.
-            dmag_lnondet = (last_nondet.value['limit'] - first_det.value['magnitude']) / (time_lnondet / 24.)
-            slack_alert += f' The last nondetection was {time_lnondet:.1f} hours before detection,'
+            time_lnondet = (first_det.timestamp - last_nondet.timestamp).total_seconds() / 3600. / 24.
+            dmag_lnondet = (last_nondet.value['limit'] - first_det.value['magnitude']) / time_lnondet
+            slack_alert += f' The last nondetection was {time_lnondet:.1f} days before detection,'
             if dmag_lnondet > 0:
                 slack_alert += f' during which time it rose &gt;{dmag_lnondet:.1f} mag/day.'
             else:
