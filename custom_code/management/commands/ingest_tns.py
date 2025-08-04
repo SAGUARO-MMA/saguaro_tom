@@ -42,7 +42,7 @@ def send_alert_if_nearby(target, max_dist, target_link, slack_client=None):
     first_det = photometry.filter(value__magnitude__isnull=False).order_by('timestamp').first()
     if first_det:
         time_fdet = (datetime.now(tz=first_det.timestamp.tzinfo) - first_det.timestamp).total_seconds() / 3600. / 24.
-        absmag = first_det.value['magnitude'] - 5. * (np.log10(target.distance) + 5.)
+        absmag = first_det.value['magnitude'] - 5. * (np.log10(galaxy["Dist"]) + 5.)
         slack_alert += (f' If this is the host, the transient was detected {time_fdet:.1f} days ago at '
                         f'an absolute magnitude of {absmag:.1f} mag in {first_det.value["filter"]}.')
 
