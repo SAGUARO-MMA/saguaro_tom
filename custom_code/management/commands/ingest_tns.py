@@ -9,6 +9,7 @@ from custom_code.templatetags.target_extras import split_name
 from tom_treasuremap.management.commands.report_pointings import get_active_nonlocalizedevents
 from datetime import datetime, timedelta
 from slack_sdk import WebClient
+import numpy as np
 import json
 import logging
 
@@ -36,18 +37,28 @@ def send_alert_if_nearby(target, max_dist, target_link, slack_client=None):
     else:
         return
 
-    # if there was nearby host galaxy found, check the last nondetection
+    # if there was nearby host galaxy found, calculate the absolute magnitude at discovery
     photometry = target.reduceddatum_set.filter(data_type='photometry')
     first_det = photometry.filter(value__magnitude__isnull=False).order_by('timestamp').first()
-    last_nondet = photometry.filter(value__magnitude__isnull=True,
-                                    timestamp__lt=first_det.timestamp).order_by('timestamp').last()
-    if first_det and last_nondet:
-        time_lnondet = (first_det.timestamp - last_nondet.timestamp).total_seconds() / 3600.
-        dmag_lnondet = (last_nondet.value['limit'] - first_det.value['magnitude']) / (time_lnondet / 24.)
-        slack_alert += (f' The last nondetection was {time_lnondet:.1f} hours before detection,'
-                        f' during which time it rose >{dmag_lnondet:.1f} mag/day.')
-    else:
-        slack_alert += ' No nondetection was reported.'
+    if first_det:
+        time_fdet = (datetime.now(tz=first_det.timestamp.tzinfo) - first_det.timestamp).total_seconds() / 3600. / 24.
+        absmag = first_det.value['magnitude'] - 5. * (np.log10(target.distance) + 5.)
+        slack_alert += (f' If this is the host, the transient was detected {time_fdet:.1f} days ago at '
+                        f'M<sub>{first_det.value["filter"]}</sub> = {absmag:.1f} mag.')
+
+        # if there was a nondetection, calculate the rise rate
+        last_nondet = photometry.filter(value__magnitude__isnull=True,
+                                        timestamp__lt=first_det.timestamp).order_by('timestamp').last()
+        if last_nondet:
+            time_lnondet = (first_det.timestamp - last_nondet.timestamp).total_seconds() / 3600.
+            dmag_lnondet = (last_nondet.value['limit'] - first_det.value['magnitude']) / (time_lnondet / 24.)
+            slack_alert += f' The last nondetection was {time_lnondet:.1f} hours before detection,'
+            if dmag_lnondet > 0:
+                slack_alert += f' during which time it rose &gt;{dmag_lnondet:.1f} mag/day.'
+            else:
+                slack_alert += ' but it does not constrain the rise rate.'
+        else:
+            slack_alert += ' No nondetection was reported.'
     logger.info(f'Sending TNS alert: {slack_alert}')
     if slack_client is not None:  # otherwise just print the alert to the log for testing
         slack_client.chat_postMessage(channel='alerts-tns', text=slack_alert)
