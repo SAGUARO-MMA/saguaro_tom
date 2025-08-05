@@ -5,9 +5,11 @@ from tom_targets.models import Target
 from custom_code.healpix_utils import create_candidates_from_targets
 from custom_code.alertstream_handlers import pick_slack_channel, send_slack, vet_or_post_error
 from custom_code.templatetags.skymap_extras import get_preferred_localization
+from custom_code.templatetags.target_extras import split_name
 from tom_treasuremap.management.commands.report_pointings import get_active_nonlocalizedevents
 from datetime import datetime, timedelta
 from slack_sdk import WebClient
+import numpy as np
 import json
 import logging
 
@@ -17,7 +19,49 @@ for handler in logger.handlers:
     handler.setFormatter(new_format)
 
 slack_tns = WebClient(settings.SLACK_TOKEN_TNS)
+slack_tns50 = WebClient(settings.SLACK_TOKEN_TNS50)
 slack_ep = WebClient(settings.SLACK_TOKEN_EP)
+
+
+def send_alert_if_nearby(target, max_dist, target_link, slack_client=None):
+    """check if any of the possible host galaxies are within some distance threshold"""
+    target_extra = target.targetextra_set.filter(key='Host Galaxies').first()
+    if target_extra is None:
+        return
+    target.basename = split_name(target.name)['basename']
+    for galaxy in json.loads(target_extra.value):
+        if galaxy['Source'] in ['GLADE', 'GWGC', 'HECATE'] and galaxy['Dist'] <= max_dist:  # catalogs that have dist
+            slack_alert = (f'<{target_link}|{{target.name}}> is {galaxy["Offset"]:.1f}" from '
+                           f'galaxy {galaxy["ID"]} at {galaxy["Dist"]:.1f} Mpc.').format(target=target)
+            break
+    else:
+        return
+
+    # if there was nearby host galaxy found, calculate the absolute magnitude at discovery
+    photometry = target.reduceddatum_set.filter(data_type='photometry')
+    first_det = photometry.filter(value__magnitude__isnull=False).order_by('timestamp').first()
+    if first_det:
+        time_fdet = (datetime.now(tz=first_det.timestamp.tzinfo) - first_det.timestamp).total_seconds() / 3600. / 24.
+        absmag = first_det.value['magnitude'] - 5. * (np.log10(galaxy["Dist"]) + 5.)
+        slack_alert += (f' If this is the host, the transient was detected {time_fdet:.1f} days ago at '
+                        f'an absolute magnitude of {absmag:.1f} mag in {first_det.value["filter"]}.')
+
+        # if there was a nondetection, calculate the rise rate
+        last_nondet = photometry.filter(value__magnitude__isnull=True,
+                                        timestamp__lt=first_det.timestamp).order_by('timestamp').last()
+        if last_nondet:
+            time_lnondet = (first_det.timestamp - last_nondet.timestamp).total_seconds() / 3600. / 24.
+            dmag_lnondet = (last_nondet.value['limit'] - first_det.value['magnitude']) / time_lnondet
+            slack_alert += f' The last nondetection was {time_lnondet:.1f} days before detection,'
+            if dmag_lnondet > 0:
+                slack_alert += f' during which time it rose &gt;{dmag_lnondet:.1f} mag/day.'
+            else:
+                slack_alert += ' but it does not constrain the rise rate.'
+        else:
+            slack_alert += ' No nondetection was reported.'
+    logger.info(f'Sending TNS alert: {slack_alert}')
+    if slack_client is not None:  # otherwise just print the alert to the log for testing
+        slack_client.chat_postMessage(channel='alerts-tns', text=slack_alert)
 
 
 class Command(BaseCommand):
@@ -177,32 +221,9 @@ class Command(BaseCommand):
         for targets in [new_targets, updated_targets]:
             for target in targets:
                 vet_or_post_error(target, slack_tns, channel='alerts-tns')
-
-                # check if any of the possible host galaxies are within 40 Mpc
-                target_extra = target.targetextra_set.filter(key='Host Galaxies').first()
-                if target_extra is None:
-                    continue
-                for galaxy in json.loads(target_extra.value):
-                    if galaxy['Source'] in ['GLADE', 'GWGC', 'HECATE'] and galaxy['Dist'] <= 40.:  # catalogs that have dist
-                        slack_alert = (f'<{settings.TARGET_LINKS[0][0]}|{target.name}> is {galaxy["Offset"]:.1f}" from '
-                                       f'galaxy {galaxy["ID"]} at {galaxy["Dist"]:.1f} Mpc.').format(target=target)
-                        break
-                else:
-                    continue
-
-                # if there was nearby host galaxy found, check the last nondetection
-                photometry = target.reduceddatum_set.filter(data_type='photometry')
-                first_det = photometry.filter(value__magnitude__isnull=False).order_by('timestamp').first()
-                last_nondet = photometry.filter(value__magnitude__isnull=True,
-                                                timestamp__lt=first_det.timestamp).order_by('timestamp').last()
-                if first_det and last_nondet:
-                    time_lnondet = (first_det.timestamp - last_nondet.timestamp).total_seconds() / 3600.
-                    dmag_lnondet = (last_nondet.value['limit'] - first_det.value['magnitude']) / (time_lnondet / 24.)
-                    slack_alert += (f' The last nondetection was {time_lnondet:.1f} hours before detection,'
-                                    f' during which time it rose >{dmag_lnondet:.1f} mag/day.')
-                else:
-                    slack_alert += ' No nondetection was reported.'
-                slack_tns.chat_postMessage(channel='alerts-tns', text=slack_alert)
+                send_alert_if_nearby(target, 40., settings.TARGET_LINKS[0][0], slack_tns)
+                if target.dec < 40.:  # only southern and equatorial targets
+                    send_alert_if_nearby(target, 50., 'https://www.wis-tns.org/object/{target.basename}', slack_tns50)
 
         for target in updated_targets_coords:
             vet_or_post_error(target, slack_tns, channel='alerts-tns')

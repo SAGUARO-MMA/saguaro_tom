@@ -40,6 +40,7 @@ SLACK_TOKENS_GW = [  # Slack API tokens for GW alerts
 ]
 SLACK_TOKEN_EP = ''  # Slack API token for Einstein Probe alerts
 SLACK_TOKEN_TNS = ''  # Slack API token for TNS transient alerts
+SLACK_TOKEN_TNS50 = ''  # Slack API token for TNS transient alerts up to 50 Mpc
 SWIFT_USERNAME = ''     # username for the Swift ToO API
 SWIFT_SHARED_SECRET = '' # shared secret for the Swift ToO API
 TNS_API_KEY = ''        # API key for the Transient Name Server
