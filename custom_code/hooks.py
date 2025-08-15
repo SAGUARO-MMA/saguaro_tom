@@ -126,8 +126,10 @@ def target_post_save(target, created, tns_time_limit: float=5.):
                     value = {'filter': candidate['filters']['name']}
                     if candidate['flux']:  # detection
                         value['magnitude'] = float(candidate['flux'])
-                    elif candidate['limflux']:
+                    elif candidate['limflux']:  # nondetection
                         value['limit'] = float(candidate['limflux'])
+                    else:  # something else, maybe an FRB; don't ingest it
+                        continue
                     if candidate['fluxerr']:  # not empty or zero
                         value['error'] = float(candidate['fluxerr'])
                     rd, created = ReducedDatum.objects.get_or_create(
