@@ -6,6 +6,10 @@ CSS_HOSTNAME = ''       # hostname to which to send CSS .prog files
 CSS_USERNAME = ''       # username (on CSS_HOSTNAME) to which to send CSS .prog files
 CSS_DIRNAME = ''        # directory (on CSS_HOSTNAME) in which to put CSS .prog files
 DEBUG = False           # set to True to display error tracebacks in browser, leave False in production
+EMAIL_HOST = ''         # SMTP server for sending emails
+EMAIL_HOST_USER = ''    # email address for the account sending emails
+EMAIL_HOST_PASSWORD = ''  # password for the account sending emails (app password for Gmail)
+EMAIL_PORT = 587        # port for the SMTP server
 FORCE_SCRIPT_NAME = ''  # the subdomain where you will host the site (leave blank for development)
 GCN_CLIENT_ID = ''      # client ID for GCN Classic over Kafka
 GCN_CLIENT_SECRET = ''  # secret key for GCN Classic over Kafka
@@ -14,6 +18,9 @@ GEM_S_API_KEY = ''      # API key for Gemini Observatory South
 HOPSKOTCH_GROUP_ID = '' # make up a unique ID for your Hopskotch alert consumer
 LASAIR_TOKEN = ''       # API key for the Lasair broker
 LCO_API_KEY = ''        # API key for Las Cumbres Observatory
+MANAGERS = [            # list of managers who should receive registration emails
+    ('Name', 'email'),
+]
 MMT_BINOSPEC_PROGRAMS = [] # list of (API key, human-readable name) for MMT+Binospec
 MMT_MMIRS_PROGRAMS = [] # list of (API key, human-readable name) for MMT+MMIRS
 MMT_MMTCAM_PROGRAMS = [] # list of (API key, human-readable name) for MMT+MMTCam
@@ -34,6 +41,7 @@ TARGET_LINKS = [  # links to TOMs for target pages, {target.name} is replaced by
     ('https://tom0.edu/targets/{target.id}/', 'Name of TOM 0'),  # TOM corresponding to Slack workspace 0
     ('https://tom1.edu/targets/{target.name}/', 'Name of TOM 1'),  # TOM corresponding to Slack workspace 1
 ]
+SITE_ID = 1  # set to 1 for production site, 2 for local development
 SLACK_TOKENS_GW = [  # Slack API tokens for GW alerts
     '',  # Slack workspace 0
     '',  # Slack workspace 1

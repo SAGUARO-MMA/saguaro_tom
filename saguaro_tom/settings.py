@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     'tom_dataproducts',
     'tom_alertstreams',
     'tom_nonlocalizedevents',
+    'tom_registration',
     'webpack_loader',
     'custom_code',
     'tom_surveys',
@@ -64,8 +65,6 @@ INSTALLED_APPS = [
     'django_tasks',
     'django_tasks.backends.database',
 ]
-
-SITE_ID = 1
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -79,6 +78,7 @@ MIDDLEWARE = [
     'tom_common.middleware.Raise403Middleware',
     'tom_common.middleware.ExternalServiceMiddleware',
     'tom_common.middleware.AuthStrategyMiddleware',
+    'tom_registration.middleware.RedirectAuthenticatedUsersFromRegisterMiddleware',
 ]
 
 ROOT_URLCONF = 'saguaro_tom.urls'
@@ -150,7 +150,7 @@ LOGIN_REDIRECT_URL = FORCE_SCRIPT_NAME + '/'
 LOGOUT_REDIRECT_URL = FORCE_SCRIPT_NAME + '/'
 
 AUTHENTICATION_BACKENDS = (
-    'django.contrib.auth.backends.ModelBackend',
+    'django.contrib.auth.backends.AllowAllUsersModelBackend',
     'guardian.backends.ObjectPermissionBackend',
 )
 
@@ -345,7 +345,7 @@ TARGET_PERMISSIONS_ONLY = True
 
 # URLs that should be allowed access even with AUTH_STRATEGY = LOCKED
 # for example: OPEN_URLS = ['/', '/about']
-OPEN_URLS = []
+OPEN_URLS = ['/accounts/register/']
 
 MATCH_MANAGERS = {'Target': 'custom_code.managers.StrictTargetMatchManager'}
 
@@ -416,3 +416,14 @@ WEBPACK_LOADER = {
 TOM_API_URL = os.getenv('TOM_API_URL', os.path.join(ALLOWED_HOST, FORCE_SCRIPT_NAME))
 HERMES_API_URL = os.getenv('HERMES_API_URL', 'https://hermes.lco.global')
 CREDIBLE_REGION_PROBABILITIES = '[0.25, 0.5, 0.75, 0.9, 0.95]'
+
+TOM_REGISTRATION = {
+    'REGISTRATION_AUTHENTICATION_BACKEND': 'django.contrib.auth.backends.AllowAllUsersModelBackend',
+    'REGISTRATION_REDIRECT_PATTERN': 'home',
+    'REGISTRATION_STRATEGY': 'approval_required',
+    'SEND_APPROVAL_EMAILS': True,
+    'APPROVAL_SUBJECT': f'Congratulations!! Welcome to {TOM_NAME}!',
+}
+EMAIL_SUBJECT_PREFIX = ''
+EMAIL_USE_TLS = True
+SERVER_EMAIL = f'Salsa Saguaro <{EMAIL_HOST_USER}>'
