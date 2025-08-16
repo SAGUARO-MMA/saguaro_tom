@@ -3,7 +3,7 @@
 from django.conf import settings
 from django.db import migrations, models
 import django.db.models.deletion
-import phonenumber_field.modelfields
+# import phonenumber_field.modelfields  # rewrote history to avoid the dependency on django-phonenumber-field
 
 
 class Migration(migrations.Migration):
@@ -28,9 +28,10 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "phone_number",
-                    phonenumber_field.modelfields.PhoneNumberField(
-                        max_length=128, null=True, region="US"
-                    ),
+                    # phonenumber_field.modelfields.PhoneNumberField(
+                    #     max_length=128, null=True, region="US"
+                    # ),
+                    models.CharField(max_length=128, null=True),
                 ),
                 ("test_alerts", models.BooleanField(default=False)),
                 ("subthreshold_alerts", models.BooleanField(default=False)),
