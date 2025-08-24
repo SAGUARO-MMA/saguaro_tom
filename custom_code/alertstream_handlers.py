@@ -3,6 +3,7 @@ from tom_nonlocalizedevents.alertstream_handlers.igwn_event_handler import handl
 from django.contrib.auth.models import Group
 from django.conf import settings
 from django.urls import reverse
+from django_tasks import task
 import urllib
 from email.mime.text import MIMEText
 from slack_sdk import WebClient
@@ -249,6 +250,7 @@ def prepare_and_send_alerts(nle, seq):
     return localizations
 
 
+@task(queue_name='nonlocalizedevents')
 def handle_message_and_send_alerts(message, metadata):
     # get skymap bytes out for later
     skymaps = []
@@ -286,6 +288,7 @@ def handle_message_and_send_alerts(message, metadata):
     logger.info(f'Finished processing alert for {nle.event_id}')
 
 
+@task(queue_name='nonlocalizedevents')
 def handle_einstein_probe_alert(message, metadata):
     alert = message.content
     logger.warning(f"Handling Einstein Probe alert: {alert}")
