@@ -355,3 +355,11 @@ def handle_einstein_probe_alert(message, metadata):
     slack_ep.chat_postMessage(channel='alerts-ep', text=alert_text)
 
     logger.info(f'Finished processing alert for {nonlocalizedevent.event_id}')
+
+
+def handle_message_and_send_alerts_async(message, metadata):
+    handle_message_and_send_alerts.enqueue(message, metadata)
+
+
+def handle_einstein_probe_alert_async(message, metadata):
+    handle_einstein_probe_alert.enqueue(message, metadata)
