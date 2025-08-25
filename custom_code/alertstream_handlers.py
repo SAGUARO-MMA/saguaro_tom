@@ -3,6 +3,8 @@ from tom_nonlocalizedevents.alertstream_handlers.igwn_event_handler import handl
 from django.contrib.auth.models import Group
 from django.conf import settings
 from django.urls import reverse
+from django_tasks import task
+from hop.models import JSONBlob
 import urllib
 from email.mime.text import MIMEText
 from slack_sdk import WebClient
@@ -249,11 +251,17 @@ def prepare_and_send_alerts(nle, seq):
     return localizations
 
 
-def handle_message_and_send_alerts(message, metadata):
+def handle_message_and_send_alerts_async(message, metadata):
+    alert = message.content[0]
+    logger.info(f"Handling igwn alert for event {alert.get('superevent_id')}")
+    handle_message_and_send_alerts.enqueue(alert)
+
+
+@task(queue_name='alerts')
+def handle_message_and_send_alerts(alert):
     # get skymap bytes out for later
     skymaps = []
     try:
-        alert = message.content[0]
         event = alert.get('event')
         if event is not None:
             skymaps.append(event.get('skymap'))
@@ -264,7 +272,7 @@ def handle_message_and_send_alerts(message, metadata):
         logger.error(f'Could not extract skymap from alert: {e}')
 
     # ingest NonLocalizedEvent into the TOM database
-    nle, seq = handle_igwn_message(message, metadata)
+    nle, seq = handle_igwn_message(JSONBlob([alert]), None)
 
     if nle is None:  # test event and SAVE_TEST_ALERTS = False
         logger.info('Test alert not saved')
@@ -286,10 +294,14 @@ def handle_message_and_send_alerts(message, metadata):
     logger.info(f'Finished processing alert for {nle.event_id}')
 
 
-def handle_einstein_probe_alert(message, metadata):
+def handle_einstein_probe_alert_async(message, metadata):
     alert = message.content
     logger.warning(f"Handling Einstein Probe alert: {alert}")
+    handle_einstein_probe_alert.enqueue(alert)
 
+
+@task(queue_name='alerts')
+def handle_einstein_probe_alert(alert):
     nonlocalizedevent, nle_created = NonLocalizedEvent.objects.get_or_create(
         event_id=alert['id'][0],
         event_type=NonLocalizedEvent.NonLocalizedEventType.UNKNOWN,
