@@ -14,7 +14,7 @@ from lightcurve_fitting.filters import filtdict
 register = template.Library()
 
 # any marker colors or shapes that we want to keep static across all pages
-COLOR_MAP = {name: to_hex(fltr.color) for name, fltr in filtdict.items()}
+COLOR_MAP = {name: to_hex(fltr.linecolor) for name, fltr in filtdict.items()}
 MARKER_MAP = {
     'limit': 50,  # arrow-bar-down
     'ATLAS': 2,  # diamond
