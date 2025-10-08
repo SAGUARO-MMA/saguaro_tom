@@ -1,5 +1,6 @@
 # convert type from <astropy table>[<colname>].dtype.str to Postgres datatype
 # https://numpy.org/doc/stable/reference/arrays.dtypes.html
+# https://numpy.org/doc/2.3/reference/generated/numpy.dtype.byteorder.html
 # https://numpy.org/doc/stable/reference/arrays.interface.html#arrays-interface
 # https://www.postgresql.org/docs/current/datatype.html
 #
@@ -23,11 +24,17 @@ def convert(dtype_str: str) -> str:
                     return "float8"
         case "i":
             match (int(dtype_str[2:])):
+                case 1:
+                    return "int2"
+                case 2:
+                    return "int2"
                 case 4:
                     return "int4"
                 case 8:
                     return "int8"
         case "S":
+            return "text"
+        case "U":
             return "text"
         case "u":
             match (int(dtype_str[2:])):
