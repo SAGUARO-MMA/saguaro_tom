@@ -5,6 +5,7 @@ from astropy.table import Table
 Catalogs = Enum('Catalogs', [
     ('DESI_DR1', 'DESIDR1'),
     ('Fermi_LPSC', 'FERMILPSC'),
+    ('Fermi_3FHL', 'FERMI3FHL'),
     ('NEDLVS', 'NEDLVS')
 ])
 
@@ -14,10 +15,13 @@ def get_prepped_catalog(source_path: str, catalog_type: str) -> Table:
             return DESIDR1Config(source_path).get_table()
         case Catalogs.Fermi_LPSC:
             return FermiLPSCConfig(source_path).get_table()
+        case Catalogs.Fermi_3FHL:
+            return Fermi3FHLConfig(source_path).get_table()
         case Catalogs.NEDLVS:
             return NEDLVSConfig(source_path).get_table()
         case _:
             raise ValueError("Invalid Catalog Type Specified")
+
 
 class CatalogConfig():
     data_table = None
@@ -45,6 +49,7 @@ class CatalogConfig():
         # ex: return self.table
         raise NotImplementedError('No implementation for get_table()')
     
+
 class DESIDR1Config(CatalogConfig):
     def __init__(self, path: str):
         self.table = DESIDR1Config._open_file(path)
@@ -75,6 +80,23 @@ class FermiLPSCConfig(CatalogConfig):
     
     def get_table(self):
         return self.table
+    
+
+class Fermi3FHLConfig(CatalogConfig):
+    def __init__(self, path: str):
+        self.table = Fermi3FHLConfig._open_file(path)
+        self.table = self._clean_table(self.table)
+
+    @staticmethod
+    def _open_file(path):
+        return Table.read(path)
+
+    def _clean_table(self, new_table) -> Table:
+        return new_table # no modifications to table are necessary
+    
+    def get_table(self):
+        return self.table
+
 
 class NEDLVSConfig(CatalogConfig):
     def __init__(self, path: str):
