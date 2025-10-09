@@ -7,6 +7,7 @@ import sys
 from   astropy.table import Table
 import psycopg
 
+import CatalogConfig
 import numpy2PGSQL
 
 logger = logging.getLogger(__name__)
@@ -128,17 +129,13 @@ def q3c_index_table(POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DB, POSTGRES_USER, PO
 
 
 def parse_and_insert(POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DB, POSTGRES_TABLE, POSTGRES_USER, POSTGRES_PASSWORD, 
-                     source_data: Table, processing: callable, chunksize: int):
+                     catalog_path: str, catalog_type: str, chunksize: int):
 
     # #####################################################################
     # Read source data
     # #####################################################################
     logger.debug("reading file into astropy table...")
-    table = Table.read(source_data)
-
-    # TODO: do this in chunks to save mem
-    table = processing(table) # mod data, colnames, etc. defined in config
-
+    table = CatalogConfig.get_prepped_catalog(catalog_path, catalog_type) # TODO: chunkify to save mem
     logger.debug("done.")
 
     # #####################################################################
@@ -185,11 +182,9 @@ if __name__ == "__main__":
 
     micromamba activate /var/www/saguaro_tom/TroveEnv/
 
-    python /var/www/saguaro_tom/custom_code/management/ingest.py /data/catalogs/NEDLVS_20250602.fits
+    python /var/www/saguaro_tom/custom_code/management/ingest.py 
     <POSTGRES_HOST> <POSTGRES_PORT> <POSTGRES_DB> <POSTGRES_TABLE> <POSTGRES_USER> <POSTGRES_PASSWORD> # do not enter passwords in CLI! (store in files w/ access controls, like this ex. bash script)
-    /var/www/saguaro_tom/custom_code/management/ingest.py /data/catalogs/NEDLVS_config.py
-    100000
-
+    /data/catalogs/NEDLVS_20250602.fits NEDLVS 100000
     """
 
     logging.basicConfig(level=logging.DEBUG)
@@ -202,31 +197,19 @@ if __name__ == "__main__":
         prog="Catalog2PGSQL",
         description="Parse catalog file and insert records into a Postgres DB")
     
-    parser.add_argument('--catalog_file',                   help='Astropy-parseable data catalog file.')
     parser.add_argument('--pghost',                         help='Host that a PGSQL server runs on. Can be \"localhost\", a domain name, or IP address.')
     parser.add_argument('--pgport', default=5432,           help='Port number the PGSQL server listens on. Default is 5432.')
     parser.add_argument('--pgdb',                           help='Name of the PG database to target.')
     parser.add_argument('--pgtable',                        help='Name of table within the PG database to target.')
     parser.add_argument('--pguser',                         help='User name necessary to access PGSQL server. This is configured by the server.')
     parser.add_argument('--pgpasswd',                       help='User password to access PGSQL server. This is confiugred by the server.')
-    parser.add_argument('--config',                         help='Catalogue-specific configs.')
+    parser.add_argument('--catalog_file',                   help='Astropy-parseable data catalog file.')
+    parser.add_argument('--catalog_type',                   help='Catalogue-specific configs.')
     parser.add_argument('--chunksize', type=int, default=1, help='Count of how many `VALUES` to `INSERT` per SQL statement.')
 
     args = parser.parse_args()
 
-    # #####################################################################
-    # Dynamically import config file
-    # #####################################################################
-    # TODO: ugly way of dynamically importing
-    sys.path.insert(0, os.path.dirname(args.config))
-    config = importlib.import_module(os.path.basename(args.config).replace(".py", ""))
-    sys.path = sys.path[1:] # cleanup. remove BY INDEX, not value!
-
-    # #####################################################################
-    # Do everything
-    # #####################################################################
-    parse_and_insert(args.pghost, args.pgport, args.pgdb, args.pgtable, args.pguser, args.pgpasswd, args.catalog_file, 
-                     config.processing, args.chunksize)
+    parse_and_insert(args.pghost, args.pgport, args.pgdb, args.pgtable, args.pguser, args.pgpasswd,
+                     args.catalog_file, args.catalog_type, args.chunksize)
     
     logger.info(f"{__file__} done.")
-
