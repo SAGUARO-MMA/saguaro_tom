@@ -1,4 +1,6 @@
 from enum import Enum
+import gzip
+import os
 import logging
 
 from astropy.table import Table
@@ -11,10 +13,11 @@ logger = logging.getLogger(__name__)
 
 Catalogs = Enum('Catalogs', 
 [
-    ('DESI_DR1', 'DESIDR1'),
-    ('Fermi_LPSC', 'FERMILPSC'),
-    ('Fermi_3FHL', 'FERMI3FHL'),
-    ('NEDLVS', 'NEDLVS')
+    ('DESIDR1', 'DESI_DR1'),
+    ('FERMILPSC', 'Fermi_LPSC'),
+    ('FERMI3FHL', 'Fermi_3FHL'),
+    ('NEDLVS', 'NEDLVS'),
+    ('TWOMASS', 'Two_MASS')
 ])
 
 class CatalogConfig():
@@ -22,6 +25,7 @@ class CatalogConfig():
         self.dbctxt:            DBctxt = dbctxt
         self.path:              str    = path
         self.relational_schema: str    = None
+        self.data                      = None
 
     # ##########################################################################
     # "private"
@@ -30,22 +34,16 @@ class CatalogConfig():
         # ex: return Table.read(path)
         raise NotImplementedError()
     
-    def _clean_table(self):
-        # TODO: separate processing against whole table vs chunks
-
-        # ex: self.table.keep_columns(['ra', 'dec']) # modifies in place
-        # ex: self.table['ra'] *= 3.141592653589793 / 180 # just an ex, idk if anyone will use rads
-        # ex: self.table['ra'].name = 'ra_rads'
-        # ex: self.table['redshift'].name = 'red_shift'
+    def _clean_data(self):
         raise NotImplementedError()
     
     def _relational_schema(self):
         raise NotImplementedError()
 
     def _create_table(self):
-        raise NotImplementedError
+        raise NotImplementedError()
 
-    def _data2SQLValue(self) -> str:
+    def _data2SQLValues(self) -> str:
         raise NotImplementedError()
 
     # def insert(self, vals: str)
@@ -56,6 +54,7 @@ class CatalogConfig():
     def insert_all(self):
         raise NotImplementedError()
 
+
 class BasicAstropyConfig(CatalogConfig):
     def __init__(self, dbctxt: DBctxt, path: str, chunk_rows: int = 100000):
         super().__init__(dbctxt, path)
@@ -63,13 +62,13 @@ class BasicAstropyConfig(CatalogConfig):
         self.chunk_rows: int = int(chunk_rows)
 
         BasicAstropyConfig._tabularize(self, path)
-        BasicAstropyConfig._clean_table(self)
+        BasicAstropyConfig._clean_data(self)
         BasicAstropyConfig._relational_schema(self)
 
     def _tabularize(self, path):
         self.table = Table.read(path)
 
-    def _clean_table(self):
+    def _clean_data(self):
         pass # no modifications to table are necessary
 
     def _relational_schema(self):
@@ -112,7 +111,7 @@ class BasicAstropyConfig(CatalogConfig):
 
         logger.info("done creating table.")
                 
-    def _data2SQLValue(self, rows: range) -> str:
+    def _data2SQLValues(self, rows: range) -> str:
         all_values = []
     
         cols = range(len(self.table.columns))
@@ -123,9 +122,9 @@ class BasicAstropyConfig(CatalogConfig):
                 value = str(self.table[row_index][col_index])
                 valtype = numpy2PGSQL.convert(self.table[self.table.colnames[col_index]].dtype.str)
 
-                # #####################################################################
+                # ##############################################################
                 # TODO: make a more comprehensive, flexible fun. for cleaning
-                # #####################################################################
+                # ##############################################################
                 if value == "--":
                         value = "null"
 
@@ -154,7 +153,7 @@ class BasicAstropyConfig(CatalogConfig):
             
             logger.info(f"Inserting values for rows {rows.start}-{rows.stop} of {len(self.table)}.")
             
-            chunked_vals = self._data2SQLValue(rows)
+            chunked_vals = self._data2SQLValues(rows)
 
             for vals in chunked_vals:
                 stringified_chunk += f"{vals}, "
@@ -177,69 +176,151 @@ class BasicAstropyConfig(CatalogConfig):
 
 
 class TwoMASSConfig(CatalogConfig):
-    relational_schema = """CREATE TABLE twomass_psc (
-    ra double precision,
-    decl double precision,
-    err_maj real,
-    err_min real,
-    err_ang smallint,
-    designation character(17),
-    j_m real,
-    j_cmsig real,
-    j_msigcom real,
-    j_snr real,
-    h_m real,
-    h_cmsig real,
-    h_msigcom real,
-    h_snr real,
-    k_m real,
-    k_cmsig real,
-    k_msigcom real,
-    k_snr real,
-    ph_qual character(3),
-    rd_flg character(3),
-    bl_flg character(3),
-    cc_flg character(3),
-    ndet character(6),
-    prox real,
-    pxpa smallint,
-    pxcntr integer,
-    gal_contam smallint,
-    mp_flg smallint,
-    pts_key integer,
-    hemis character(1),
-    date date,
-    scan smallint,
-    glon real,
-    glat real,
-    x_scan real,
-    jdate double precision,
-    j_psfchi real,
-    h_psfchi real,
-    k_psfchi real,
-    j_m_stdap real,
-    j_msig_stdap real,
-    h_m_stdap real,
-    h_msig_stdap real,
-    k_m_stdap real,
-    k_msig_stdap real,
-    dist_edge_ns integer,
-    dist_edge_ew integer,
-    dist_edge_flg character(2),
-    dup_src smallint,
-    use_src smallint,
-    a character(1),
-    dist_opt real,
-    phi_opt smallint,
-    b_m_opt real,
-    vr_m_opt real,
-    nopt_mchs smallint,
-    ext_key integer,
-    scan_key integer,
-    coadd_key integer,
-    coadd smallint
-) WITHOUT OIDS;
-"""
-    def __init__(self, path: str):
+    relational_schema = [
+        "ra double precision",
+        "decl double precision",
+        "err_maj real",
+        "err_min real",
+        "err_ang smallint",
+        "designation character(17)",
+        "j_m real",
+        "j_cmsig real",
+        "j_msigcom real",
+        "j_snr real",
+        "h_m real",
+        "h_cmsig real",
+        "h_msigcom real",
+        "h_snr real",
+        "k_m real",
+        "k_cmsig real",
+        "k_msigcom real",
+        "k_snr real",
+        "ph_qual character(3)",
+        "rd_flg character(3)",
+        "bl_flg character(3)",
+        "cc_flg character(3)",
+        "ndet character(6)",
+        "prox real",
+        "pxpa smallint",
+        "pxcntr integer",
+        "gal_contam smallint",
+        "mp_flg smallint",
+        "pts_key integer",
+        "hemis character(1)",
+        "date date",
+        "scan smallint",
+        "glon real",
+        "glat real",
+        "x_scan real",
+        "jdate double precision",
+        "j_psfchi real",
+        "h_psfchi real",
+        "k_psfchi real",
+        "j_m_stdap real",
+        "j_msig_stdap real",
+        "h_m_stdap real",
+        "h_msig_stdap real",
+        "k_m_stdap real",
+        "k_msig_stdap real",
+        "dist_edge_ns integer",
+        "dist_edge_ew integer",
+        "dist_edge_flg character(2)",
+        "dup_src smallint",
+        "use_src smallint",
+        "a character(1)",
+        "dist_opt real",
+        "phi_opt smallint",
+        "b_m_opt real",
+        "vr_m_opt real",
+        "nopt_mchs smallint",
+        "ext_key integer",
+        "scan_key integer",
+        "coadd_key integer",
+        "coadd smallint"
+    ]
+    
+    def __init__(self, dbctxt: DBctxt, path: str, chunk_rows: int = 1000000):
+        super().__init__(dbctxt, path)
+        self.chunk_rows = chunk_rows
+        self.relational_schema = TwoMASSConfig.relational_schema # TODO: redundant
+        self.table_created: bool = False
+
+    def _tabularize(self, path):
+        with gzip.open(path, 'rb') as f:
+            file_content = f.read()
+            file_content = str(file_content)[2:-1].replace("\\\\N", "NULL")
+            file_content = file_content.split("\\n")
+            
+            for rownum, record in enumerate(file_content):
+                file_content[rownum] = file_content[rownum].split("|")
+
+            self.data = file_content
+                
+    def _clean_data(self):
         pass
+
+    def _relational_schema(self):
+        pass
+
+    def _create_table(self):
+        # #####################################################################
+        # TODO: drop table & create new, edit in place?
+        # #####################################################################
+        logger.info(f"Creating new table in database {self.dbctxt.POSTGRES_DB} on host {self.dbctxt.POSTGRES_HOST}.")
+
+        SQL_statement = ""
+        
+        SQL_statement += f"DROP TABLE IF EXISTS {self.dbctxt.sql_table};\n"
+        
+        SQL_statement += f"CREATE TABLE {self.dbctxt.sql_table} (\n{",\n".join(self.relational_schema)});"
+        with psycopg.connect(host=self.dbctxt.POSTGRES_HOST, port=self.dbctxt.POSTGRES_PORT, dbname=self.dbctxt.POSTGRES_DB, user=self.dbctxt.POSTGRES_USER, password=self.dbctxt.POSTGRES_PASSWORD) as conn:
+            with conn.cursor() as cur:
+                try:
+                    cur.execute(SQL_statement)
+                    conn.commit()
+                except psycopg.errors.DuplicateTable:
+                    raise f"Table {self.dbctxt.sql_table} already exists. Attemtping to continue with existing schema..."
+                except Exception as e: raise
+
+        logger.info("done creating table.")
+
+    def _data2SQLValues(self):
+        for rownum, record in enumerate(self.data):
+            for elementnum, element in enumerate(record):
+                if "character" in self.relational_schema[elementnum]:
+                    element = element.replace('"', '"""') # SQL escapes a quote with another quote
+                    element = element.replace("'", "''")
+                    record[elementnum] = f"\'{element}\'"
+                
+                if "date" in self.relational_schema[elementnum]:
+                    record[elementnum] = f"\'{element}\'"
+
+            record = f"({", ".join(record)})"
+
+            self.data[rownum] = record
+
+    def insert_all(self):
+        SQL_statement = ""
+
+        filenames = sorted(os.listdir(self.path))
+        
+        self._create_table()
+
+        for index, filename in enumerate(filenames):
+            
+            if filename[:4] == "psc_" and filename[-3:] == ".gz":
+                logger.debug(f"File index: {index}\t filename: {filename}")
+                
+                self._tabularize(f"{self.path}/{filename}")
+                self._clean_data()
+                self._data2SQLValues()
+
+                for start_index in range(0, len(self.data), self.chunk_rows):
+                    logger.debug(f"{self.path}/{filename} rows {start_index}:{min(len(self.data), start_index + self.chunk_rows)}")
+                    SQL_statement = f"INSERT INTO {self.dbctxt.sql_table} VALUES \n {",\n".join(self.data[start_index:start_index + self.chunk_rows])};"
+                    execute_statement(self.dbctxt, SQL_statement)
+                
+                logger.debug(f"file {self.path}/{filename} complete.")    
+        
+        q3c_index_table(self.dbctxt)
 

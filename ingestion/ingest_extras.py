@@ -14,8 +14,7 @@ class DBctxt():
         self.sql_table = sql_table
 
 def execute_statement(dbctxt: DBctxt, SQL_statement: str):
-    logger.info("Executing SQL statement")
-    logger.debug(SQL_statement)
+    logger.debug("Executing SQL statement")
     with psycopg.connect(host=dbctxt.POSTGRES_HOST, port=dbctxt.POSTGRES_PORT, dbname=dbctxt.POSTGRES_DB, user=dbctxt.POSTGRES_USER, password=dbctxt.POSTGRES_PASSWORD) as conn:
         with conn.cursor() as cur:
             try:
@@ -23,7 +22,7 @@ def execute_statement(dbctxt: DBctxt, SQL_statement: str):
                 conn.commit()
             except Exception as e: raise
             finally:
-                logger.info("executed SQL statement.")
+                logger.debug("executed SQL statement.")
 
 def q3c_index_table(dbctxt: DBctxt):
     SQL_statements = [f"CREATE INDEX ON {dbctxt.sql_table} (q3c_ang2ipix(ra, dec));", \

@@ -9,29 +9,33 @@ logger = logging.getLogger(__name__)
 
 def parse_and_insert(dbctxt: DBctxt, catalog_path: str, catalog_type: str):
     match(CatalogConfig.Catalogs[catalog_type]):
-        case CatalogConfig.Catalogs.DESI_DR1:
+        case CatalogConfig.Catalogs.DESIDR1:
             datain = CatalogConfig.BasicAstropyConfig(dbctxt, catalog_path)
             datain.insert_all()
-        case CatalogConfig.Catalogs.Fermi_LPSC:
+        case CatalogConfig.Catalogs.FERMILPSC:
             datain = CatalogConfig.BasicAstropyConfig(dbctxt, catalog_path)
             datain.insert_all()
-        case CatalogConfig.Catalogs.Fermi_3FHL:
+        case CatalogConfig.Catalogs.FERMI3FHL:
             datain = CatalogConfig.BasicAstropyConfig(dbctxt, catalog_path)
             datain.insert_all()
         case CatalogConfig.Catalogs.NEDLVS:
             datain = CatalogConfig.BasicAstropyConfig(dbctxt, catalog_path)
             datain.insert_all()
+        case CatalogConfig.Catalogs.TWOMASS:
+            datain = CatalogConfig.TwoMASSConfig(dbctxt, catalog_path)
+            datain.insert_all()
 
 
-# ##########################################################################################################################################
+
+# ##############################################################################
 # Run as standalone application
-# ##########################################################################################################################################
+# ##############################################################################
 if __name__ == "__main__":
     logger.info(f"started {__file__}.")
 
-    # #####################################################################
+    # ##########################################################################
     # Accept command line args
-    # #####################################################################
+    # ##########################################################################
     parser = argparse.ArgumentParser(
         prog="Catalog2PGSQL",
         description="Parse catalog file and insert records into a Postgres DB")
