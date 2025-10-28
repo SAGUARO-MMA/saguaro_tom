@@ -99,7 +99,8 @@ def target_post_save(target, created, tns_time_limit: float=5.):
                     break
 
             # now query the real TNS by name for even more recent updates
-            get_obj = [("objname", basename), ("objid", ""), ("photometry", "1"), ("spectra", "0")]
+            objname = iau_name if iau_name.startswith('FRB') else basename
+            get_obj = [("objname", objname), ("objid", ""), ("photometry", "1"), ("spectra", "0")]
             response, time_to_wait = TNS_get(get_obj,
                                              settings.BROKERS['TNS']['bot_id'],
                                              settings.BROKERS['TNS']['bot_name'],
@@ -125,8 +126,10 @@ def target_post_save(target, created, tns_time_limit: float=5.):
                     value = {'filter': candidate['filters']['name']}
                     if candidate['flux']:  # detection
                         value['magnitude'] = float(candidate['flux'])
-                    else:
+                    elif candidate['limflux']:  # nondetection
                         value['limit'] = float(candidate['limflux'])
+                    else:  # something else, maybe an FRB; don't ingest it
+                        continue
                     if candidate['fluxerr']:  # not empty or zero
                         value['error'] = float(candidate['fluxerr'])
                     rd, created = ReducedDatum.objects.get_or_create(
