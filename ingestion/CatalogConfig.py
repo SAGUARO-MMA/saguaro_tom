@@ -13,11 +13,11 @@ logger = logging.getLogger(__name__)
 
 Catalogs = Enum('Catalogs', 
 [
-    ('DESIDR1', 'DESI_DR1'),
+    ('DESIDR1',   'DESI_DR1'),
     ('FERMILPSC', 'Fermi_LPSC'),
     ('FERMI3FHL', 'Fermi_3FHL'),
-    ('NEDLVS', 'NEDLVS'),
-    ('TWOMASS', 'Two_MASS')
+    ('NEDLVS',    'NEDLVS'),
+    ('TWOMASS',   'Two_MASS')
 ])
 
 class CatalogConfig():
@@ -239,7 +239,7 @@ class TwoMASSConfig(CatalogConfig):
         "coadd smallint"
     ]
     
-    def __init__(self, dbctxt: DBctxt, path: str, chunk_rows: int = 1000000):
+    def __init__(self, dbctxt: DBctxt, path: str, chunk_rows: int = 100000):
         super().__init__(dbctxt, path)
         self.chunk_rows = chunk_rows
         self.relational_schema = TwoMASSConfig.relational_schema # TODO: redundant
@@ -249,7 +249,7 @@ class TwoMASSConfig(CatalogConfig):
         with gzip.open(path, 'rb') as f:
             file_content = f.read()
             file_content = str(file_content)[2:-1].replace("\\\\N", "NULL")
-            file_content = file_content.split("\\n")
+            file_content = file_content.split("\\n")[:-1] # remove trailing empty line
             
             for rownum, record in enumerate(file_content):
                 file_content[rownum] = file_content[rownum].split("|")
