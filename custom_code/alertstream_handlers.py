@@ -1,6 +1,7 @@
 from tom_nonlocalizedevents.models import NonLocalizedEvent, EventSequence, EventCandidate
 from tom_nonlocalizedevents.alertstream_handlers.igwn_event_handler import handle_igwn_message
 from django.contrib.auth.models import Group
+from django.contrib.sites.models import Site
 from django.conf import settings
 from email.mime.text import MIMEText
 from slack_sdk import WebClient
@@ -130,7 +131,7 @@ def send_email(subject, body, is_test_alert=False):
     """This doesn't currently work"""
     msg = MIMEText(body)
     msg['Subject'] = subject
-    msg['From'] = settings.ALERT_EMAIL_FROM
+    msg['From'] = settings.SERVER_EMAIL
     group = Group.objects.get(name='Test Email Alerts') if is_test_alert else Group.objects.get(name='Email Alerts')
     msg['To'] = ','.join([u.email.split(',')[0] for u in group.user_set.all()])
     if not msg['To']:
@@ -331,7 +332,9 @@ def handle_einstein_probe_alert(message, metadata):
     t_ep = Target.objects.create(name=ep_name, type='SIDEREAL', ra=ep_ra, dec=ep_dec, permissions='PUBLIC')
     EventCandidate.objects.create(target=t_ep, nonlocalizedevent=nonlocalizedevent)
     vet_or_post_error(t_ep, slack_ep, channel='alerts-ep')
-    alert_text = ALERT_TEXT_EP.format(nle_link=settings.NLE_LINKS[0][0], target_link=settings.TARGET_LINKS[0][0]
+    query = {'localization_event': nonlocalizedevent.event_id, 'localization_prob': 95, 'localization_dt': 3}
+    survey_obs_link = f"https://{Site.objects.get_current().domain}{reverse('surveys:observations')}?{urllib.parse.urlencode(query)}"
+    alert_text = ALERT_TEXT_EP.format(survey_obs_link=survey_obs_link, target_link=settings.TARGET_LINKS[0][0]
                                      ).format(target=t_ep)
     logger.info(f'Sending EP alert: {alert_text}')
     slack_ep.chat_postMessage(channel='alerts-ep', text=alert_text)

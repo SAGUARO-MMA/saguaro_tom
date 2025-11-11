@@ -7,7 +7,9 @@ from custom_code.alertstream_handlers import pick_slack_channel, send_slack, vet
 from custom_code.templatetags.skymap_extras import get_preferred_localization
 from tom_nonlocalizedevents.models import NonLocalizedEvent
 from datetime import datetime, timedelta, timezone
+from custom_code.templatetags.target_extras import split_name
 from slack_sdk import WebClient
+import numpy as np
 import json
 import logging
 
@@ -17,6 +19,7 @@ for handler in logger.handlers:
     handler.setFormatter(new_format)
 
 slack_tns = WebClient(settings.SLACK_TOKEN_TNS)
+slack_tns50 = WebClient(settings.SLACK_TOKEN_TNS50)
 slack_ep = WebClient(settings.SLACK_TOKEN_EP)
 
 
@@ -35,7 +38,6 @@ def get_active_nonlocalizedevents(t0=None, lookback_days=3., test=False):
     else:
         active_nles = active_nles.exclude(event_id__startswith='MS')
     return active_nles.distinct()
-
 
 class Command(BaseCommand):
 
@@ -194,36 +196,7 @@ class Command(BaseCommand):
         for targets in [new_targets, updated_targets]:
             for target in targets:
                 vet_or_post_error(target, slack_tns, channel='alerts-tns')
-
-                # check if any of the possible host galaxies are within 40 Mpc
-                target_extra = target.targetextra_set.filter(key='Host Galaxies').first()
-                if target_extra is None:
-                    continue
-                for galaxy in json.loads(target_extra.value):
-                    if galaxy['Source'] in ['GLADE', 'GWGC', 'HECATE'] and galaxy['Dist'] <= 40.:  # catalogs that have dist
-                        slack_alert = (f'<{settings.TARGET_LINKS[0][0]}|{target.name}> is {galaxy["Offset"]:.1f}" from '
-                                       f'galaxy {galaxy["ID"]} at {galaxy["Dist"]:.1f} Mpc.').format(target=target)
-                        break
-                else:
-                    continue
-
-                # if there was nearby host galaxy found, check the last nondetection
-                photometry = target.reduceddatum_set.filter(data_type='photometry')
-                first_det = photometry.filter(value__magnitude__isnull=False).order_by('timestamp').first()
-                last_nondet = photometry.filter(value__magnitude__isnull=True,
-                                                timestamp__lt=first_det.timestamp).order_by('timestamp').last()
-                if first_det and last_nondet:
-                    time_lnondet = (first_det.timestamp - last_nondet.timestamp).total_seconds() / 3600.
-                    dmag_lnondet = (last_nondet.value['limit'] - first_det.value['magnitude']) / (time_lnondet / 24.)
-                    slack_alert += (f' The last nondetection was {time_lnondet:.1f} hours before detection,'
-                                    f' during which time it rose >{dmag_lnondet:.1f} mag/day.')
-                else:
-                    slack_alert += ' No nondetection was reported.'
-                slack_tns.chat_postMessage(channel='alerts-tns', text=slack_alert)
-
-        for target in updated_targets_coords:
-            vet_or_post_error(target, slack_tns, channel='alerts-tns')
-
+                
         # automatically associate with nonlocalized events
         for nle in get_active_nonlocalizedevents(lookback_days=lookback_days_nle):
             seq = nle.sequences.last()
