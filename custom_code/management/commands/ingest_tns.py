@@ -2,6 +2,7 @@ from django.core.management.base import BaseCommand
 from django.conf import settings
 from django.db import connection
 from trove_targets.models import Target
+from tom_targets.models import BaseTarget
 from custom_code.healpix_utils import create_candidates_from_targets
 from custom_code.alertstream_handlers import pick_slack_channel, send_slack, vet_or_post_error
 from custom_code.templatetags.skymap_extras import get_preferred_localization
@@ -12,6 +13,9 @@ from slack_sdk import WebClient
 import numpy as np
 import json
 import logging
+
+from astropy.coordinates import SkyCoord
+from healpix_alchemy.constants import HPX
 
 logger = logging.getLogger(__name__)
 new_format = logging.Formatter('[%(asctime)s] %(levelname)s : s%(message)s')
@@ -116,7 +120,6 @@ class Command(BaseCommand):
             )
             updated_ids = [row[0] for row in cursor.fetchall()]
             updated_targets = Target.objects.filter(id__in = updated_ids)
-
             
         logger.info(f"Updated {len(updated_targets):d} targets to match the TNS.")
 
@@ -210,9 +213,36 @@ class Command(BaseCommand):
              
         logger.info(f"Added {len(new_targets):d} new targets from the TNS.")
 
-        for targets in [new_targets, updated_targets]:
-            for target in targets:
-                vet_or_post_error(target, slack_tns, channel='alerts-tns')
+        # Finally, we need to insert these into the Trove Target table rather than
+        # just the TOM BaseTarget table
+
+        # these missing_targets should be the ones that are added to the BaseTarget
+        # table but not the Trove Targets table
+        # note that we will recompute the healpix, etc. below. These are just
+        # temporary placeholders        
+        missing_targets = BaseTarget.objects.filter(target__isnull = True)
+        logger.info(f"Adding {len(missing_targets):d} from basetarget table to trove target table")        
+        for basetarget in missing_targets:            
+            # create the target with the basetarget ptr
+            coord = SkyCoord(basetarget.ra, basetarget.dec, unit="deg")
+            with connection.cursor() as cursor:
+                cursor.execute(f"""
+                INSERT INTO trove_targets_target (
+                    basetarget_ptr_id,
+                    healpix
+                )
+                VALUES (
+                    {basetarget.id},
+                    {HPX.skycoord_to_healpix(coord)}
+                )
+                """)
+
+            trove_target = Target.objects.filter(
+                basetarget_ptr_id = basetarget.id
+            ).first()
+
+            # then vet this target
+            vet_or_post_error(trove_target, slack_tns, channel='alerts-tns')
                 
         # automatically associate with nonlocalized events
         for nle in get_active_nonlocalizedevents(lookback_days=lookback_days_nle):
