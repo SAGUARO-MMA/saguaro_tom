@@ -322,5 +322,5 @@ class TwoMASSConfig(CatalogConfig):
                 
                 logger.debug(f"file {self.path}/{filename} complete.")    
         
-        q3c_index_table(self.dbctxt)
+        q3c_index_table(self.dbctxt, "ra", "decl")
 

@@ -26,7 +26,6 @@ def parse_and_insert(dbctxt: DBctxt, catalog_path: str, catalog_type: str):
             datain.insert_all()
 
 
-
 # ##############################################################################
 # Run as standalone application
 # ##############################################################################
