@@ -52,18 +52,23 @@ class Command(BaseCommand):
 
     def handle(self, lookback_days_nle=7., lookback_days_obs=3., **kwargs):
         
-        updated_targets_coords = Target.objects.raw(
-            """
-            --STEP 0: update coordinates and prefix of existing targets with TNS names
-            UPDATE tom_targets_basetarget AS tt
-            SET name=CONCAT(tns.name_prefix, tns.name), ra=tns.ra, dec=tns.declination, modified=NOW()
-            FROM tns_q3c as tns
-            WHERE REGEXP_REPLACE(tt.name, '^[^0-9]*', '')=tns.name
-            AND (q3c_dist(tt.ra, tt.dec, tns.ra, tns.declination) > 0
-                 OR tt.name != CONCAT(tns.name_prefix, tns.name))
-            RETURNING tt.*;
-            """
-        )
+        with connection.cursor() as cursor:
+             cursor.execute("""
+                 --STEP 0: update coordinates and prefix of existing targets with TNS names
+                 UPDATE tom_targets_basetarget AS tt
+                 SET name = CONCAT(tns.name_prefix, tns.name),
+                     ra = tns.ra,
+                     dec = tns.declination,
+                     modified = NOW()
+                 FROM tns_q3c AS tns
+                 WHERE REGEXP_REPLACE(tt.name, '^[^0-9]*', '') = tns.name
+                   AND (q3c_dist(tt.ra, tt.dec, tns.ra, tns.declination) > 0
+                        OR tt.name != CONCAT(tns.name_prefix, tns.name))
+                 RETURNING tt.id;
+             """)
+             updated_ids = [row[0] for row in cursor.fetchall()]
+             updated_targets_coords = Target.objects.filter(id__in = updated_ids)
+        
         logger.info(f"Updated coordinates of {len(updated_targets_coords):d} targets to match the TNS.")
 
         logger.info('Crossmatching TNS with targets table. This will take several minutes.')
@@ -98,16 +103,21 @@ class Command(BaseCommand):
                 """
             )
 
-        updated_targets = Target.objects.raw(
-            """
-            --STEP 2: update existing non-TNS targets within 2" of a TNS transient to have the TNS name and coordinates
-            UPDATE tom_targets_basetarget AS tt
-            SET name=tm.tns_name, ra=tm.ra, dec=tm.dec, modified=NOW()
-            FROM top_tns_matches AS tm
-            WHERE tt.name=tm.name AND (tm.name != tm.tns_name OR sep > 0)
-            RETURNING tt.*;
-            """
-        )
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                --STEP 2: update existing non-TNS targets within 2" of a TNS transient to have the TNS name and coordinates
+                UPDATE tom_targets_basetarget AS tt
+                SET name=tm.tns_name, ra=tm.ra, dec=tm.dec, modified=NOW()
+                FROM top_tns_matches AS tm
+                WHERE tt.name=tm.name AND (tm.name != tm.tns_name OR sep > 0)
+                RETURNING tt.id;
+                """
+            )
+            updated_ids = [row[0] for row in cursor.fetchall()]
+            updated_targets = Target.objects.filter(id__in = updated_ids)
+
+            
         logger.info(f"Updated {len(updated_targets):d} targets to match the TNS.")
 
         with connection.cursor() as cursor:
@@ -168,29 +178,36 @@ class Command(BaseCommand):
                 """
             )
 
-        deleted_targets = Target.objects.raw(
-            """
-            DELETE FROM tom_targets_basetarget
-            WHERE id IN (
+        with connection.cursor() as cursor:
+             cursor.execute(
+                """
                 SELECT old_id FROM targets_to_merge
-            )
-            RETURNING *;
-            """
-        )
+                """
+             )
+             ids_to_delete = [row[0] for row in cursor.fetchall()]
+
+        deleted_targets = Target.objects.filter(id__in = ids_to_delete)
+        deleted_targets.delete()
+             
         logger.info(f"Merged {len(deleted_targets):d} targets into TNS targets.")
         for target in deleted_targets:
             logger.info(f" - deleted target {target.name} during merge")
 
-        new_targets = Target.objects.raw(
-            """
-            --STEP 4: add all other unmatched TNS transients to the targets table (removing duplicate names)
-            INSERT INTO tom_targets_basetarget (name, type, created, modified, permissions, ra, dec, epoch, scheme)
-            SELECT CONCAT(name_prefix, name), 'SIDEREAL', NOW(), NOW(), 'PUBLIC', ra, declination, 2000, ''
-            FROM tns_q3c WHERE name_prefix != 'FRB' AND name != '2023hzc' -- this is a duplicate of AT2016jlf in the TNS
-            ON CONFLICT (name) DO NOTHING
-            RETURNING *;
-            """
-        )
+        with connection.cursor() as cursor:
+             cursor.execute(
+                """
+                --STEP 4: add all other unmatched TNS transients to the targets table (removing duplicate names)
+                INSERT INTO tom_targets_basetarget (name, type, created, modified, permissions, ra, dec, epoch, scheme)
+                SELECT CONCAT(name_prefix, name), 'SIDEREAL', NOW(), NOW(), 'PUBLIC', ra, declination, 2000, ''
+                FROM tns_q3c WHERE name_prefix != 'FRB' AND name != '2023hzc' -- this is a duplicate of AT2016jlf in the TNS
+                ON CONFLICT (name) DO NOTHING
+                RETURNING id;
+                """
+             )
+
+             new_target_ids = [row[0] for row in cursor.fetchall()]
+             new_targets = Target.objects.filter(id__in = new_target_ids)
+             
         logger.info(f"Added {len(new_targets):d} new targets from the TNS.")
 
         for targets in [new_targets, updated_targets]:
