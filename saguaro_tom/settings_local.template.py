@@ -1,6 +1,10 @@
 ALLOWED_HOST = ''       # hostname or IP address of the web server (leave blank for development)
 ATLAS_API_KEY = ''      # API key for the ATLAS forced photometry server
 DEBUG = False           # set to True to display error tracebacks in browser, leave False in production
+EMAIL_HOST = ''         # SMTP server for sending emails
+EMAIL_HOST_USER = ''    # email address for the account sending emails
+EMAIL_HOST_PASSWORD = ''  # password for the account sending emails (app password for Gmail)
+EMAIL_PORT = 587        # port for the SMTP server
 FORCE_SCRIPT_NAME = ''  # the subdomain where you will host the site (leave blank for development)
 GCN_CLIENT_ID = ''      # client ID for GCN Classic over Kafka
 GCN_CLIENT_SECRET = ''  # secret key for GCN Classic over Kafka
@@ -23,6 +27,7 @@ TARGET_LINKS = [  # links to TOMs for target pages, {target.name} is replaced by
     ('https://tom0.edu/targets/{target.id}/', 'Name of TOM 0'),  # TOM corresponding to Slack workspace 0
     ('https://tom1.edu/targets/{target.name}/', 'Name of TOM 1'),  # TOM corresponding to Slack workspace 1
 ]
+SITE_ID = 1  # set to 1 for production site, 2 for local development
 SLACK_TOKENS_GW = [  # Slack API tokens for GW alerts
     '',  # Slack workspace 0
     '',  # Slack workspace 1

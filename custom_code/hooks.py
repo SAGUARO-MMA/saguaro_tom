@@ -1,7 +1,9 @@
 import logging
+import numpy as np
 from tom_targets.models import TargetExtra
 from tom_dataproducts.models import ReducedDatum
 from candidate_vetting.vet_bns import vet_bns
+from candidate_vetting.public_catalogs.phot_catalogs import TNS_Phot
 from astropy.cosmology import FlatLambdaCDM
 from astropy.time import Time, TimezoneInfo
 from astropy.coordinates import SkyCoord
@@ -78,6 +80,9 @@ def target_post_save(target, created, nonlocalized_event_name=None):
             vet_bns(target.id, nonlocalized_event_name)
         else:
             messages.append("Could not run vetting on this target because there are no non-localized events associated with it!")
+
+        # then query TNS for the photometry
+        TNS_Phot("tns").query(target, timelimit=np.inf)
             
     redshift = target.targetextra_set.filter(key='Redshift')
     if redshift.exists() and redshift.first().float_value >= 0.02 and target.distance is None:

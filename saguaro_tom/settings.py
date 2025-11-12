@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     'tom_dataproducts',
     'tom_alertstreams',
     'tom_nonlocalizedevents',
+    'tom_registration',
     'webpack_loader',
     'custom_code',
     'django_tasks',
@@ -68,8 +69,6 @@ INSTALLED_APPS = [
     'trove_targets',
     'trove_nonlocalizedevents',
 ]
-
-SITE_ID = 1
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -83,6 +82,7 @@ MIDDLEWARE = [
     'tom_common.middleware.Raise403Middleware',
     'tom_common.middleware.ExternalServiceMiddleware',
     'tom_common.middleware.AuthStrategyMiddleware',
+    'tom_registration.middleware.RedirectAuthenticatedUsersFromRegisterMiddleware',
 ]
 
 ROOT_URLCONF = 'saguaro_tom.urls'
@@ -154,7 +154,7 @@ LOGIN_REDIRECT_URL = FORCE_SCRIPT_NAME + '/'
 LOGOUT_REDIRECT_URL = FORCE_SCRIPT_NAME + '/'
 
 AUTHENTICATION_BACKENDS = (
-    'django.contrib.auth.backends.ModelBackend',
+    'django.contrib.auth.backends.AllowAllUsersModelBackend',
     'guardian.backends.ObjectPermissionBackend',
 )
 
@@ -299,7 +299,7 @@ TARGET_PERMISSIONS_ONLY = True
 
 # URLs that should be allowed access even with AUTH_STRATEGY = LOCKED
 # for example: OPEN_URLS = ['/', '/about']
-OPEN_URLS = []
+OPEN_URLS = ['/accounts/register/']
 
 HOOKS = {
     'target_post_save': 'custom_code.hooks.target_post_save',
@@ -394,3 +394,11 @@ def sf11(*args):
 
 DUST_MAP = sf11
 COMMENTS_ENABLED = False
+
+TOM_REGISTRATION = {
+    'REGISTRATION_AUTHENTICATION_BACKEND': 'django.contrib.auth.backends.AllowAllUsersModelBackend',
+    'REGISTRATION_REDIRECT_PATTERN': 'home',
+    'REGISTRATION_STRATEGY': 'approval_required',
+    'SEND_APPROVAL_EMAILS': True,
+    'APPROVAL_SUBJECT': f'Congratulations!! Welcome to {TOM_NAME}!',
+}

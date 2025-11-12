@@ -44,8 +44,9 @@ from candidate_vetting.public_catalogs.static_catalogs import (
     Ps1PointSource
 )
 
-# After we order the dataframe by the Pcc score, take this number of hosts from the top
-N_TOP_PCC = 50
+# After we order the dataframe by the Pcc score, remove any host matches with a greater
+# Pcc score than this
+PCC_THRESHOLD = 0.1
 
 class AsymmetricGaussian(rv_continuous):
     """
@@ -67,9 +68,11 @@ class AsymmetricGaussian(rv_continuous):
             -((x[where_plus] - mean[where_plus]) / unc_plus[where_plus])**2 / 2
         ) # Right side Gaussian-like
 
-        return minus_dist.tolist()+plus_dist.tolist()
-
-def _localization_from_name(nonlocalized_event_name):
+        non_normalized = np.array(minus_dist.tolist()+plus_dist.tolist())
+        norm_factor = trapezoid(non_normalized) # integrate over the non normalized PDF
+        return non_normalized/norm_factor
+        
+def _localization_from_name(nonlocalized_event_name, max_time=Time.now()):
     """Find the most recenet LocalizationEvent object from the nonlocalized event name
     """
     # first find the localization to use
@@ -81,21 +84,46 @@ def _localization_from_name(nonlocalized_event_name):
         nonlocalizedevent_id=localization_queryset.id
     )
 
+    all_localizations_sorted = sorted(all_localizations, key=lambda x : x.date)
+
     # now choose the most recent localization
-    localization = all_localizations[0]
-    for loc in all_localizations:
-        curr_loc_time = Time(localization.date, format="datetime")
-        test_loc_time = Time(loc.date, format="datetime")
-        if test_loc_time > curr_loc_time:
-            localization = loc
+    localization = all_localizations_sorted[0]
+    if len(all_localizations_sorted) > 1:
+        for loc in all_localizations_sorted[1:]:
+            curr_loc_time = Time(localization.date, format="datetime")
+            test_loc_time = Time(loc.date, format="datetime")
+            if test_loc_time > curr_loc_time and test_loc_time <= max_time:
+                localization = loc
 
     return localization
+
+def _distance_at_healpix(nonlocalized_event_name, target_id, max_time=Time.now()):
+    """Computes the GW distance at the target_id healpix location"""
+
+    localization = _localization_from_name(nonlocalized_event_name, max_time=max_time)
+    # find the distance at the healpix
+    query = sa.select(
+        SaSkymapTile.distance_mean,
+        SaSkymapTile.distance_std
+    ).filter(
+        SaTarget.basetarget_ptr_id == target_id,
+        SaSkymapTile.localization_id == localization.id,
+        SaSkymapTile.tile.contains(SaTarget.healpix)
+    )
+
+    # execute the query
+    with Session(sa_engine) as session:
+        dist, dist_err = session.execute(
+            query
+        ).fetchall()[0]
+
+    return dist, dist_err
 
 def update_score_factor(event_candidate, key, value):
     ScoreFactor.objects.update_or_create(
         event_candidate = event_candidate,
         key = key,
-        value = value
+        defaults = dict(value = value)
     )
 
 def update_event_candidate_score(event_candidate, score):
@@ -154,59 +182,45 @@ def _save_host_galaxy_df(df, target):
 def skymap_association(
         nonlocalized_event_name:str,
         target_id:int,
+        max_time = Time.now(),
         prob:float=0.95
 ) -> float:
 
     # grab the EventLocalization object for nonlocalized_event_name
-    localization = _localization_from_name(nonlocalized_event_name)
+    localization = _localization_from_name(nonlocalized_event_name, max_time=max_time)
+    print(f"Localization Used: {localization} ({localization.date}; {max_time})")
+
+    # find the healpix where this target is located
+    target_hpx_subq = sa.select(
+        SaTarget.healpix
+    ).filter(
+        SaTarget.basetarget_ptr_id == target_id
+    ).lateral()
     
-    # calculate the cumalative probability density for the tiles
-    # SHOULDN'T THIS BE STORED IN THE SaSkymapTile OBJECT???
-    cum_prob = sa.func.sum(
-        SaSkymapTile.probdensity * SaSkymapTile.tile.area
-    ).over(
-        order_by=SaSkymapTile.probdensity.desc()
-    ).label(
-        'cum_prob'
-    )
-
-    # find the localization region in the SaSkymapTile
-    subquery = sa.select(
-        SaSkymapTile.probdensity,
-        cum_prob
+    # find the probdensity at the tile of the target_id
+    # and for this localization id
+    probdensity_subq = sa.select(
+        sa.func.min(SaSkymapTile.probdensity).label("min_probdensity")
     ).filter(
+        SaSkymapTile.tile.contains(target_hpx_subq.c.healpix),
         SaSkymapTile.localization_id == localization.id
-    ).subquery()
-
-    # Filter on the skymap and take all of the tiles that are within the
-    # cumulative probability density contour passed in as "prob"
-    min_probdensity = sa.select(
-        sa.func.min(subquery.columns.probdensity)
+    )
+    
+    # then we can sum from that probability density to the maximum
+    cumprob_query = sa.select(
+        sa.func.sum(
+            SaSkymapTile.probdensity * SaSkymapTile.tile.area
+        )
     ).filter(
-        subquery.columns.cum_prob <= prob
-    ).scalar_subquery()
-
-    # write the query for the Target table
-    query = sa.select(
-        cum_prob
-    ).filter(
-        SaTarget.basetarget_ptr_id == target_id,
-        SaSkymapTile.localization_id == localization.id,
-        SaSkymapTile.tile.contains(SaTarget.healpix),
-        SaSkymapTile.probdensity >= min_probdensity
+        SaSkymapTile.probdensity >= probdensity_subq.c.min_probdensity,
+        SaSkymapTile.localization_id == localization.id
     )
 
-    # execute the query
+    # finally we can execute this cumprob_query and return 1 - the result
     with Session(sa_engine) as session:
-        skymap_score = session.execute(
-            query
-        ).fetchall()
+        cumprob = session.execute(cumprob_query).fetchall()
 
-    if len(skymap_score) == 0:
-        return 0
-
-    # need [0][0] because it is a list of tuples
-    return 1 - float(skymap_score[0][0])
+    return 1 - cumprob[0][0]
         
 def pcc(r:list[float], m:list[float]):
     """
@@ -227,7 +241,7 @@ def pcc(r:list[float], m:list[float]):
 
     return prob
         
-def host_association(target_id:int, radius=50, nkeep=N_TOP_PCC):
+def host_association(target_id:int, radius=50, pcc_threshold=PCC_THRESHOLD):
     """
     Find all of the potential hosts associated with this target
     """
@@ -263,7 +277,11 @@ def host_association(target_id:int, radius=50, nkeep=N_TOP_PCC):
         df = cat.to_standardized_catalog(df)
 
         # some extra cleaning before continuing
-        df = df[df.z > 0.02] # otherwise it probably isn't a real redshift
+        if "z" in df:
+            # we only need to do this if the redshift is in the dataframe
+            # if it isn't then that's fine because it means the catalog we are using
+            # had a derived distance in it already!
+            df = df[df.z > 0.02] # otherwise it probably isn't a real redshift
         df = df.dropna(
             subset=["default_mag", "ra", "dec", "lumdist"]
         ) # drop rows without the information we need
@@ -282,9 +300,14 @@ def host_association(target_id:int, radius=50, nkeep=N_TOP_PCC):
 
     # TODO: We will need to put some deduplication code for the galaxy dataframe
     #       here at some point. For now it seems to work without it though!
+
+    # filter out anything above PCC_THRESHOLD
+    # Or, alternatively, only keep the best matching galaxy (if all of the galaxies
+    # have a Pcc greater than PCC_THRESHOLD)
+    pcc_threshold = max(pcc_threshold, df.pcc.min())
     
-    # Finally, sort inversely by pcc
-    ret_df = df.sort_values("pcc", ascending=True)[:nkeep]
+    # Finally, filter out anything <= pcc_threshold and sort inversely by pcc
+    ret_df = df[df.pcc <= pcc_threshold].sort_values("pcc", ascending=True)
     
     end = time.time()
     print(ret_df)
@@ -298,26 +321,13 @@ def host_association(target_id:int, radius=50, nkeep=N_TOP_PCC):
 def host_distance_match(
         host_df:pd.DataFrame,
         target_id:int,
-        nonlocalized_event_name:str
+        nonlocalized_event_name:str,
+        max_time:Time=Time.now()
 ):
 
-    localization = _localization_from_name(nonlocalized_event_name)
     # find the distance at the healpix
-    query = sa.select(
-        SaSkymapTile.distance_mean,
-        SaSkymapTile.distance_std
-    ).filter(
-        SaTarget.basetarget_ptr_id == target_id,
-        SaSkymapTile.localization_id == localization.id,
-        SaSkymapTile.tile.contains(SaTarget.healpix)
-    )
-
-    # execute the query
-    with Session(sa_engine) as session:
-        dist, dist_err = session.execute(
-            query
-        ).fetchall()[0]
-
+    dist, dist_err = _distance_at_healpix(nonlocalized_event_name, target_id, max_time=max_time)
+        
     # now crossmatch this distance to the host galaxy dataframe
     _lumdist = np.linspace(0, 10_000, 10_000)
     test_pdf = norm.pdf(_lumdist, loc=dist, scale=dist_err)
@@ -330,8 +340,12 @@ def host_distance_match(
         ) for _,row in host_df.iterrows() 
     ])
     joint_prob = host_pdfs*test_pdf
-
-    host_df["dist_norm_joint_prob"] = trapezoid(joint_prob, axis=1)
+    
+    # finally, compute the Bhattacharyya coefficient for the overlap of these
+    # two distributions. https://en.wikipedia.org/wiki/Bhattacharyya_distance
+    # This coefficient is non-parametric which is good for our Asymmetric Gaussian
+    # Original paper: http://www.jstor.org/stable/25047806
+    host_df["dist_norm_joint_prob"] = trapezoid(np.sqrt(joint_prob), axis=1)
     return host_df
 
 def point_source_association(target_id:int, radius:float=2):
