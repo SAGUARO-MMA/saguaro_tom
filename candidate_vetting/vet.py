@@ -6,7 +6,7 @@ import time
 import numpy as np
 import pandas as pd
 from scipy.stats import norm, rv_continuous
-from scipy.integrate import trapezoid
+from scipy.integrate import trapezoid, quad
 
 from astropy.coordinates import SkyCoord
 from astropy import units as u
@@ -52,25 +52,41 @@ class AsymmetricGaussian(rv_continuous):
     """
     Custom Asymmetric Gaussian distribution for uneven uncertainties
     """
-    def _pdf(self, x, mean, unc_minus, unc_plus):        
-        # normalization factor
-        # from https://forum.pyro.ai/t/simplest-way-to-generate-an-assymetric-gaussian/5736
-        norm = np.sqrt(2)/(np.sqrt(np.pi) * (unc_minus + unc_plus))
-
+    def _asymm_gauss_forquad(x : float, mean : float, 
+                             unc_minus : float, unc_plus : float):
+        """Asymmetric Gaussian function written for compatibility with 
+        scipy.integrate.quad"""
+        return np.exp( -0.5 * ((x-mean)/unc_minus)**2) if x < mean else np.exp( -0.5 * ((x-mean)/unc_plus)**2)
+    
+    def _pdf_unnorm(self, x, mean, unc_minus, unc_plus):
+        """**Unnormalized** asymmetric Gaussian PDF"""
         # piecewise return a Gaussian depending on the side of the mean you are on
         where_minus = np.where(x < mean)[0]
         where_plus = np.where(x >= mean)[0]
 
         minus_dist = np.exp(
-            -((x[where_minus] - mean[where_minus]) / unc_minus[where_minus])**2 / 2
+            -0.5*((x[where_minus] - mean[where_minus]) / unc_minus[where_minus])**2
         ) # Left side Gaussian-like
         plus_dist = np.exp(
-            -((x[where_plus] - mean[where_plus]) / unc_plus[where_plus])**2 / 2
+            -0.5*((x[where_plus] - mean[where_plus]) / unc_plus[where_plus])**2
         ) # Right side Gaussian-like
 
-        non_normalized = np.array(minus_dist.tolist()+plus_dist.tolist())
-        norm_factor = trapezoid(non_normalized) # integrate over the non normalized PDF
-        return non_normalized/norm_factor
+        return np.concatenate((minus_dist, plus_dist))
+    
+    def _pdf(self, x, mean, unc_minus, unc_plus):
+        """**Normalized** asymmetric Gaussian PDF"""
+        # unclear why, but even when floats are passed to this function for 
+        # mean, unc_minus, and unc_plus, they become lists of the same value 
+        # repeated len(x) times
+        
+        # numerically integrate asymmetric Gaussian from 0 to +inf, for normalization
+        integ = quad(func=AsymmetricGaussian._asymm_gauss_forquad, 
+                      a=0, b=np.inf, 
+                      args=(mean[0], unc_minus[0], unc_plus[0]))
+        integ_norm = 1 / integ[0]
+
+        # return unnormalized PDF multiplied by normalization factor
+        return self._pdf_unnorm(x, mean, unc_minus, unc_plus) * integ_norm
         
 def _localization_from_name(nonlocalized_event_name, max_time=Time.now()):
     """Find the most recenet LocalizationEvent object from the nonlocalized event name
