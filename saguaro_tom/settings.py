@@ -254,8 +254,8 @@ TOM_ALERT_CLASSES = [
 BROKERS = {
     'TNS': {
         'api_key': TNS_API_KEY,
-        'bot_id': '60911',
-        'bot_name': 'SAGUARO_Bot1',
+        'bot_id': '197798',
+        'bot_name': 'TROVE_Bot1',
     }
 }
 

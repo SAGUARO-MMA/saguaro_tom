@@ -88,10 +88,10 @@ slack_ep = WebClient(settings.SLACK_TOKEN_EP)
 slack_gw = [WebClient(token) for token in settings.SLACK_TOKENS_GW]
 
 
-def vet_or_post_error(target, slack_client, channel):
+def vet_or_post_error(target, slack_client, channel, **kwargs):
     try:
         target.save()  # to do coordinate conversions
-        _, tns_query_status = target_post_save(target, created=True)
+        _, tns_query_status = target_post_save(target, created=True, **kwargs)
         if tns_query_status is not None:
             logger.warning(tns_query_status)
             slack_client.chat_postMessage(channel=channel, text=tns_query_status)

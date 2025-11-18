@@ -194,12 +194,15 @@ def vet_bns(target_id:int, nonlocalized_event_name:Optional[str]=None):
     prephot = _get_pre_disc_phot(target.id, nonlocalized_event)
     predet_score = 1
     if len(prephot):
-        n_predets, _ = get_predetection_stats(
-            prephot.mjd.values,
-            prephot.magerr.values,
-            window_size=5, # +/-5 day window size
-            det_snr_thresh=PREDETECTION_SNR_THRESHOLD
-        )
+        try:
+            n_predets, _ = get_predetection_stats(
+                prephot.mjd.values,
+                prephot.magerr.values,
+                window_size=5, # +/-5 day window size
+                det_snr_thresh=PREDETECTION_SNR_THRESHOLD
+            )
+        except ValueError:
+            n_predets = [0] # this ValueError only happens when there aren't any predets
         if any(v >= PARAM_RANGES["max_predets"] for v in n_predets):
             predet_score = PHOT_SCORE_MIN
             update_score_factor(event_candidate, "predetection_score", predet_score)
