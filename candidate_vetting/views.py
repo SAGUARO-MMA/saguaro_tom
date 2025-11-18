@@ -9,7 +9,8 @@ from django.views.generic.base import RedirectView
 from django.http import HttpResponseRedirect
 
 from trove_targets.models import Target
-from custom_code.hooks import target_post_save
+from candidate_vetting.vet_bns import vet_bns
+from candidate_vetting.public_catalogs.phot_catalogs import TNS_Phot
 
 import requests
 
@@ -34,17 +35,13 @@ class TargetVettingView(LoginRequiredMixin, RedirectView):
             # because parse_qs returns lists for each query item
             nonlocalized_event_name = nonlocalized_event_name[0]
 
-        banners, tns_query_status = target_post_save(
-            target,
-            created=True,
-            nonlocalized_event_name=nonlocalized_event_name
-        )
-        for banner in banners:
-            messages.success(request, banner)
 
-        if tns_query_status is not None:
-            messages.add_message(request,99,tns_query_status)
+        # first check for new photometry
+        TNS_Phot("tns").query(target, timelimit=10)
 
+        # then run the vetting
+        vet_bns(target.id, nonlocalized_event_name)
+            
         return HttpResponseRedirect(self.get_redirect_url())
 
     def get_redirect_url(self):

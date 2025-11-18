@@ -873,3 +873,6 @@ class ScoreFactor(models.Model):
     event_candidate = models.ForeignKey(EventCandidate, on_delete=models.CASCADE)
     key = models.CharField(max_length=200)
     value = models.CharField(max_length=200)
+
+    class Meta:
+        unique_together = ("event_candidate", "key")

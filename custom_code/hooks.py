@@ -84,7 +84,6 @@ def associate_nle_with_target(target:Target, lookback_days_nle, lookback_days_ob
         seq = nle.sequences.last()
         localization = get_preferred_localization(nle)
         nle_time = datetime.strptime(seq.details['time'], '%Y-%m-%dT%H:%M:%S.%f%z')
-        breakpoint()
         target_ids = []
         first_det = target.reduceddatum_set.filter(data_type='photometry', value__magnitude__isnull=False
                                                    ).order_by('timestamp').first()
