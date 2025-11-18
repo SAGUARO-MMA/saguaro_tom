@@ -75,7 +75,9 @@ def _score_phot(allphot, target, nonlocalized_event, filt=None):
     lum = compute_peak_lum(phot.mag, phot.magerr, phot["filter"].tolist(), dist*u.Mpc)
 
     phot_score = 1
-    if lum < PARAM_RANGES["lum_max"][0] or lum > PARAM_RANGES["lum_max"][1]:
+    if lum is not None and (
+            lum < PARAM_RANGES["lum_max"][0] or lum > PARAM_RANGES["lum_max"][1]
+    ):
         phot_score *= PHOT_SCORE_MIN
 
     # then we can only do the next stuff if there is more than one photometry point

@@ -301,6 +301,9 @@ def compute_peak_lum(
 
     lc = LC([mag, magerr, filters], names=['mag', 'dmag', 'filter'])
     lc.calcFlux()
+
+    if len(lc) == 0:
+        return None # we don't want to change the score if there isn't photometry to do this
     
     # find the max of the light curve
     fluxmax_idx = np.argmax(lc["flux"])
