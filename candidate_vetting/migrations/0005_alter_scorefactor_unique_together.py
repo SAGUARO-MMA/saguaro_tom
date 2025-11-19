@@ -6,7 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('tom_nonlocalizedevents', '0019_merge_20251111_2206'),
+        # ('tom_nonlocalizedevents', '0019_merge_20251111_2206'),
         ('candidate_vetting', '0004_rename_event_candidate_id_scorefactor_event_candidate'),
     ]
 
