@@ -26,7 +26,7 @@ def execute_statement(dbctxt: DBctxt, SQL_statement: str):
 
 def q3c_index_table(dbctxt: DBctxt, ra: str = "ra", dec: str = "dec"):
     SQL_statements = [f"CREATE INDEX ON {dbctxt.sql_table} (q3c_ang2ipix({ra}, {dec}));", \
-                      f"CLUSTER {dbctxt.sql_table}_q3c_ang2ipix_idx ON {dbctxt.sql_table};"] # q3c docs recommend to "cluster" as well
+                      f"CLUSTER {dbctxt.sql_table}_q3c_ang2ipix_idx ON {dbctxt.sql_table};"] # create index creates index named <tablename>_q3c_ang2ipix_idx
     
     execute_statement(dbctxt, SQL_statements[0])
     execute_statement(dbctxt, SQL_statements[1])
