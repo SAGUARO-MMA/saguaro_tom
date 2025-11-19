@@ -2,27 +2,27 @@ import argparse
 import logging
 
 from ingest_extras import *
-import CatalogConfig
+import catalog_config
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 def parse_and_insert(dbctxt: DBctxt, catalog_path: str, catalog_type: str):
-    match(CatalogConfig.Catalogs[catalog_type]):
-        case CatalogConfig.Catalogs.DESIDR1:
-            datain = CatalogConfig.BasicAstropyConfig(dbctxt, catalog_path)
+    match(catalog_config.Catalogs[catalog_type]):
+        case catalog_config.Catalogs.DESIDR1:
+            datain = catalog_config.BasicAstropyConfig(dbctxt, catalog_path)
             datain.insert_all()
-        case CatalogConfig.Catalogs.FERMILPSC:
-            datain = CatalogConfig.BasicAstropyConfig(dbctxt, catalog_path)
+        case catalog_config.Catalogs.FERMILPSC:
+            datain = catalog_config.BasicAstropyConfig(dbctxt, catalog_path)
             datain.insert_all()
-        case CatalogConfig.Catalogs.FERMI3FHL:
-            datain = CatalogConfig.BasicAstropyConfig(dbctxt, catalog_path)
+        case catalog_config.Catalogs.FERMI3FHL:
+            datain = catalog_config.BasicAstropyConfig(dbctxt, catalog_path)
             datain.insert_all()
-        case CatalogConfig.Catalogs.NEDLVS:
-            datain = CatalogConfig.BasicAstropyConfig(dbctxt, catalog_path)
+        case catalog_config.Catalogs.NEDLVS:
+            datain = catalog_config.BasicAstropyConfig(dbctxt, catalog_path)
             datain.insert_all()
-        case CatalogConfig.Catalogs.TWOMASS:
-            datain = CatalogConfig.TwoMASSConfig(dbctxt, catalog_path)
+        case catalog_config.Catalogs.TWOMASS:
+            datain = catalog_config.TwoMASSConfig(dbctxt, catalog_path)
             datain.insert_all()
 
 

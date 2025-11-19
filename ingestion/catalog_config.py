@@ -46,8 +46,6 @@ class CatalogConfig():
     def _data2SQLValues(self) -> str:
         raise NotImplementedError()
 
-    # def insert(self, vals: str)
-
     # ##########################################################################
     # "public"
     # ##########################################################################
@@ -86,13 +84,9 @@ class BasicAstropyConfig(CatalogConfig):
         
             self.relational_schema = self.relational_schema[:-1] # get rid of the trailing comma bc PGSQL syntax won't ignore it
             self.relational_schema += ")"
-            # print(ap_types) # used in devel to get src data types (in the fits file, not implementation)
             return self.relational_schema
 
     def _create_table(self):
-        # #####################################################################
-        # TODO: drop table & create new, edit in place?
-        # #####################################################################
         logger.info(f"Creating new table in database {self.dbctxt.POSTGRES_DB} on host {self.dbctxt.POSTGRES_HOST}.")
 
         SQL_statement = ""
@@ -123,7 +117,7 @@ class BasicAstropyConfig(CatalogConfig):
                 valtype = numpy2PGSQL.convert(self.table[self.table.colnames[col_index]].dtype.str)
 
                 # ##############################################################
-                # TODO: make a more comprehensive, flexible fun. for cleaning
+                # TODO: DRY: delegate to a fun. for cleaning
                 # ##############################################################
                 if value == "--":
                         value = "null"
