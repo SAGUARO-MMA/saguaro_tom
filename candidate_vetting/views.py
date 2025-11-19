@@ -10,7 +10,7 @@ from django.http import HttpResponseRedirect
 
 from trove_targets.models import Target
 from candidate_vetting.vet_bns import vet_bns
-from candidate_vetting.public_catalogs.phot_catalogs import TNS_Phot
+from candidate_vetting.vet_phot import find_public_phot
 
 import requests
 
@@ -37,11 +37,12 @@ class TargetVettingView(LoginRequiredMixin, RedirectView):
 
 
         # first check for new photometry
-        TNS_Phot("tns").query(target, timelimit=10)
+        messages.info(request, "Checking for new public forced photometry. We will vet without this, please consider running the vetting again in ~3-5 minutes.")
+        find_public_phot(target, queue_priority=0) # set priority=0 so this jumps the queue (clearly a user cares about it)
 
         # then run the vetting
         vet_bns(target.id, nonlocalized_event_name)
-            
+        
         return HttpResponseRedirect(self.get_redirect_url())
 
     def get_redirect_url(self):

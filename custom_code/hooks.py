@@ -5,6 +5,7 @@ from tom_targets.models import TargetExtra
 from tom_nonlocalizedevents.models import NonLocalizedEvent
 from tom_dataproducts.models import ReducedDatum
 from candidate_vetting.vet_bns import vet_bns
+from candidate_vetting.vet_phot import find_public_phot
 from candidate_vetting.public_catalogs.phot_catalogs import TNS_Phot
 from custom_code.healpix_utils import create_candidates_from_targets
 from custom_code.templatetags.skymap_extras import get_preferred_localization
@@ -111,9 +112,9 @@ def target_post_save(target, created=True, lookback_days_nle=7, lookback_days_ob
                 update_or_create_target_extra(target, 'MW E(B-V)', mwebv)
                 messages.append(f'MW E(B-V) set to {mwebv:.4f}')
 
-        # then query TNS for the photometry
-        TNS_Phot("tns").query(target, timelimit=np.inf)
-
+        # then query for new photometry
+        find_public_phot(target)
+        
         # then check if this target is associated with any NLEs
         new_candidates = associate_nle_with_target(
             target,

@@ -2,6 +2,7 @@
 Some general functions useful for vetting photometry
 """
 from typing import Tuple, Optional, Iterable
+from datetime import datetime, timezone, timedelta
 
 from astropy.time import Time
 from astropy.stats import akaike_info_criterion_lsq as info_crit
@@ -15,6 +16,8 @@ from lightcurve_fitting.lightcurve import LC
 from tom_nonlocalizedevents.models import NonLocalizedEvent, EventSequence
 from tom_dataproducts.models import ReducedDatum
 from trove_targets.models import Target
+from candidate_vetting.public_catalogs.phot_catalogs import TNS_Phot
+from candidate_vetting.tasks import async_atlas_query
 
 def _powerlaw(x, a, y0):
     """
@@ -369,3 +372,61 @@ def get_predetection_stats(
     
     # now we can transpose the result and return
     return tuple(zip(*res))
+
+def find_public_phot(
+        target:Target,
+        forced_phot_tol=1,
+        days_ago_max=200,
+        queue_priority=100
+) -> None:
+    """Query TNS, ATLAS Forced photometry, and other services for publicly available
+    photometry. After querying for new photometry it will automatically add it to
+    the target.
+
+    Parameters
+    ----------
+    target: Target
+        The Trove Target model object to find data for
+    forced_phot_tol: int = 1
+        The tolerance on the forced photometry sources. If we have queried for forced
+        photometry in the past forced_phot_tol days, we skip querying for more.
+    days_ago_max: int = 200
+        The days ago to query forced photometry servers for. If forced photometry
+        already exists from a service within days_ago, we only query for the days since
+        the last existing photometry point.
+    """
+
+    # check TNS for any new photometry
+    TNS_Phot("tns").query(target, timelimit=10)
+
+    # query ATLAS for new forced photometry
+    # get the most recent ATLAS forced photometry point
+    atlas_data = target.reduceddatum_set.filter(
+        data_type="photometry",
+        source_name="ATLAS"
+    )
+    query_atlas = True
+    days_ago = days_ago_max # initialize days_ago as the maximum, and recompute as needed
+    if atlas_data.count(): # if this is true there is existing ATLAS data
+        last_atlas_point = atlas_data.order_by("timestamp").last()
+
+        now = datetime.now(tz=timezone.utc)
+        if last_atlas_point.timestamp < now - timedelta(days=forced_phot_tol):
+            # then we should only query ATLAS for this target for forced photometry
+            # since the last point we have
+            days_ago = (last_atlas_point.timestamp - now).days
+            query_atlas = days_ago > 3 # otherwise ATLAS probably won't have anything new
+        else:
+            # Then we have already queried ATLAS for this target in the past forced_phot_tol days
+            query_atlas = False
+            
+    if query_atlas:
+        async_atlas_query.using(
+            priority=queue_priority # this sets the priority to whatever is passed in
+        ).enqueue(
+            target.id,
+            days_ago=min(
+                days_ago_max,
+                days_ago
+            ) # this min ensures we never query more than days_ago_max
+        )
