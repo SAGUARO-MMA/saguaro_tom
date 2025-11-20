@@ -48,6 +48,9 @@ PHOT_SCORE_MIN = 0.1
 PREDETECTION_SNR_THRESHOLD = 5 # require a S/N of 5 for a predetection to be considered real
 
 def _score_phot(allphot, target, nonlocalized_event, filt=None):
+    if allphot is None: # this is if there is no photometry
+        return 1, None, None, None, None, None
+    
     phot = allphot[~allphot.upperlimit]
     if not len(phot):
         # then there is no photometry for this object and we're done!
@@ -75,7 +78,9 @@ def _score_phot(allphot, target, nonlocalized_event, filt=None):
     lum = compute_peak_lum(phot.mag, phot.magerr, phot["filter"].tolist(), dist*u.Mpc)
 
     phot_score = 1
-    if lum < PARAM_RANGES["lum_max"][0] or lum > PARAM_RANGES["lum_max"][1]:
+    if lum is not None and (
+            lum < PARAM_RANGES["lum_max"][0] or lum > PARAM_RANGES["lum_max"][1]
+    ):
         phot_score *= PHOT_SCORE_MIN
 
     # then we can only do the next stuff if there is more than one photometry point
@@ -193,13 +198,16 @@ def vet_bns(target_id:int, nonlocalized_event_name:Optional[str]=None):
     # check for *reliable* predetections
     prephot = _get_pre_disc_phot(target.id, nonlocalized_event)
     predet_score = 1
-    if len(prephot):
-        n_predets, _ = get_predetection_stats(
-            prephot.mjd.values,
-            prephot.magerr.values,
-            window_size=5, # +/-5 day window size
-            det_snr_thresh=PREDETECTION_SNR_THRESHOLD
-        )
+    if prephot is not None and len(prephot):
+        try:
+            n_predets, _ = get_predetection_stats(
+                prephot.mjd.values,
+                prephot.magerr.values,
+                window_size=5, # +/-5 day window size
+                det_snr_thresh=PREDETECTION_SNR_THRESHOLD
+            )
+        except ValueError:
+            n_predets = [0] # this ValueError only happens when there aren't any predets
         if any(v >= PARAM_RANGES["max_predets"] for v in n_predets):
             predet_score = PHOT_SCORE_MIN
             update_score_factor(event_candidate, "predetection_score", predet_score)

@@ -3,10 +3,8 @@ from django.conf import settings
 from django.db import connection
 from trove_targets.models import Target
 from tom_targets.models import BaseTarget
-from custom_code.healpix_utils import create_candidates_from_targets
 from custom_code.alertstream_handlers import pick_slack_channel, send_slack, vet_or_post_error
 from custom_code.templatetags.skymap_extras import get_preferred_localization
-from tom_nonlocalizedevents.models import NonLocalizedEvent
 from datetime import datetime, timedelta, timezone
 from custom_code.templatetags.target_extras import split_name
 from slack_sdk import WebClient
@@ -25,24 +23,7 @@ for handler in logger.handlers:
 slack_tns = WebClient(settings.SLACK_TOKEN_TNS)
 slack_tns50 = WebClient(settings.SLACK_TOKEN_TNS50)
 slack_ep = WebClient(settings.SLACK_TOKEN_EP)
-
-
-def get_active_nonlocalizedevents(t0=None, lookback_days=3., test=False):
-    """
-    Returns a queryset containing "active" NonLocalizedEvents, significant events that happened less than
-    `lookback_days` before `t0` and have not been retracted. Use `test=True` to query mock events instead of real ones.
-    """
-    if t0 is None:
-        t0 = datetime.now(tz=timezone.utc)
-    lookback_window_nle = (t0 - timedelta(days=lookback_days)).isoformat()
-    active_nles = NonLocalizedEvent.objects.filter(sequences__details__time__gte=lookback_window_nle, state='ACTIVE')
-    active_nles = active_nles.exclude(sequences__details__significant=False)
-    if test:
-        active_nles = active_nles.filter(event_id__startswith='MS')
-    else:
-        active_nles = active_nles.exclude(event_id__startswith='MS')
-    return active_nles.distinct()
-
+        
 class Command(BaseCommand):
 
     help = 'Updates, merges, and adds targets from the tns_q3c table (maintained outside the TOM Toolkit)'
@@ -221,7 +202,7 @@ class Command(BaseCommand):
         # note that we will recompute the healpix, etc. below. These are just
         # temporary placeholders        
         missing_targets = BaseTarget.objects.filter(target__isnull = True)
-        logger.info(f"Adding {len(missing_targets):d} from basetarget table to trove target table")        
+        logger.info(f"Adding {len(missing_targets):d} from basetarget table to trove target table")
         for basetarget in missing_targets:            
             # create the target with the basetarget ptr
             coord = SkyCoord(basetarget.ra, basetarget.dec, unit="deg")
@@ -242,29 +223,10 @@ class Command(BaseCommand):
             ).first()
 
             # then vet this target
-            vet_or_post_error(trove_target, slack_tns, channel='alerts-tns')
-                
-        # automatically associate with nonlocalized events
-        for nle in get_active_nonlocalizedevents(lookback_days=lookback_days_nle):
-            seq = nle.sequences.last()
-            localization = get_preferred_localization(nle)
-            nle_time = datetime.strptime(seq.details['time'], '%Y-%m-%dT%H:%M:%S.%f%z')
-            target_ids = []
-            for targets in [new_targets, updated_targets, updated_targets_coords]:
-                for target in targets:
-                    first_det = target.reduceddatum_set.filter(data_type='photometry', value__magnitude__isnull=False
-                                                               ).order_by('timestamp').first()
-                    if first_det and nle_time < first_det.timestamp < nle_time + timedelta(days=lookback_days_obs):
-                        target_ids.append(target.id)
-            candidates = create_candidates_from_targets(seq, target_ids=target_ids)
-            for candidate in candidates:
-                credible_region = candidate.credibleregions.get(localization=localization).smallest_percent
-                format_kwargs = {'nle': nle, 'target': candidate.target, 'credible_region': credible_region}
-                slack_alert = ('<{target_link}|{{target.name}}> falls in the {{credible_region:d}}% '
-                               'localization region of <{nle_link}|{{nle.event_id}}>')
-                if nle.event_type == nle.NonLocalizedEventType.GRAVITATIONAL_WAVE:
-                    send_slack(slack_alert, format_kwargs, *pick_slack_channel(seq))
-                elif nle.event_type == nle.NonLocalizedEventType.UNKNOWN:
-                    body = slack_alert.format(nle_link=settings.NLE_LINKS[0][0],
-                                              target_link=settings.TARGET_LINKS[0][0])
-                    slack_ep.chat_postMessage(channel='alerts-ep', text=body.format(**format_kwargs))
+            vet_or_post_error(
+                trove_target,
+                slack_tns,
+                channel='alerts-tns',
+                lookback_days_nle=lookback_days_nle,
+                lookback_days_obs=lookback_days_obs
+            )

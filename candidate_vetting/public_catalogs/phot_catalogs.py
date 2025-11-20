@@ -210,7 +210,7 @@ class ASASSN_SkyPatrol(PhotCatalog):
 class ATLAS_Forced_Phot(PhotCatalog):
     """ATLAS Forced photometry server
     """
-
+    
     def query(
             self,
             target:Target,
@@ -218,11 +218,10 @@ class ATLAS_Forced_Phot(PhotCatalog):
             days_ago: float = 200.,
             token: str = None
     ):
-        f"""Query the ZTF forced photometry service
+        f"""Query the ATLAS forced photometry service
 
         {_QUERY_METHOD_DOCSTRING}
         """
-
         # get the RA and Dec from the target
         ra, dec = target.ra, target.dec
         
@@ -231,14 +230,16 @@ class ATLAS_Forced_Phot(PhotCatalog):
         BASEURL = "https://fallingstar-data.com/forcedphot"
 
         if token is None:
-            token = settings.ATLAS_API_KEY
-        else:
-            token = os.environ.get('ATLAS_API_KEY', None)
-
+            try:
+                token = settings.ATLAS_API_KEY
+            except AttributeError:
+                print('Setting token to environment variable ATLAS_API_KEY!')
+                token = os.environ.get('ATLAS_API_KEY', None)
+                
         if token is None:
             raise Exception('No token provided')
         else:
-            print('Using token from environment')
+            print('Using provided token')
 
         headers = {'Authorization': f'Token {token}', 'Accept': 'application/json'}
 
