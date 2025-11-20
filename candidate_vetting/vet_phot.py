@@ -119,6 +119,8 @@ def _get_post_disc_phot(
         nonlocalized_event:NonLocalizedEvent
 ) -> pd.DataFrame:
     photdf = _get_phot(target_id, nonlocalized_event)
+    if not len(photdf):
+        return 
     phot_post_disc = photdf[photdf.dt >= 0]
     return phot_post_disc
     
@@ -127,6 +129,8 @@ def _get_pre_disc_phot(
         nonlocalized_event:NonLocalizedEvent
 ) -> pd.DataFrame:
     photdf = _get_phot(target_id, nonlocalized_event)
+    if not len(photdf):
+        return
     phot_pre_disc = photdf[photdf.dt < 0]
     return phot_pre_disc
 

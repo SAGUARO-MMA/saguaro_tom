@@ -48,6 +48,9 @@ PHOT_SCORE_MIN = 0.1
 PREDETECTION_SNR_THRESHOLD = 5 # require a S/N of 5 for a predetection to be considered real
 
 def _score_phot(allphot, target, nonlocalized_event, filt=None):
+    if allphot is None: # this is if there is no photometry
+        return 1, None, None, None, None, None
+    
     phot = allphot[~allphot.upperlimit]
     if not len(phot):
         # then there is no photometry for this object and we're done!
@@ -195,7 +198,7 @@ def vet_bns(target_id:int, nonlocalized_event_name:Optional[str]=None):
     # check for *reliable* predetections
     prephot = _get_pre_disc_phot(target.id, nonlocalized_event)
     predet_score = 1
-    if len(prephot):
+    if prephot is not None and len(prephot):
         try:
             n_predets, _ = get_predetection_stats(
                 prephot.mjd.values,
