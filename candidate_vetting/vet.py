@@ -81,7 +81,7 @@ class AsymmetricGaussian(rv_continuous):
         
         # numerically integrate asymmetric Gaussian from 0 to +inf, for normalization
         integ = quad(func=AsymmetricGaussian._asymm_gauss_forquad, 
-                      a=0, b=np.inf, 
+                      a=0, b=1e5, 
                       args=(mean[0], unc_minus[0], unc_plus[0]))
         integ_norm = 1 / integ[0]
 
