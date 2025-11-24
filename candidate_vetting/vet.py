@@ -8,6 +8,14 @@ import pandas as pd
 from scipy.stats import norm, rv_continuous
 from scipy.integrate import trapezoid, quad
 
+from astropy.utils.introspection import minversion
+if minversion(np, "2.0.0"):
+    np_trapz_fn = np.trapezoid
+else:
+    np_trapz_fn = np.trapz # np.trapz is deprecated in numpy >2.0.0 
+
+import warnings
+
 from astropy.coordinates import SkyCoord
 from astropy import units as u
 from astropy.time import Time
@@ -48,16 +56,15 @@ from candidate_vetting.public_catalogs.static_catalogs import (
 # Pcc score than this
 PCC_THRESHOLD = 0.1
 
+# upper / lower bounds on distance for computing normal / asymmetric Gaussian
+# distributions
+D_LIM_LOWER = 1e-5 # -9 Mpc
+D_LIM_UPPER = 1e4  # 10,000 Mpc 
+
 class AsymmetricGaussian(rv_continuous):
     """
     Custom Asymmetric Gaussian distribution for uneven uncertainties
     """
-    def _asymm_gauss_forquad(x : float, mean : float, 
-                             unc_minus : float, unc_plus : float):
-        """Asymmetric Gaussian function written for compatibility with 
-        scipy.integrate.quad"""
-        return np.exp( -0.5 * ((x-mean)/unc_minus)**2) if x < mean else np.exp( -0.5 * ((x-mean)/unc_plus)**2)
-    
     def _pdf_unnorm(self, x, mean, unc_minus, unc_plus):
         """**Unnormalized** asymmetric Gaussian PDF"""
         # piecewise return a Gaussian depending on the side of the mean you are on
@@ -73,17 +80,20 @@ class AsymmetricGaussian(rv_continuous):
 
         return np.concatenate((minus_dist, plus_dist))
     
-    def _pdf(self, x, mean, unc_minus, unc_plus):
+    def _pdf(self, x, mean, unc_minus, unc_plus, integ_a, integ_b):
         """**Normalized** asymmetric Gaussian PDF"""
         # unclear why, but even when floats are passed to this function for 
-        # mean, unc_minus, and unc_plus, they become lists of the same value 
-        # repeated len(x) times
+        # args mean, unc_minus, unc_plus, integ_a, integ_b, they become lists 
+        # of the same value repeated len(x) times
         
-        # numerically integrate asymmetric Gaussian from 0 to +inf, for normalization
-        integ = quad(func=AsymmetricGaussian._asymm_gauss_forquad, 
-                      a=0, b=np.inf, 
-                      args=(mean[0], unc_minus[0], unc_plus[0]))
-        integ_norm = 1 / integ[0]
+        # numerically integrate asymmetric Gaussian, for normalization
+        integ_x = np.logspace(np.log10(integ_a[0]), np.log10(integ_b[0]), 
+                              10000)
+        integ = np_trapz_fn(
+            y=self._pdf_unnorm(integ_x, mean, unc_minus, unc_plus),
+            x=integ_x
+        )
+        integ_norm = 1 / integ
 
         # return unnormalized PDF multiplied by normalization factor
         return self._pdf_unnorm(x, mean, unc_minus, unc_plus) * integ_norm
@@ -340,19 +350,27 @@ def host_distance_match(
         nonlocalized_event_name:str,
         max_time:Time=Time.now()
 ):
-
     # find the distance at the healpix
     dist, dist_err = _distance_at_healpix(nonlocalized_event_name, target_id, max_time=max_time)
+    
+    # let user know about hard-coded bounds on luminosity distance array
+    warnings.warn(f"Using hard-coded D_LIM_LOWER = {D_LIM_LOWER} and "+
+                  f"D_LIM_UPPER = {D_LIM_UPPER} to construct log-spaced "+
+                  "distance array for calculating distance probability "+
+                  "distribution functions")
         
     # now crossmatch this distance to the host galaxy dataframe
     _lumdist = np.linspace(0, 10_000, 10_000)
+    # _lumdist = np.logspace(np.log10(D_LIM_LOWER), np.log10(D_LIM_UPPER), 10_000)
     test_pdf = norm.pdf(_lumdist, loc=dist, scale=dist_err)
     host_pdfs = np.array([ 
         AsymmetricGaussian().pdf(
             _lumdist,
             mean=row.lumdist,
             unc_minus = row.lumdist_neg_err,
-            unc_plus = row.lumdist_pos_err
+            unc_plus = row.lumdist_pos_err,
+            integ_a=1e-9,
+            integ_b=_lumdist[-1]
         ) for _,row in host_df.iterrows() 
     ])
     joint_prob = host_pdfs*test_pdf
