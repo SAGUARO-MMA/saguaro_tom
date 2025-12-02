@@ -41,7 +41,8 @@ from candidate_vetting.public_catalogs.static_catalogs import (
     Sdss12Photoz,
     AsassnVariableStar,
     Gaiadr3Variable,
-    Ps1PointSource
+    Ps1PointSource,
+    Milliquas
 )
 
 # After we order the dataframe by the Pcc score, remove any host matches with a greater
@@ -387,3 +388,30 @@ def point_source_association(target_id:int, radius:float=2):
         return 0
 
     return 1
+
+def associate_agn_2d(target_id:int, radius:float=2):
+    """
+    This searches the AGN catalogs for a match for this target
+    """
+    
+    target = Target.objects.get(id=target_id)
+    ra, dec = target.ra, target.dec
+    
+    agn_catalogs = [
+        Milliquas
+    ] # there is currently only one, but this should help to "future proof" the code
+
+    agn_matches = None
+    for catalog in agn_catalogs:
+        cat = catalog()
+        query_set = cat.query(ra, dec, radius)
+
+        # no match found here! let's check another catalog!
+        if query_set.count() == 0: continue
+
+        if agn_matches is None:
+            agn_matches = query_set
+        else:
+            agn_matches |= query_set # this will perform a SQL UNION on the query sets
+
+    return agn_matches
