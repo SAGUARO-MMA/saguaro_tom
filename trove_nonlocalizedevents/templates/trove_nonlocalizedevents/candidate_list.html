@@ -11,7 +11,7 @@
 {% endif %}
 <div class="row">
   <div class="col-md-10">
-  {% bootstrap_pagination page_obj extra=request.GET.urlencode %}
+  {% bootstrap_pagination page_obj extra=request.GET.urlencode %} 
     <table class="table table-sm table-hover">
       <thead>
         <tr>
@@ -21,7 +21,8 @@
         </tr>
       </thead>
       <tbody>
-        {% for candidate in object_list %}
+	{% get_event_candidate_scores object_list 'host_distance_score' 'predetection_score' 'ps_score' 'skymap_score' 'phot_peak_lum' 'phot_peak_time' 'phot_decay_rate' as candidates_to_display %}
+	{% for candidate in candidates_to_display %}
         <tr>
           <td>
             {% if candidate.target is not None %}
@@ -31,7 +32,7 @@
             {% endif %}
           </td>
           <td><a href="{% url 'nonlocalizedevents:event-detail' candidate.nonlocalizedevent.event_id %}" target="_blank">{{ candidate.nonlocalizedevent.event_id }}</a></td>
-          <td>{% get_event_candidate_score candidate 'host_distance_score' 'predetection_score' 'ps_score' 'skymap_score' 'phot_peak_lum' 'phot_peak_time' 'phot_decay_rate' %}</td>
+          <td>{{ candidate.score|floatformat:2 }}</td>
         </tr>
         {% empty %}
         <tr>
