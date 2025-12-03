@@ -48,7 +48,7 @@ def get_event_candidate_score(event_candidate, *subscore_names):
             filt = ["g", "r", "i", "o", "c"] # use the common optical filters
         )
 
-        susbcores.exclude(
+        subscores.exclude(
             key__in = val_not_score_keys
         ) # this removes those rows from the queryset
         
