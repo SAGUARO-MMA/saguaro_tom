@@ -58,7 +58,7 @@ PCC_THRESHOLD = 0.1
 
 # upper / lower bounds on distance for computing normal / asymmetric Gaussian
 # distributions
-D_LIM_LOWER = 1e-5 # -9 Mpc
+D_LIM_LOWER = 1e-5 # 0.00001 Mpc
 D_LIM_UPPER = 1e4  # 10,000 Mpc 
 
 class AsymmetricGaussian(rv_continuous):
