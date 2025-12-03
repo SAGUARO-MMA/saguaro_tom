@@ -62,7 +62,7 @@
   <dd class="col-sm-6">{{ value }}</dd>
 {% endfor %}
 </dl>
-{% get_candidate_event_score target.id as scores %}
+{% get_target_score target.id as scores %}
 <h4>Scores:</h4>
 <dl class="row">
   {% for nonlocalized_name, score in scores.items %}

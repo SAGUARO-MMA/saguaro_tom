@@ -1,19 +1,69 @@
 """
 Some functions for accessing the EventCandidate table inside a django template
 """
+import math
 from functools import partial
 from urllib.parse import urlparse
 from django import template
 from django.template.defaultfilters import linebreaks
 from django.utils.safestring import mark_safe
+from django.db.models import FloatField
+from django.db.models.functions import Cast
 from tom_nonlocalizedevents.models import EventCandidate, NonLocalizedEvent
 from trove_targets.models import Target
+from candidate_vetting.models import ScoreFactor
+from candidate_vetting.vet_bns import _score_phot as kn_score_phot
+from candidate_vetting.vet_phot import _get_post_disc_phot
 
 register = template.Library()
 
+@register.simple_tag
+def get_event_candidate_score(event_candidate, *subscore_names):
+    """Get the event candidate score for everything in subscore_names""" 
+
+    # first get all the subscores for this object
+    subscores = ScoreFactor.objects.filter(
+        event_candidate = event_candidate,
+        key__in = subscore_names
+    ).annotate(
+        value_float = Cast("value", FloatField())
+    )
+    
+    # some of the keys in ScoreFactor are really just calculated values
+    # where the score depends on the type of non-localized event. So we need to convert
+    # these to scores.
+    # I'm writing this just for KN for now, but we can modify as needed!
+    val_not_score_keys = ["phot_peak_lum", "phot_peak_time", "phot_decay_rate"]
+    phot_score = 1
+    if any(_key in subscore_names for _key in val_not_score_keys):
+        # then we need to compute the photometry score and store it
+        allphot = _get_post_disc_phot(
+            target_id = event_candidate.target.id,
+            nonlocalized_event = event_candidate.nonlocalizedevent
+        )
+        phot_score, _, _, _, _, _ = kn_score_phot(
+            allphot,
+            target = event_candidate.target,
+            nonlocalized_event = event_candidate.nonlocalizedevent,
+            filt = ["g", "r", "i", "o", "c"] # use the common optical filters
+        )
+
+        susbcores.exclude(
+            key__in = val_not_score_keys
+        ) # this removes those rows from the queryset
+        
+    # now we can compute the score just using multiplication
+    subscore_list = list(
+        subscores.values_list("value_float", flat=True)
+    )
+    subscore_list.append(phot_score)
+    score = math.prod(subscore_list) # multiply the subscores
+    return score
+    
+
 #@register.inclusion_tag('tom_targets/partials/target_data.html', takes_context=True)
 @register.simple_tag
-def get_candidate_event_score(target_id):
+def get_target_score(target_id):
 
     if target_id is None:
         return "Target ID is None!"

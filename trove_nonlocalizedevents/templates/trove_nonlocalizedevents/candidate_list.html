@@ -1,5 +1,5 @@
 {% extends 'tom_common/base.html' %}
-{% load bootstrap4 crispy_forms_tags nonlocalizedevent_extras skymap_extras %}
+{% load bootstrap4 crispy_forms_tags nonlocalizedevent_extras skymap_extras event_candidate_extras %}
 {% block title %}Candidates{% endblock %}
 {% block content %}
 {% if request.GET.nonlocalizedevent %}
@@ -17,7 +17,7 @@
         <tr>
           <th>Target</th>
           <th>Event</th>
-          <th>Score (out of 100)</th>
+          <th>Score</th>
         </tr>
       </thead>
       <tbody>
@@ -31,7 +31,7 @@
             {% endif %}
           </td>
           <td><a href="{% url 'nonlocalizedevents:event-detail' candidate.nonlocalizedevent.event_id %}" target="_blank">{{ candidate.nonlocalizedevent.event_id }}</a></td>
-          <td>{{ candidate.priority }}</td>
+          <td>{% get_event_candidate_score candidate 'host_distance_score' 'predetection_score' 'ps_score' 'skymap_score' %}</td>
         </tr>
         {% empty %}
         <tr>
