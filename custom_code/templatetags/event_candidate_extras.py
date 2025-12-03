@@ -12,8 +12,11 @@ from django.db.models.functions import Cast
 from tom_nonlocalizedevents.models import EventCandidate, NonLocalizedEvent
 from trove_targets.models import Target
 from candidate_vetting.models import ScoreFactor
-from candidate_vetting.vet_bns import _score_phot as kn_score_phot
-from candidate_vetting.vet_phot import _get_post_disc_phot
+from candidate_vetting.vet_bns import (
+    PARAM_RANGES as KN_PARAM_RANGES,
+    PHOT_SCORE_MIN as KN_PHOT_SCORE_MIN
+)
+from astropy.units import Quantity
 
 register = template.Library()
 
@@ -40,23 +43,32 @@ def get_event_candidate_scores(event_candidates, *subscore_names):
         # where the score depends on the type of non-localized event. So we need to convert
         # these to scores.
         # I'm writing this just for KN for now, but we can modify as needed!
-        val_not_score_keys = ["phot_peak_lum", "phot_peak_time", "phot_decay_rate"]
+        val_not_score_keys = {
+            "phot_peak_lum":"lum_max",
+            "phot_peak_time":"peak_time",
+            "phot_decay_rate":"decay_rate"
+        }
         phot_score = 1
-        if any(_key in subscore_names for _key in val_not_score_keys):
-            # then we need to compute the photometry score and store it
-            allphot = _get_post_disc_phot(
-                target_id = ec.target.id,
-                nonlocalized_event = ec.nonlocalizedevent
-            )
-            phot_score, _, _, _, _, _ = kn_score_phot(
-                allphot,
-                target = ec.target,
-                nonlocalized_event = ec.nonlocalizedevent,
-                filt = ["g", "r", "i", "o", "c"] # use the common optical filters
-            )
+        subscore_keys = subscores.values_list("key", flat=True)        
+        for subscore_key, param_range_key in val_not_score_keys.items():
+            if subscore_key in subscore_names and subscore_key in subscore_keys:
+                val = subscores.get(
+                    key = subscore_key
+                ).value_float
 
+                val_max = KN_PARAM_RANGES[param_range_key][0]
+                val_min = KN_PARAM_RANGES[param_range_key][1]
+                if isinstance(val_min, Quantity):
+                    val_min = val_min.value
+                if isinstance(val_max, Quantity):
+                    val_max = val_max.value
+                
+                if val < val_min or val > val_max:
+                    phot_score *= KN_PHOT_SCORE_MIN
+             
+            
         subscores = subscores.exclude(
-            key__in = val_not_score_keys
+            key__in = list(val_not_score_keys.keys())
         ) # this removes those rows from the queryset
         
         # now we can compute the score just using multiplication
