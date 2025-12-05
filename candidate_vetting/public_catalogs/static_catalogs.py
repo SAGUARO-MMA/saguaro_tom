@@ -4,7 +4,8 @@ Define the static catalogs for querying
 from astropy import units as u
 import pandas as pd
 
-from django.db.models import Func, Q
+from django.db.models import F, Q, Func, Value, IntegerField, Case, When, CharField
+from django.db.models.functions import Cast
 from django.conf import settings
 cosmo = settings.COSMO
 
@@ -185,7 +186,50 @@ class LsDr10(StaticCatalog):
         
 class Milliquas(StaticCatalog):
     catalog_model = MilliquasQ3C
-    
+
+    def __init__(self):
+        """Override the StaticCatalog init because Milliquas doesn't come with a
+        redshift error column, so we need to make some assumptions
+        """
+        
+        num_decimal = Func(
+            Func(
+                Cast(
+                    F('z'),
+                    CharField()
+                ), # split_part only works with CharField, need to cast first
+                Value('.'),
+                Value(2),
+                function='split_part',
+                output_field=CharField()
+            ), # this gets just the decimals of the z field as a string
+            function="length",
+            output_field=IntegerField()
+        ) # then this counts the number of decimal places
+        
+        self.catalog_model.objects = self.catalog_model.objects.annotate(
+            num_decimal = num_decimal # this gives a temp row with the number of decimals
+        ).annotate(
+            z_err=Case(
+                When(num_decimal__lte = 1, then=F("z")*0.1),
+                When(num_decimal = 2, then=F("z")*0.01),
+                default=Value(1e-3)
+            ) # this computes the z_err based on the assumptions outlined in the docs for this catalog
+        )
+
+        # now that we have these annotations, we can define the colmap
+        self.colmap = {
+            "name":"name",
+            "ra":"ra",
+            "dec":"dec",
+            "z":"z",
+            "z_err":"z_err",
+            "rmag":"default_mag" # mag col to use for pcc
+        }
+
+        # then, of course, init the super class
+        super().__init__()
+
 class Ps1(StaticCatalog):
     catalog_model = Ps1Q3C
     colmap = {
