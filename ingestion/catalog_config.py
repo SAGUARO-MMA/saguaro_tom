@@ -17,7 +17,8 @@ Catalogs = Enum('Catalogs',
     ('FERMILPSC', 'Fermi_LPSC'),
     ('FERMI3FHL', 'Fermi_3FHL'),
     ('NEDLVS',    'NEDLVS'),
-    ('TWOMASS',   'Two_MASS')
+    ('TWOMASS',   'Two_MASS'),
+    ('ZTFVARSTAR','ZTF_varstar')
 ])
 
 class CatalogConfig():
@@ -266,7 +267,8 @@ class TwoMASSConfig(CatalogConfig):
         
         SQL_statement += f"DROP TABLE IF EXISTS {self.dbctxt.sql_table};\n"
         
-        SQL_statement += f"CREATE TABLE {self.dbctxt.sql_table} (\n{",\n".join(self.relational_schema)});"
+        comma_nl = ",\n"
+        SQL_statement += f"CREATE TABLE {self.dbctxt.sql_table} (\n{comma_nl.join(self.relational_schema)});"
         with psycopg.connect(host=self.dbctxt.POSTGRES_HOST, port=self.dbctxt.POSTGRES_PORT, dbname=self.dbctxt.POSTGRES_DB, user=self.dbctxt.POSTGRES_USER, password=self.dbctxt.POSTGRES_PASSWORD) as conn:
             with conn.cursor() as cur:
                 try:
@@ -289,12 +291,14 @@ class TwoMASSConfig(CatalogConfig):
                 if "date" in self.relational_schema[elementnum]:
                     record[elementnum] = f"\'{element}\'"
 
-            record = f"({", ".join(record)})"
+            comma_space = ", "
+            record = f"({comma_space.join(record)})"
 
             self.data[rownum] = record
 
     def insert_all(self):
         SQL_statement = ""
+        comma_nl = ",\n"
 
         filenames = sorted(os.listdir(self.path))
         
@@ -311,10 +315,129 @@ class TwoMASSConfig(CatalogConfig):
 
                 for start_index in range(0, len(self.data), self.chunk_rows):
                     logger.debug(f"{self.path}/{filename} rows {start_index}:{min(len(self.data), start_index + self.chunk_rows)}")
-                    SQL_statement = f"INSERT INTO {self.dbctxt.sql_table} VALUES \n {",\n".join(self.data[start_index:start_index + self.chunk_rows])};"
+                    SQL_statement = f"INSERT INTO {self.dbctxt.sql_table} VALUES \n {comma_nl.join(self.data[start_index:start_index + self.chunk_rows])};"
                     execute_statement(self.dbctxt, SQL_statement)
                 
                 logger.debug(f"file {self.path}/{filename} complete.")    
         
         q3c_index_table(self.dbctxt, "ra", "decl")
+
+
+class ZTFVarStarConfig(CatalogConfig):
+    relational_schema = [
+        "ID         character(22)",
+        "SourceID   int8",
+        "RAdeg      float8",
+        "DEdeg      float8",
+        "Per        float8",
+        "R21        float8",
+        "phi21      float8",
+        "T0         float8",
+        "gmag       float8",
+        "rmag       float8",
+        "Per_g      float8",
+        "Per_r      float8",
+        "Num_g      int4",
+        "Num_r      int4",
+        "R21_g      float8",
+        "R21_r      float8",
+        "phi21_g    float8",
+        "phi21_r    float8",
+        "R2_g       float8",
+        "R2_r       float8",
+        "Amp_g      float8",
+        "Amp_r      float8",
+        "logFAP_g   float8",
+        "logFAP_r   float8",
+        "Type       character(5)",
+        "Dmin_g     float8",
+        "Dmin_r     float8"
+    ]
+
+    first_data_row = 36
+    
+    def __init__(self, dbctxt: DBctxt, path: str, chunk_rows: int = 100000):
+        super().__init__(dbctxt, path)
+        self.chunk_rows = chunk_rows
+        self.relational_schema = ZTFVarStarConfig.relational_schema # TODO: redundant
+        self.table_created: bool = False
+
+    def _tabularize(self, path):
+        logger.info(f"Reading in data from single catalog file {self.path}...")
+        with open(path, 'r') as f:
+            file_content = f.read()
+            
+            file_content = file_content.split("\n")
+
+            file_content = file_content[ZTFVarStarConfig.first_data_row:-1]
+
+            for index, row in enumerate(file_content):
+                file_content[index] = " ".join(row.split())
+
+            
+            for rownum, record in enumerate(file_content):
+                file_content[rownum] = record.split(" ")
+
+            self.data = file_content
+        logger.info(f"done creating internal data table.")
+                
+    def _clean_data(self):
+        pass
+
+    def _relational_schema(self):
+        pass
+
+    def _create_table(self):
+        logger.info(f"Creating new table in database {self.dbctxt.POSTGRES_DB} on host {self.dbctxt.POSTGRES_HOST}.")
+        
+        SQL_statement = ""
+        comma_nl = ",\n"
+        
+        SQL_statement += f"DROP TABLE IF EXISTS {self.dbctxt.sql_table};\n"
+        
+        SQL_statement += f"CREATE TABLE {self.dbctxt.sql_table} (\n{comma_nl.join(self.relational_schema)});"
+        with psycopg.connect(host=self.dbctxt.POSTGRES_HOST, port=self.dbctxt.POSTGRES_PORT, dbname=self.dbctxt.POSTGRES_DB, user=self.dbctxt.POSTGRES_USER, password=self.dbctxt.POSTGRES_PASSWORD) as conn:
+            with conn.cursor() as cur:
+                try:
+                    cur.execute(SQL_statement)
+                    conn.commit()
+                except psycopg.errors.DuplicateTable:
+                    raise f"Table {self.dbctxt.sql_table} already exists. Attemtping to continue with existing schema..."
+                except Exception as e: raise
+        
+        logger.info("done creating table.")
+
+    def _data2SQLValues(self):
+        # comma_space = ", "
+        # for rownum, record in enumerate(self.data):
+        #     record = f"({comma_space.join(record)})"
+        #     self.data[rownum] = record
+        for rownum, record in enumerate(self.data):
+            for elementnum, element in enumerate(record):
+                if "character" in self.relational_schema[elementnum]:
+                    element = element.replace('"', '"""') # SQL escapes a quote with another quote
+                    element = element.replace("'", "''")
+                    record[elementnum] = f"\'{element}\'"
+
+            comma_space = ", "
+            record = f"({comma_space.join(record)})"
+
+            self.data[rownum] = record
+
+    def insert_all(self):
+        SQL_statement = ""
+        comma_nl = ",\n"
+
+        self._tabularize(self.path)
+
+        self._data2SQLValues()
+
+        self._create_table()
+
+        # insert values
+        SQL_statement = f"INSERT INTO {self.dbctxt.sql_table} VALUES \n {comma_nl.join(self.data)};"
+        
+        execute_statement(self.dbctxt, SQL_statement)
+
+        q3c_index_table(self.dbctxt, "RAdeg", "DEdeg")
 

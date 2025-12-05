@@ -24,6 +24,9 @@ def parse_and_insert(dbctxt: DBctxt, catalog_path: str, catalog_type: str):
         case catalog_config.Catalogs.TWOMASS:
             datain = catalog_config.TwoMASSConfig(dbctxt, catalog_path)
             datain.insert_all()
+        case catalog_config.Catalogs.ZTFVARSTAR:
+            datain = catalog_config.ZTFVarStarConfig(dbctxt, catalog_path)
+            datain.insert_all()
 
 
 # ##############################################################################
