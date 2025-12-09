@@ -56,8 +56,8 @@ def get_event_candidate_scores(event_candidates, *subscore_names):
                     key = subscore_key
                 ).value_float
 
-                val_max = KN_PARAM_RANGES[param_range_key][0]
-                val_min = KN_PARAM_RANGES[param_range_key][1]
+                val_max = max(KN_PARAM_RANGES[param_range_key])
+                val_min = min(KN_PARAM_RANGES[param_range_key])
                 if isinstance(val_min, Quantity):
                     val_min = val_min.value
                 if isinstance(val_max, Quantity):
