@@ -49,6 +49,7 @@ from candidate_vetting.public_catalogs.static_catalogs import (
     Sdss12Photoz,
     AsassnVariableStar,
     Gaiadr3Variable,
+    ZtfVarStar,
     Ps1PointSource,
     Milliquas
 )
@@ -460,7 +461,8 @@ def point_source_association(target_id:int, radius:float=2):
     point_source_catalogs = [
         AsassnVariableStar,
         Gaiadr3Variable,
-        Ps1PointSource
+        Ps1PointSource,
+        ZtfVarStar
     ]
 
     for catalog in point_source_catalogs:
