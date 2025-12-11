@@ -23,7 +23,11 @@ from ..models import (
     MilliquasQ3C,
     Ps1Q3C,
     RomaBzcatQ3C,
-    Sdss12PhotozQ3C
+    Sdss12PhotozQ3C,
+    ZtfVarstarQ3C,
+    TwomassQ3C,
+    NedlvsQ3C,
+    DesiDr1Q3C
 )
 
 class _Log10(Func):
@@ -32,6 +36,17 @@ class _Log10(Func):
 
 class AsassnVariableStar(StaticCatalog):
     catalog_model = AsassnQ3C
+
+class DesiDr1(StaticCatalog):
+    catalog_model = DesiDr1Q3C
+
+class Nedlvs(StaticCatalog):
+    catalog_model = NedlvsQ3C
+
+class ZtfVarStar(StaticCatalog):
+    catalog_model = ZtfVarstarQ3C
+    ra_colname = "radeg"
+    dec_colname = "dedeg"
     
 class DesiSpec(StaticCatalog):
     catalog_model = DesiSpecQ3C
