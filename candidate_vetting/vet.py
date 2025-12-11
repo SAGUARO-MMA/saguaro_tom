@@ -153,10 +153,6 @@ def update_score_factor(event_candidate, key, value):
         defaults = dict(value = value)
     )
 
-def update_event_candidate_score(event_candidate, score):
-    event_candidate.priority = score
-    event_candidate.save()
-
 def _save_host_galaxy_df(df, target):
 
     # first delete the host galaxy key for this target if it already exists

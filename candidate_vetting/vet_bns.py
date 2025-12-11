@@ -14,7 +14,6 @@ from .vet import (
     host_association,
     host_distance_match,
     update_score_factor,
-    update_event_candidate_score,
     _distance_at_healpix
 )
 from .vet_phot import (
@@ -119,14 +118,12 @@ def vet_bns(target_id:int, nonlocalized_event_name:Optional[str]=None):
     skymap_score = skymap_association(nonlocalized_event_name, target_id)
     update_score_factor(event_candidate, "skymap_score", skymap_score)
     if skymap_score < 1e-2:
-        update_event_candidate_score(event_candidate, 0)
         return 
 
     # run the point source checker
     ps_score = point_source_association(target_id)
     update_score_factor(event_candidate, "ps_score", ps_score)
     if ps_score == 0:
-        update_event_candidate_score(event_candidate, 0)
         return
     
     # run the minor planet checker
@@ -150,10 +147,6 @@ def vet_bns(target_id:int, nonlocalized_event_name:Optional[str]=None):
         update_score_factor(event_candidate, "mpc_match_name", mpc_match.match_name)
         update_score_factor(event_candidate, "mpc_match_sep", mpc_match.distance)
         update_score_factor(event_candidate, "mpc_match_date", latest_det.timestamp)
-
-        # update the event candidate overall score to 0
-        update_event_candidate_score(event_candidate, 0)
-
         return
     
     mpc_score = 1
@@ -211,8 +204,3 @@ def vet_bns(target_id:int, nonlocalized_event_name:Optional[str]=None):
         if any(v >= PARAM_RANGES["max_predets"] for v in n_predets):
             predet_score = PHOT_SCORE_MIN
             update_score_factor(event_candidate, "predetection_score", predet_score)
-
-    # compute the overall score
-    overall_score = skymap_score*ps_score*mpc_score*host_score*phot_score*predet_score
-    update_event_candidate_score(event_candidate, int(overall_score*100))
-
