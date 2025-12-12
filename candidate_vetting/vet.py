@@ -204,7 +204,7 @@ def _save_host_galaxy_df(df, target):
 
 def _save_associated_agn_df(df, target):
 
-    # first delete the host galaxy key for this target if it already exists
+    # first delete the associated AGN key for this target if it already exists
     if TargetExtra.objects.filter(target_id=target.id, key="Associated AGN").exists():
         TargetExtra.objects.filter(target_id=target.id, key="Associated AGN").delete()
     
@@ -562,7 +562,7 @@ def agn_distance_match(
 
     Returns
     -------
-    host_df : pd.DataFrame
+    agn_df : pd.DataFrame
         Dataframe containing information on AGN(s), with added integrated 
         joint probability
 
