@@ -52,7 +52,8 @@ from candidate_vetting.public_catalogs.static_catalogs import (
     ZtfVarStar,
     Ps1PointSource,
     Milliquas,
-    NedLvs
+    NedLvs,
+    TwoMass
 )
 
 # After we order the dataframe by the Pcc score, remove any host matches with a greater
@@ -391,7 +392,12 @@ def point_source_association(target_id:int, radius:float=2):
         AsassnVariableStar,
         Gaiadr3Variable,
         Ps1PointSource,
-        ZtfVarStar
+        ZtfVarStar,
+
+        # this is the 2MASS point source catalog
+        # I'm leaving it commented out because we need to test it a bit more before
+        # using it!
+        #TwoMass 
     ]
 
     for catalog in point_source_catalogs:

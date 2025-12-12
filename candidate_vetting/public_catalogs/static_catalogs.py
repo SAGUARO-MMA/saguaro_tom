@@ -37,6 +37,11 @@ class _Log10(Func):
 class AsassnVariableStar(StaticCatalog):
     catalog_model = AsassnQ3C
 
+class TwoMass(StaticCatalog):
+    catalog_model = TwomassQ3C
+    ra_colname = "ra"
+    dec_colname = "decl"
+    
 class DesiDr1(StaticCatalog):
     catalog_model = DesiDr1Q3C
 
