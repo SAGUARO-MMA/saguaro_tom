@@ -40,9 +40,42 @@ class AsassnVariableStar(StaticCatalog):
 class DesiDr1(StaticCatalog):
     catalog_model = DesiDr1Q3C
 
-class Nedlvs(StaticCatalog):
+class NedLvs(StaticCatalog):
     catalog_model = NedlvsQ3C
+    colmap = {
+        "objname":"name",
+        "z":"z",
+        "z_unc":"z_err", 
+        "distmpc": "lumdist", # Mpc
+        "distmpc_unc":"lumdist_err", # Mpc
+        "ra":"ra",
+        "dec":"dec",
+        "m_j":"default_mag" # use 2MASS J for the Pcc magnitude
+    }
 
+    def to_standardized_catalog(self, df):
+        df = self._standardize_df(df)
+
+        # some rows don't have uncertainty on redshift
+        # we can assume these are spec-z's with very small uncertainty
+        df["z_err"] = df.z_err.fillna(1e-3)
+        df["z_neg_err"] = df.z_err
+        df["z_pos_err"] = df.z_err
+
+        
+        lumdist_err = pd.Series(
+            cosmo.luminosity_distance(df.z_err).to(u.Mpc).value,
+            index = df.index
+        ) 
+        # when lumdist_err is NaN is when the z_err column is also NaN
+        # so we assume an uncertainty on the distance of ~4.5 Mpc (the conversion
+        # from z_err = 1e-3 to Mpc)
+        df.lumdist_err = df.lumdist_err.fillna(lumdist_err)
+        df["lumdist_neg_err"] = df.lumdist_err
+        df["lumdist_pos_err"] = df.lumdist_err
+
+        return df
+    
 class ZtfVarStar(StaticCatalog):
     catalog_model = ZtfVarstarQ3C
     ra_colname = "radeg"
