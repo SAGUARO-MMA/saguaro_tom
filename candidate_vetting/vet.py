@@ -51,7 +51,8 @@ from candidate_vetting.public_catalogs.static_catalogs import (
     Gaiadr3Variable,
     ZtfVarStar,
     Ps1PointSource,
-    Milliquas
+    Milliquas,
+    NedLvs
 )
 
 # After we order the dataframe by the Pcc score, remove any host matches with a greater
@@ -276,7 +277,8 @@ def host_association(target_id:int, radius=50, pcc_threshold=PCC_THRESHOLD):
         Hecate,
         LsDr10,
         Ps1Galaxy,
-        Sdss12Photoz
+        Sdss12Photoz,
+        NedLvs
     )
 
     target = Target.objects.filter(id=target_id)[0]
