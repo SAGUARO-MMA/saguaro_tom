@@ -39,12 +39,14 @@ def convert(dtype_str: str) -> str:
         case "u":
             match (int(dtype_str[2:])):
                 # SQL does not support unsigned ints but PGSQL supports "serial"
+                case 1:
+                    return "smallint"
                 case 4:
                     return "bigint"
                 case 8:
                     return "bigserial"
 
-    if (type(dtype_str) == "str"):
+    if (isinstance(dtype_str,  str)):
         raise ValueError("unrecognized input datatype string representation")
     else:
         raise TypeError("passed non-string argument to convert()")

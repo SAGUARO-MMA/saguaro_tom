@@ -4,6 +4,8 @@ import os
 import logging
 
 from astropy.table import Table
+import fitsio
+import numpy as np
 import psycopg
 
 from ingest_extras import *
@@ -64,6 +66,10 @@ class BasicAstropyConfig(CatalogConfig):
         BasicAstropyConfig._clean_data(self)
         BasicAstropyConfig._relational_schema(self)
 
+        self.ra  = "ra"
+        self.dec = "dec"
+
+
     def _tabularize(self, path):
         self.table = Table.read(path)
 
@@ -77,7 +83,7 @@ class BasicAstropyConfig(CatalogConfig):
             for col_index in range(len(self.table.colnames)):
                 colname = self.table.colnames[col_index]
                 np_dtype = str(type(self.table[colname][0]))
-                ap_dtype = self.table[self.table.colnames[col_index]].dtype.str
+                ap_dtype = self.table[colname].dtype.str
                 pg_type = numpy2PGSQL.convert(ap_dtype)
                 
                 # ap_types.add(ap_dtype) # used in devel to get src data types (in the fits file, not implementation)
@@ -150,10 +156,7 @@ class BasicAstropyConfig(CatalogConfig):
             
             chunked_vals = self._data2SQLValues(rows)
 
-            for vals in chunked_vals:
-                stringified_chunk += f"{vals}, "
-
-            stringified_chunk = stringified_chunk[:-2] # remove trailing ", "
+            stringified_chunk = ", ".join(chunked_vals)
 
             SQL_statement = f"INSERT INTO {self.dbctxt.sql_table} VALUES {stringified_chunk};"
 
@@ -167,7 +170,33 @@ class BasicAstropyConfig(CatalogConfig):
                         raise e
             logger.info("done.")
 
-        q3c_index_table(self.dbctxt)
+        q3c_index_table(self.dbctxt, self.ra, self.dec)
+
+
+class DESIDR1Config(BasicAstropyConfig):
+    COEFF_COUNT = 10
+    COEFF_INDEX = 9
+    
+    def __init__(self, dbctxt: DBctxt, path: str, chunk_rows: int = 100000):
+        super().__init__(dbctxt, path)
+        self.ra  = "TARGET_RA"
+        self.dec = "TARGET_DEC"
+
+    def _tabularize(self, path):
+        logger.debug(f"Opening data file {path}...")
+        try:
+            self.table = Table(fitsio.read(path, ext=1)) # this will take a while, this is a large file
+        except Exception as e:
+            logger.debug(e)
+
+        logger.debug("done loading data file.")
+
+    def _clean_data(self):
+        oldcol = self.table['COEFF'].data
+        self.table.remove_column('COEFF')
+        for i in range(DESIDR1Config.COEFF_COUNT):
+            self.table.add_column(oldcol[:, i], index=DESIDR1Config.COEFF_INDEX + i, name=f"COEFF_{i:02}")
+
 
 
 class TwoMASSConfig(CatalogConfig):
@@ -238,7 +267,8 @@ class TwoMASSConfig(CatalogConfig):
         super().__init__(dbctxt, path)
         self.chunk_rows = chunk_rows
         self.relational_schema = TwoMASSConfig.relational_schema # TODO: redundant
-        self.table_created: bool = False
+        self.ra  = "ra"
+        self.dec = "decl"
 
     def _tabularize(self, path):
         with gzip.open(path, 'rb') as f:
@@ -320,7 +350,7 @@ class TwoMASSConfig(CatalogConfig):
                 
                 logger.debug(f"file {self.path}/{filename} complete.")    
         
-        q3c_index_table(self.dbctxt, "ra", "decl")
+        q3c_index_table(self.dbctxt, self.ra, self.dec)
 
 
 class ZTFVarStarConfig(CatalogConfig):
@@ -360,7 +390,8 @@ class ZTFVarStarConfig(CatalogConfig):
         super().__init__(dbctxt, path)
         self.chunk_rows = chunk_rows
         self.relational_schema = ZTFVarStarConfig.relational_schema # TODO: redundant
-        self.table_created: bool = False
+        self.ra  = "RAdeg"
+        self.dec = "DEdeg"
 
     def _tabularize(self, path):
         logger.info(f"Reading in data from single catalog file {self.path}...")
@@ -439,5 +470,5 @@ class ZTFVarStarConfig(CatalogConfig):
         
         execute_statement(self.dbctxt, SQL_statement)
 
-        q3c_index_table(self.dbctxt, "RAdeg", "DEdeg")
+        q3c_index_table(self.dbctxt, self.ra, self.dec)
 
