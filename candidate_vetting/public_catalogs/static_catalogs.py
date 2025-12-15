@@ -44,7 +44,37 @@ class TwoMass(StaticCatalog):
     
 class DesiDr1(StaticCatalog):
     catalog_model = DesiDr1Q3C
+    ra_colname = "target_ra"
+    dec_colname = "target_dec"
 
+    def __init__(self):
+        self.catalog_model.objects = self.catalog_model.objects.filter(
+            flux_r__gt=0, # anything with a negative flux (in the linear nanomaggy unit) can be ignored
+            zwarn = 0, # we don't want anything with ZWARN > 0: https://data.desi.lbl.gov/doc/releases/dr1/
+            zcat_primary = True # only take the best ("primary") redshift for this target
+        ).annotate(
+            default_mag=22.5-2.5*_Log10('flux_r')
+        )
+
+        self.colmap = {
+            "desiname":"name",
+            "z":"z",
+            "zerr":"z_err",
+            "target_ra":"ra",
+            "target_dec":"dec",
+            "default_mag":"default_mag"
+        }
+
+    def to_standardized_catalog(self, df):
+        df = self._standardize_df(df)
+        df["lumdist"] = cosmo.luminosity_distance(df.z).to(u.Mpc).value 
+        df["lumdist_err"] = cosmo.luminosity_distance(df.z_err).to(u.Mpc).value
+        df["z_neg_err"] = df.z_err
+        df["z_pos_err"] = df.z_err
+        df["lumdist_neg_err"] = df.lumdist_err 
+        df["lumdist_pos_err"] = df.lumdist_err
+        return df
+    
 class NedLvs(StaticCatalog):
     catalog_model = NedlvsQ3C
     colmap = {
