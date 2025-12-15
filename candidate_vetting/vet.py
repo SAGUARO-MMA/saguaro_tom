@@ -53,7 +53,8 @@ from candidate_vetting.public_catalogs.static_catalogs import (
     Ps1PointSource,
     Milliquas,
     NedLvs,
-    TwoMass
+    TwoMass,
+    DesiDr1
 )
 
 # After we order the dataframe by the Pcc score, remove any host matches with a greater
@@ -272,7 +273,8 @@ def host_association(target_id:int, radius=50, pcc_threshold=PCC_THRESHOLD):
     Find all of the potential hosts associated with this target
     """
     catalogs = (
-        DesiSpec,
+        DesiDr1,
+        # DesiSpec, # this duplicates with DESI DR1 (which also includes the EDR data)
         GladePlus,
         Gwgc,
         Hecate,
@@ -290,6 +292,7 @@ def host_association(target_id:int, radius=50, pcc_threshold=PCC_THRESHOLD):
     res = []
     for catalog in catalogs:
         cat = catalog()
+        print(f"Querying {cat}...")
         query_set = cat.query(ra, dec, radius=radius)
             
         # if no queries are returned we can skip this catalog
