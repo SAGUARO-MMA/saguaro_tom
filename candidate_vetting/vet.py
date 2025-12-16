@@ -523,7 +523,7 @@ def associate_agn_2d(target_id:int, radius:float=2):
     if len(res) > 0: # when no matches, nothing to concatenate
         df = pd.concat(res).reset_index(drop=True)
     else: # return an empty dataframe
-        return df
+        return pd.DataFrame({})
 
     # put any more cleaning up / filtering here; none for now
     ret_df = df.copy()
