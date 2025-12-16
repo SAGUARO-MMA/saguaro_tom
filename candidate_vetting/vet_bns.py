@@ -43,7 +43,8 @@ PARAM_RANGES = dict(
     lum_max = [0*u.erg/u.s, 1e43*u.erg/u.s],
     peak_time = [0, 4],
     decay_rate = [-np.inf, -0.1],
-    max_predets = 3
+    max_predets = 3,
+    t_pre = 0,
 )
 FILTER_PRIORITY_ORDER = ["r", "g", "V", "R", "G"]
 PHOT_SCORE_MIN = 0.1
@@ -211,8 +212,10 @@ def vet_bns(target_id:int, nonlocalized_event_name:Optional[str]=None):
     if decay_rate is not None:
         update_score_factor(event_candidate, "phot_decay_rate", decay_rate)
 
-    # check for *reliable* predetections
-    prephot = _get_pre_disc_phot(target.id, nonlocalized_event)
+    # check for *reliable* predetections before time t_pre
+    prephot = _get_pre_disc_phot(target.id,
+                                 nonlocalized_event, 
+                                 PARAM_RANGES["t_pre"])
     predet_score = 1
     if prephot is not None and len(prephot):
         try:
