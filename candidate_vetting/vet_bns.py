@@ -1,5 +1,6 @@
 """
-The "pipeline" to vet BNS nonlocalized events
+The "pipeline" to vet candidate counterparts to nonlocalized events based on 
+their resemblance to kilonovae.
 """
 import logging
 from typing import Optional
