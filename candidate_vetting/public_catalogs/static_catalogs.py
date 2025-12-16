@@ -226,9 +226,20 @@ class Milliquas(StaticCatalog):
             "z_err":"z_err",
             "rmag":"default_mag" # mag col to use for pcc
         }
-
+        
         # then, of course, init the super class
         super().__init__()
+        
+    def to_standardized_catalog(self, df):
+        df = self._standardize_df(df)
+        df["z_neg_err"] = df.z_err
+        df["z_pos_err"] = df.z_err
+        df["lumdist"] = cosmo.luminosity_distance(df.z).to(u.Mpc).value
+        df["lumdist_err"] = cosmo.luminosity_distance(df.z_err).to(u.Mpc).value
+        df["lumdist_neg_err"] = df.lumdist_err
+        df["lumdist_pos_err"] = df.lumdist_err
+        return df
+
 
 class Ps1(StaticCatalog):
     catalog_model = Ps1Q3C
