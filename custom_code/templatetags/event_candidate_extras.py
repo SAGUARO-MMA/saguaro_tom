@@ -12,10 +12,9 @@ from django.db.models.functions import Cast
 from tom_nonlocalizedevents.models import EventCandidate, NonLocalizedEvent
 from trove_targets.models import Target
 from candidate_vetting.models import ScoreFactor
-from candidate_vetting.vet_bns import (
-    PARAM_RANGES as KN_PARAM_RANGES,
-    PHOT_SCORE_MIN as KN_PHOT_SCORE_MIN
-)
+from candidate_vetting.vet_bns import PARAM_RANGES as KN_PARAM_RANGES
+from candidate_vetting.vet_phot import PHOT_SCORE_MIN as KN_PHOT_SCORE_MIN
+
 from astropy.units import Quantity
 
 register = template.Library()
