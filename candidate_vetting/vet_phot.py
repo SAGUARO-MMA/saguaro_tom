@@ -496,7 +496,7 @@ def _score_phot(allphot, target, nonlocalized_event,
         if max_time < param_ranges["peak_time"][0] or max_time > param_ranges["peak_time"][1]:
             phot_score *= PHOT_SCORE_MIN
         
-        if decay_rate > param_ranges["decay_rate"][1]: # if it's greater than the max
+        if decay_rate < param_ranges["decay_rate"][0] or decay_rate > param_ranges["decay_rate"][1]:
             phot_score *= PHOT_SCORE_MIN
 
         return phot_score, lum, max_time, decay_rate, _model, _best_fit_params
