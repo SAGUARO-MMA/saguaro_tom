@@ -126,12 +126,13 @@ def _get_post_disc_phot(
     
 def _get_pre_disc_phot(
         target_id:int,
-        nonlocalized_event:NonLocalizedEvent
+        nonlocalized_event:NonLocalizedEvent,
+        t_pre:float=0,
 ) -> pd.DataFrame:
     photdf = _get_phot(target_id, nonlocalized_event)
     if not len(photdf):
         return
-    phot_pre_disc = photdf[photdf.dt < 0]
+    phot_pre_disc = photdf[photdf.dt < t_pre]
     return phot_pre_disc
 
 def _get_window_stats(min_idx, max_idx, isdet):
