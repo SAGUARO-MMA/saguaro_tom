@@ -76,10 +76,10 @@ def vet_bns(target_id:int, nonlocalized_event_name:Optional[str]=None):
     )
     # then, assign score based on AGN association
     if len(agn_df) != 0:
-        agn_assoc_score = 0 # for BNS, association with an AGN is bad
+        agn_assoc_score = 0 # association with an AGN is bad
     else:
         agn_assoc_score = 1 
-    agn_score = agn_assoc_score # for BNS, don't bother with 3D AGN scoring
+    agn_score = agn_assoc_score # don't bother with 3D AGN scoring
     update_score_factor(event_candidate, "agn_score", agn_score)
     
     ## if either point source or AGN score is 0, end it here
