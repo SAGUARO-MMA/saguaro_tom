@@ -13,6 +13,8 @@ from .vet import (
     point_source_association,
     host_association,
     host_distance_match,
+    associate_agn_2d,
+    agn_distance_match,
     update_score_factor,
     _distance_at_healpix
 )
@@ -114,19 +116,35 @@ def vet_bns(target_id:int, nonlocalized_event_name:Optional[str]=None):
         target_id = target_id
     )
     
-    # check skymap association
+    ## check skymap association
     skymap_score = skymap_association(nonlocalized_event_name, target_id)
     update_score_factor(event_candidate, "skymap_score", skymap_score)
     if skymap_score < 1e-2:
         return 
 
-    # run the point source checker
+    ## run the point source checker
     ps_score = point_source_association(target_id)
     update_score_factor(event_candidate, "ps_score", ps_score)
-    if ps_score == 0:
+    
+    ## AGN score
+    # search for an AGN associated with the target
+    agn_df = associate_agn_2d(
+        target_id, 
+        radius=2 # 2 arcseconds
+    )
+    # then, assign score based on AGN association
+    if len(agn_df) != 0:
+        agn_assoc_score = 0 # for BNS, association with an AGN is bad
+    else:
+        agn_assoc_score = 1 
+    agn_score = agn_assoc_score # for BNS, don't bother with 3D AGN scoring
+    update_score_factor(event_candidate, "agn_score", agn_score)
+    
+    ## if either point source or AGN score is 0, end it here
+    if ps_score == 0 or agn_score == 0:
         return
     
-    # run the minor planet checker
+    ## run the minor planet checker
     target = Target.objects.filter(id=target_id)[0]
     phot = ReducedDatum.objects.filter(
         target_id=target_id,
@@ -142,19 +160,23 @@ def vet_bns(target_id:int, nonlocalized_event_name:Optional[str]=None):
         logger.warn("This candidate has no photometry, skipping MPC!")
         mpc_match = None
 
+    # update the score factor information
     if mpc_match is not None:
-        # update the score factor information
         update_score_factor(event_candidate, "mpc_match_name", mpc_match.match_name)
         update_score_factor(event_candidate, "mpc_match_sep", mpc_match.distance)
         update_score_factor(event_candidate, "mpc_match_date", latest_det.timestamp)
+        mpc_score = 0
+        update_score_factor(event_candidate, "mpc_score", mpc_score)
         return
-    
-    mpc_score = 1
-    
+    else:    
+        mpc_score = 1
+        update_score_factor(event_candidate, "mpc_score", mpc_score)
+
+    ## distance score
     # do the Pcc analysis and find a host
     host_df = host_association(
         target_id,
-        radius = 5*60
+        radius = 5*60 # 5*60 arcseconds
     )
     if len(host_df) != 0:
         # then run the distance comparison for each of these hosts
@@ -172,8 +194,8 @@ def vet_bns(target_id:int, nonlocalized_event_name:Optional[str]=None):
         # if no hosts are found we don't want to bias the final score if the host
         # is just too far
         host_score = 1
-
-    # Photometry scoring
+        
+    ## photometry scoring
     allphot = _get_post_disc_phot(target_id=target_id, nonlocalized_event=nonlocalized_event)
     phot_score, lum, max_time, decay_rate, _, _ = _score_phot(
         allphot=allphot,
