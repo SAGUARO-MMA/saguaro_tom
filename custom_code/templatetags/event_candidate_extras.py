@@ -120,8 +120,10 @@ def display_score_details(target_id):
     res = {}
     keymap = dict(
         skymap_score = ("2D Localization Score", _float_format),
-        ps_score = ("Point Source Score (1 or 0)", _bool_format),
         host_distance_score = ("3D Association Score", _float_format),
+        ps_score = ("Point Source Score (1 or 0)", _bool_format),
+        mpc_score = ("Minor Planet Center Score (1 or 0)", _bool_format),
+        agn_score = ("AGN Score (1 or 0 except for AGN flares)", _float_format),
         phot_peak_lum = ("Maximum Luminosity", partial(_sci_format, unit="erg/s")),
         phot_peak_time = ("Time of Maximum Light Curve", partial(_float_format, unit="days")),
         phot_decay_rate = ("Light Curve Slope (positive is brightening)", partial(_float_format, unit="mag/day"))
