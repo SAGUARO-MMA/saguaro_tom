@@ -127,9 +127,50 @@ class Candidate(models.Model):
     mlscore_real = models.FloatField(null=True)
     mlscore_bogus = models.FloatField(null=True)
     observation_record = models.ForeignKey(SurveyObservationRecord, null=True, on_delete=models.DO_NOTHING)
+    # NEW: Field to distinguish CSS vs DECam candidates
+    facility = models.CharField(max_length=16, default='CSS')
 
     class Meta:
         db_table = 'candidates'
+
+
+class DecamThumbnail(models.Model):
+    """
+    Store DECam thumbnail images in the database.
+    CSS thumbnails are served from URLs, but DECam thumbnails are stored
+    as binary PNG data since they're generated on webtrove.
+    """
+    candidate = models.ForeignKey(Candidate, on_delete=models.CASCADE, related_name='thumbnails')
+    observation_record = models.ForeignKey(SurveyObservationRecord, null=True, on_delete=models.SET_NULL)
+    
+    # Observation metadata
+    mjd_obs = models.FloatField(null=True)
+    filter_name = models.CharField(max_length=8, null=True)
+    science_name = models.CharField(max_length=128, null=True)
+    
+    # Thumbnail images as binary PNG
+    thumb_template = models.BinaryField(null=True)
+    thumb_science = models.BinaryField(null=True)
+    thumb_difference = models.BinaryField(null=True)
+    
+    # Photometry metadata
+    cnnscore = models.FloatField(null=True)
+    snr_fphot = models.FloatField(null=True)
+    mag_fphot = models.FloatField(null=True)
+    magerr_fphot = models.FloatField(null=True)
+    lim_mag5 = models.FloatField(null=True)
+    status_fphot = models.CharField(max_length=1, null=True)
+    
+    # Classification flags
+    in_gaia = models.CharField(max_length=32, null=True)
+    desi_bgs = models.CharField(max_length=32, null=True)
+    desi_bgs_agn = models.CharField(max_length=32, null=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'decam_thumbnails'
+        ordering = ['mjd_obs']
 
 
 class SurveyFieldCredibleRegion(models.Model):
