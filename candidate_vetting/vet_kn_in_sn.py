@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 PARAM_RANGES = dict(
     lum_max = [5e41*u.erg/u.s, 1e44*u.erg/u.s],
     peak_time = [0, 35],
-    decay_rate = [-0.1, np.inf],
+    decay_rate = [-0.1, 2.0],
     max_predets = 3,
     t_pre = -0.1,
 )
