@@ -10,6 +10,8 @@ from django.http import HttpResponseRedirect
 
 from trove_targets.models import Target
 from candidate_vetting.vet_bns import vet_bns
+from candidate_vetting.vet_kn_in_sn import vet_kn_in_sn
+from candidate_vetting.vet_super_kn import vet_super_kn
 from candidate_vetting.vet_phot import find_public_phot
 
 import requests
@@ -20,7 +22,8 @@ class TargetVettingView(LoginRequiredMixin, RedirectView):
     """
     def get(self, request, *args, **kwargs):
         """
-        Method that handles the GET requests for this view. Calls the kilonova vetting code.
+        Method that handles the GET requests for this view. Calls the vetting 
+        code for different transients.
         """        
         target = Target.objects.get(pk=kwargs['pk'])
 
@@ -42,6 +45,8 @@ class TargetVettingView(LoginRequiredMixin, RedirectView):
 
         # then run the vetting
         vet_bns(target.id, nonlocalized_event_name)
+        vet_kn_in_sn(target.id, nonlocalized_event_name)
+        vet_super_kn(target.id, nonlocalized_event_name)
         
         return HttpResponseRedirect(self.get_redirect_url())
 

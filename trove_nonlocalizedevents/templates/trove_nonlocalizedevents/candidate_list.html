@@ -34,7 +34,11 @@
             {% endif %}
           </td>
           <td><a href="{% url 'nonlocalizedevents:event-detail' candidate.nonlocalizedevent.event_id %}" target="_blank">{{ candidate.nonlocalizedevent.event_id }}</a></td>
-          <td>{{ candidate.score|floatformat:2 }}</td>
+          <td>
+            {% for transient, score in candidate.score.items %}
+            {{ transient }} {{score|floatformat:2}}<br>
+            {% endfor %}
+          </td>
         </tr>
         {% empty %}
         <tr>

@@ -1,6 +1,6 @@
 """
 The "pipeline" to vet candidate counterparts to nonlocalized events based on 
-their resemblance to kilonovae.
+their resemblance to kilonovae-in-supernovae.
 """
 import logging
 from typing import Optional
@@ -39,15 +39,15 @@ from tom_nonlocalizedevents.models import (
 logger = logging.getLogger(__name__)
 
 PARAM_RANGES = dict(
-    lum_max = [0*u.erg/u.s, 1e43*u.erg/u.s],
-    peak_time = [0, 4],
-    decay_rate = [-np.inf, -0.1],
+    lum_max = [5e41*u.erg/u.s, 1e44*u.erg/u.s],
+    peak_time = [0, 35],
+    decay_rate = [-0.1, 2.0],
     max_predets = 3,
-    t_pre = 0,
+    t_pre = -0.1,
 )
 
 
-def vet_bns(target_id:int, nonlocalized_event_name:Optional[str]=None):
+def vet_kn_in_sn(target_id:int, nonlocalized_event_name:Optional[str]=None):
 
     # get the correct EventCandidate object for this target_id and nonlocalized event
     nonlocalized_event = NonLocalizedEvent.objects.get(
@@ -171,3 +171,4 @@ def vet_bns(target_id:int, nonlocalized_event_name:Optional[str]=None):
         if any(v >= PARAM_RANGES["max_predets"] for v in n_predets):
             predet_score = PHOT_SCORE_MIN
             update_score_factor(event_candidate, "predetection_score", predet_score)
+
