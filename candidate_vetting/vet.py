@@ -160,6 +160,18 @@ def update_score_factor(event_candidate, key, value):
         defaults = dict(value = value)
     )
 
+def delete_score_factor(event_candidate, key):
+    """This is basically only used since we are updating various scores
+    and may want to delete some, rather than update them, in the process"""
+    # first get any score factors that match this event candidate and key
+    matches = ScoreFactor.objects.filter(
+        event_candidate=event_candidate,
+        key = key
+    )
+
+    if matches.count():
+        matches.delete()
+    
 def _save_host_galaxy_df(df, target):
 
     # first delete the host galaxy key for this target if it already exists
@@ -318,7 +330,7 @@ def host_association(target_id:int, radius=50, pcc_threshold=PCC_THRESHOLD):
             # had a derived distance in it already!
             df = df[df.z > 0.02] # otherwise it probably isn't a real redshift
         df = df.dropna(
-            subset=["default_mag", "ra", "dec", "lumdist"]
+            subset=["default_mag", "ra", "dec", "lumdist", "lumdist_err"]
         ) # drop rows without the information we need
                 
         # now save the cleaned dataset
@@ -371,7 +383,7 @@ def host_distance_match(
     if not len(host_df):        
         host_df["dist_norm_joint_prob"] = []
         return host_df # continue to return an empty dataframe here, but with the correct columns
-
+    
     # now crossmatch this distance to the host galaxy dataframe
     _lumdist = np.linspace(0, 10_000, 10_000)
 
@@ -381,6 +393,7 @@ def host_distance_match(
         target_id,
         max_time=max_time
     )
+
     host_pdfs = np.array([ 
         AsymmetricGaussian().pdf(
             _lumdist,
@@ -409,7 +422,7 @@ def get_distance_score(host_df, target_id, nonlocalized_event_name):
     """
     # first check if this target has a measured redshift
     targ = Target.objects.get(id=target_id)
-    if targ.redshift is not None:
+    if not np.isnan(targ.redshift):
         _lumdist = np.linspace(0, 10_000, 10_000)
         nle_pdf = _get_nle_distance_pdf(_lumdist,  nonlocalized_event_name, target_id)
         targ_dist = cosmo.luminosity_distance(targ.redshift).to(u.Mpc).value

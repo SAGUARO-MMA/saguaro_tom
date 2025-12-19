@@ -66,6 +66,8 @@ class DesiDr1(StaticCatalog):
             "default_mag":"default_mag"
         }
 
+        super().__init__()
+        
     def to_standardized_catalog(self, df):
         df = self._standardize_df(df)
         df["lumdist"] = cosmo.luminosity_distance(df.z).to(u.Mpc).value 
@@ -74,6 +76,7 @@ class DesiDr1(StaticCatalog):
         df["z_pos_err"] = df.z_err
         df["lumdist_neg_err"] = df.lumdist_err 
         df["lumdist_pos_err"] = df.lumdist_err
+        df["z_type"] = "spec-z"
         return df
     
 class NedLvs(StaticCatalog):
@@ -90,6 +93,15 @@ class NedLvs(StaticCatalog):
     }
 
     def to_standardized_catalog(self, df):
+        def _get_ztype(row):
+            if row.distmpc_method == "zIndependent":
+                return "z ind."
+            if row.z_tech == "SPEC":
+                return "spec-z"
+            return "photo-z"
+        
+        df["z_type"] = df.apply(_get_ztype, axis=1)
+        
         df = self._standardize_df(df)
 
         # some rows don't have uncertainty on redshift
@@ -97,7 +109,6 @@ class NedLvs(StaticCatalog):
         df["z_err"] = df.z_err.fillna(1e-3)
         df["z_neg_err"] = df.z_err
         df["z_pos_err"] = df.z_err
-
         
         lumdist_err = pd.Series(
             cosmo.luminosity_distance(df.z_err).to(u.Mpc).value,
@@ -109,7 +120,7 @@ class NedLvs(StaticCatalog):
         df.lumdist_err = df.lumdist_err.fillna(lumdist_err)
         df["lumdist_neg_err"] = df.lumdist_err
         df["lumdist_pos_err"] = df.lumdist_err
-
+        
         return df
     
 class ZtfVarStar(StaticCatalog):
