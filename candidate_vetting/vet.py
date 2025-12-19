@@ -59,7 +59,7 @@ from candidate_vetting.public_catalogs.static_catalogs import (
 
 # After we order the dataframe by the Pcc score, remove any host matches with a greater
 # Pcc score than this
-PCC_THRESHOLD = 0.1
+PCC_THRESHOLD = 0.15 # this is the value used in Rastinejad+2022
 
 # upper / lower bounds on distance for computing normal / asymmetric Gaussian
 # distributions
@@ -380,11 +380,6 @@ def host_association(target_id:int, radius=50, pcc_threshold=PCC_THRESHOLD):
     # TODO: We will need to put some deduplication code for the galaxy dataframe
     #       here at some point. For now it seems to work without it though!
 
-    # filter out anything above PCC_THRESHOLD
-    # Or, alternatively, only keep the best matching galaxy (if all of the galaxies
-    # have a Pcc greater than PCC_THRESHOLD)
-    pcc_threshold = max(pcc_threshold, df.pcc.min())
-    
     # Finally, filter out anything <= pcc_threshold and sort inversely by pcc
     ret_df = df[df.pcc <= pcc_threshold].sort_values("pcc", ascending=True)
     
@@ -393,8 +388,11 @@ def host_association(target_id:int, radius=50, pcc_threshold=PCC_THRESHOLD):
     print(f"Queries finished in {end-start}s")
 
     # save the host galaxy dataframe to the TargetExtra "Host Galaxies" keyword
+    if not len(ret_df):
+        # then we don't need to actually save any host information
+        return ret_df
+
     _save_host_galaxy_df(ret_df, target)
-    
     return ret_df
 
 def host_distance_match(
