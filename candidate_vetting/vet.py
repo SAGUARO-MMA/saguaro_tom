@@ -69,6 +69,25 @@ PCC_THRESHOLD = 0.15 # this is the value used in Rastinejad+2022
 D_LIM_LOWER = 1e-5 # 0.00001 Mpc
 D_LIM_UPPER = 1e4  # 10,000 Mpc 
 
+# rank order of the galaxy catalogs for getting the "default" distance to this transient
+# this is kinda arbitrary, but generally I consider
+# 1) is this a redshift catalog or a galaxy distance catalog? An actual galaxy distance
+#    catalog is preferred over a general redshift catalog
+# 2) Does this catalog have spec-z's or photo-z's? A spec-z catalog is preferred.
+GALAXY_CATALOGS = [
+    GladePlus,
+    Gwgc,
+    Hecate,
+    DesiDr1,
+    # DesiSpec, # this duplicates with DESI DR1 (which also includes the EDR data)
+    NedLvs,
+    LsDr10,
+    Ps1Galaxy,
+    Sdss12Photoz
+]
+
+GALAXY_CATALOG_RANKING = {c.__name__:i for i,c in enumerate(GALAXY_CATALOGS)}
+    
 class AsymmetricGaussian(rv_continuous):
     """
     Custom Asymmetric Gaussian distribution for uneven uncertainties
@@ -289,25 +308,14 @@ def host_association(target_id:int, radius=50, pcc_threshold=PCC_THRESHOLD):
     """
     Find all of the potential hosts associated with this target
     """
-    catalogs = (
-        DesiDr1,
-        # DesiSpec, # this duplicates with DESI DR1 (which also includes the EDR data)
-        GladePlus,
-        Gwgc,
-        Hecate,
-        LsDr10,
-        Ps1Galaxy,
-        Sdss12Photoz,
-        NedLvs
-    )
-
+    
     target = Target.objects.filter(id=target_id)[0]
     ra, dec = target.ra, target.dec
     coord = SkyCoord(ra, dec, unit="deg")
         
     start = time.time()
     res = []
-    for catalog in catalogs:
+    for catalog in GALAXY_CATALOGS:
         cat = catalog()
         print(f"Querying {cat}...")
         query_set = cat.query(ra, dec, radius=radius)
@@ -442,7 +450,49 @@ def get_distance_score(host_df, target_id, nonlocalized_event_name):
 
     # then if we don't know the spec-z or have an independent distance measure use the photo-z's
     return host_df.dist_norm_joint_prob.max()
+
+def get_eventcandidate_default_distance(target_id:int, nonlocalized_event_name:str):
+
+    # first check if this target has a redshift associated with it
+    targ = Target.objects.get(id = target_id)
+    if not np.isnan(targ.redshift):
+        targ_dist = cosmo.luminosity_distance(targ.redshift).to(u.Mpc).value
+        targ_dist_err = cosmo.luminosity_distance(1e-3).to(u.Mpc).value
+        return targ_dist, targ_dist_err
+        
+    # then try to get out the host galaxy json file from target extra
+    hosts = TargetExtra.objects.filter(target_id = target_id, key='Host Galaxies')
+    if not len(hosts):
+        return _distance_at_healpix(nonlocalized_event_name, target_id)
+
+    host_df = pd.read_json(hosts[0].value) # since we store the host info as a json str in the db
+    if not len(host_df):
+        return _distance_at_healpix(nonlocalized_event_name, target_id)
+
+    # if we've gotten to this point then the target has host galaxies associated with it!
+    # first thing we need to do is assign a rank ordering to the various catalogs,
+    # this will help later
+    host_df["_rank_order"] = host_df.Source.replace(GALAXY_CATALOG_RANKING)
+    host_df = host_df.sort_values("_rank_order")
+
+    # because we already sorted the dataframe by our "preferred" catalogs, we can
+    # just always take the distances from the first row and return them
+    # so let's start with z independent measures of the distance
+    ind_distance_hosts = host_df[host_df.z_type == "z ind."]
+    specz_hosts = host_df[host_df.z_type.str.contains("spec-z")]
+    if len(ind_distance_hosts):
+        to_ret = ind_distance_hosts.iloc[0]
+        
+    # then spec-z's
+    elif len(specz_hosts):
+        to_ret = specz_hosts.iloc[0]
+        
+    # then photo-z's
+    else:
+        to_ret = host_df
     
+    return to_ret.Dist, to_ret.DistErr
+
 def point_source_association(target_id:int, radius:float=2):
 
     target = Target.objects.get(id=target_id)

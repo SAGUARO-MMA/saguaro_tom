@@ -16,6 +16,7 @@ from .vet import (
     update_score_factor,
     delete_score_factor,
     get_distance_score,
+    get_eventcandidate_default_distance,
     _distance_at_healpix
 )
 from .vet_phot import (
@@ -75,7 +76,10 @@ def _score_phot(allphot, target, nonlocalized_event, filt=None):
     
     # if we've made it to this point we have at least one detection so
     # we can calculate the luminosity
-    dist, dist_err = _distance_at_healpix(nonlocalized_event.event_id, target.id)
+    dist, _ = get_eventcandidate_default_distance(
+        target.id,
+        nonlocalized_event.event_id
+    )
     lum = compute_peak_lum(phot.mag, phot.magerr, phot["filter"].tolist(), dist*u.Mpc)
 
     phot_score = 1
