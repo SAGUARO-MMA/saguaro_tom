@@ -869,7 +869,7 @@ class TnsQ3C(models.Model):
         db_table = 'tns_q3c'
 
 class ZtfVarstarQ3C(models.Model):
-    id = models.CharField(max_length=22, blank=True, null=True)
+    id = models.CharField(max_length=22, blank=True, primary_key=True)
     sourceid = models.BigIntegerField(blank=True, null=True)
     radeg = models.FloatField(blank=True, null=True)
     dedeg = models.FloatField(blank=True, null=True)
