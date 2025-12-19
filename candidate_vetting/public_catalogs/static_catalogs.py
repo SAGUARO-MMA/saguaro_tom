@@ -65,6 +65,9 @@ class DesiDr1(StaticCatalog):
             "target_dec":"dec",
             "default_mag":"default_mag"
         }
+    
+    # then, of course, init the super class
+    super().__init__()
 
     def to_standardized_catalog(self, df):
         df = self._standardize_df(df)
@@ -74,6 +77,7 @@ class DesiDr1(StaticCatalog):
         df["z_pos_err"] = df.z_err
         df["lumdist_neg_err"] = df.lumdist_err 
         df["lumdist_pos_err"] = df.lumdist_err
+        df["z_type"] = "spec-z"
         return df
     
 class NedLvs(StaticCatalog):
@@ -90,6 +94,15 @@ class NedLvs(StaticCatalog):
     }
 
     def to_standardized_catalog(self, df):
+        def _get_ztype(row):
+            if row.distmpc_method == "zIndependent":
+                return "z ind."
+            if row.z_tech == "SPEC":
+                return "spec-z"
+            return "photo-z"
+        
+        df["z_type"] = df.apply(_get_ztype, axis=1)
+                
         df = self._standardize_df(df)
 
         # some rows don't have uncertainty on redshift
@@ -97,7 +110,6 @@ class NedLvs(StaticCatalog):
         df["z_err"] = df.z_err.fillna(1e-3)
         df["z_neg_err"] = df.z_err
         df["z_pos_err"] = df.z_err
-
         
         lumdist_err = pd.Series(
             cosmo.luminosity_distance(df.z_err).to(u.Mpc).value,
@@ -139,6 +151,7 @@ class DesiSpec(StaticCatalog):
             "default_mag":"default_mag",
         }
         
+        # then, of course, init the super class
         super().__init__()
 
     def to_standardized_catalog(self, df):
@@ -149,7 +162,7 @@ class DesiSpec(StaticCatalog):
         df["z_pos_err"] = df.z_err
         df["lumdist_neg_err"] = df.lumdist_err 
         df["lumdist_pos_err"] = df.lumdist_err
-        df["z_type"] = "spec"
+        df["z_type"] = "spec-z"
         return df    
         
 class FermiLat(StaticCatalog):
@@ -175,8 +188,8 @@ class GladePlus(StaticCatalog):
 
         def _parse_dist_flag_col(row):
             if row.dist_flag <= 1:
-                return "phot"
-            return "spec"
+                return "photo-z"
+            return "spec-z"
         
         df["z_type"] = df.apply(_parse_dist_flag_col, axis=1)
         
@@ -208,7 +221,7 @@ class Gwgc(StaticCatalog):
         df = self._standardize_df(df)
         df["lumdist_neg_err"] = df.lumdist_err
         df["lumdist_pos_err"] = df.lumdist_err
-        
+        df["z_type"] = "spec-z/z ind."
         return df
     
 class Hecate(StaticCatalog):
@@ -229,7 +242,13 @@ class Hecate(StaticCatalog):
         self.colmap["lumdist_neg_err"] = "lumdist_neg_err"
         self.colmap["lumdist_pos_err"] = "lumdist_pos_err"
         
+        df["z_type"] = df.apply(
+            lambda row : "z ind." if row.dmethod == "N" else "spec-z",
+            axis=1
+        )
+        
         df = self._standardize_df(df)
+        
         return df
     
 class LsDr10(StaticCatalog):
@@ -253,6 +272,7 @@ class LsDr10(StaticCatalog):
             "z_phot_std":"z_err",
         }
 
+        # then, of course, init the super class
         super().__init__()
 
     def to_standardized_catalog(self, df):
@@ -267,7 +287,7 @@ class LsDr10(StaticCatalog):
         df["lumdist_err"] = cosmo.luminosity_distance(df.z_err).to(u.Mpc).value
         df["lumdist_neg_err"] = cosmo.luminosity_distance(df.z_neg_err).to(u.Mpc).value
         df["lumdist_pos_err"] = cosmo.luminosity_distance(df.z_pos_err).to(u.Mpc).value
-        df["z_type"] = "phot"
+        df["z_type"] = "photo-z"
         return df
 
     def query(self, ra, dec, radius=RADIUS_ARCSEC):
@@ -335,6 +355,7 @@ class Milliquas(StaticCatalog):
         df["lumdist_err"] = cosmo.luminosity_distance(df.z_err).to(u.Mpc).value
         df["lumdist_neg_err"] = df.lumdist_err
         df["lumdist_pos_err"] = df.lumdist_err
+        df["z_type"] = "photo-z"
         return df
 
 
@@ -358,7 +379,7 @@ class Ps1(StaticCatalog):
         df["lumdist_err"] = cosmo.luminosity_distance(df.z_err).to(u.Mpc).value
         df["lumdist_neg_err"] = df.lumdist_err
         df["lumdist_pos_err"] = df.lumdist_err
-        df["z_type"] = "phot"
+        df["z_type"] = "photo-z"
         return df
 
 class Ps1Galaxy(Ps1):
@@ -399,5 +420,5 @@ class Sdss12Photoz(StaticCatalog):
         df["lumdist_err"] = cosmo.luminosity_distance(df.z_err).to(u.Mpc).value
         df["lumdist_neg_err"] = df.lumdist_err
         df["lumdist_pos_err"] = df.lumdist_err
-        df["z_type"] = "phot"
+        df["z_type"] = "photo-z"
         return df
