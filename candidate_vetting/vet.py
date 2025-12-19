@@ -23,6 +23,9 @@ from astropy.time import Time
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
+from django.conf import settings
+cosmo = settings.COSMO
+
 from trove_targets.models import Target
 from tom_targets.models import TargetExtra
 from .models import ScoreFactor
@@ -337,17 +340,7 @@ def host_association(target_id:int, radius=50, pcc_threshold=PCC_THRESHOLD):
     _save_host_galaxy_df(ret_df, target)
     return ret_df
 
-def host_distance_match(
-        host_df:pd.DataFrame,
-        target_id:int,
-        nonlocalized_event_name:str,
-        max_time:Time=Time.now()
-):
-
-    if not len(host_df):        
-        host_df["dist_norm_joint_prob"] = []
-        return host_df # continue to return an empty dataframe here, but with the correct columns
-    
+def _get_nle_distance_pdf(lumdist_array:np.ndarray, nonlocalized_event_name:str, target_id, max_time=Time.now()):
     # find the distance at the healpix
     dist, dist_err = _distance_at_healpix(nonlocalized_event_name, target_id, max_time=max_time)
     
@@ -357,10 +350,30 @@ def host_distance_match(
                   "distance array for calculating distance probability "+
                   "distribution functions")
         
+    # _lumdist = np.logspace(np.log10(D_LIM_LOWER), np.log10(D_LIM_UPPER), 10_000)
+    test_pdf = norm.pdf(lumdist_array, loc=dist, scale=dist_err)
+    return test_pdf
+
+def host_distance_match(
+        host_df:pd.DataFrame,
+        target_id:int,
+        nonlocalized_event_name:str,
+        max_time:Time=Time.now()
+):
+    
+    if not len(host_df):        
+        host_df["dist_norm_joint_prob"] = []
+        return host_df # continue to return an empty dataframe here, but with the correct columns
+
     # now crossmatch this distance to the host galaxy dataframe
     _lumdist = np.linspace(0, 10_000, 10_000)
-    # _lumdist = np.logspace(np.log10(D_LIM_LOWER), np.log10(D_LIM_UPPER), 10_000)
-    test_pdf = norm.pdf(_lumdist, loc=dist, scale=dist_err)
+
+    test_pdf = _get_nle_distance_pdf(
+        _lumdist,
+        nonlocalized_event_name,
+        target_id,
+        max_time=max_time
+    )
     host_pdfs = np.array([ 
         AsymmetricGaussian().pdf(
             _lumdist,
@@ -380,14 +393,24 @@ def host_distance_match(
     host_df["dist_norm_joint_prob"] = trapezoid(np.sqrt(joint_prob), axis=1)
     return host_df
 
-def get_host_score(host_df):
+def get_distance_score(host_df, target_id, nonlocalized_event_name):
     """
-    This get's the host score from the input host_df by first prioritizing
-    spec-z's and then photo-z's. It assumes that any potential host within a
+    This get's the host score from the input host_df by first prioritizing target specific redshifts,
+    then spec-z's, and then photo-z's. It assumes that any potential host within a
     Pcc < PCC_THRESHOLD is equally probable. It also uses the maximum probability galaxy
     to soften the effects of poor distance associations.
     """
-    # first use the redshift independent measurements of distances
+    # first check if this target has a measured redshift
+    targ = Target.objects.get(id=target_id)
+    if targ.redshift is not None:
+        _lumdist = np.linspace(0, 10_000, 10_000)
+        nle_pdf = _get_nle_distance_pdf(_lumdist,  nonlocalized_event_name, target_id)
+        targ_dist = cosmo.luminosity_distance(targ.redshift).to(u.Mpc).value
+        targ_dist_err = cosmo.luminosity_distance(1e-3).to(u.Mpc).value
+        targ_pdf = norm.pdf(_lumdist, loc=targ_dist, scale=targ_dist_err)
+        return trapezoid(np.sqrt(nle_pdf*targ_pdf))
+    
+    # then use the redshift independent measurements of distances
     ind_distance_hosts = host_df[host_df.z_type == "z ind."]
     if len(ind_distance_hosts):
         return ind_distance_hosts.dist_norm_joint_prob.max()
