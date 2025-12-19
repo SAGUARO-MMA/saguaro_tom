@@ -334,10 +334,6 @@ def host_association(target_id:int, radius=50, pcc_threshold=PCC_THRESHOLD):
     print(f"Queries finished in {end-start}s")
 
     # save the host galaxy dataframe to the TargetExtra "Host Galaxies" keyword
-    if not len(ret_df):
-        # then we don't need to actually save any host information
-        return ret_df
-
     _save_host_galaxy_df(ret_df, target)
     return ret_df
 
@@ -347,6 +343,11 @@ def host_distance_match(
         nonlocalized_event_name:str,
         max_time:Time=Time.now()
 ):
+
+    if not len(host_df):        
+        host_df["dist_norm_joint_prob"] = []
+        return host_df # continue to return an empty dataframe here, but with the correct columns
+    
     # find the distance at the healpix
     dist, dist_err = _distance_at_healpix(nonlocalized_event_name, target_id, max_time=max_time)
     
@@ -379,6 +380,26 @@ def host_distance_match(
     host_df["dist_norm_joint_prob"] = trapezoid(np.sqrt(joint_prob), axis=1)
     return host_df
 
+def get_host_score(host_df):
+    """
+    This get's the host score from the input host_df by first prioritizing
+    spec-z's and then photo-z's. It assumes that any potential host within a
+    Pcc < PCC_THRESHOLD is equally probable. It also uses the maximum probability galaxy
+    to soften the effects of poor distance associations.
+    """
+    # first use the redshift independent measurements of distances
+    ind_distance_hosts = host_df[host_df.z_type == "z ind."]
+    if len(ind_distance_hosts):
+        return ind_distance_hosts.dist_norm_joint_prob.max()
+        
+    # then use the specz hosts
+    specz_hosts = host_df[host_df.z_type.str.contains("spec-z")]
+    if len(specz_hosts):
+        return specz_hosts.dist_norm_joint_prob.max()
+
+    # then if we don't know the spec-z or have an independent distance measure use the photo-z's
+    return host_df.dist_norm_joint_prob.max()
+    
 def point_source_association(target_id:int, radius:float=2):
 
     target = Target.objects.get(id=target_id)

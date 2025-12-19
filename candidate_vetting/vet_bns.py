@@ -14,6 +14,7 @@ from .vet import (
     host_association,
     host_distance_match,
     update_score_factor,
+    get_host_score,
     _distance_at_healpix
 )
 from .vet_phot import (
@@ -165,7 +166,7 @@ def vet_bns(target_id:int, nonlocalized_event_name:Optional[str]=None):
         )
 
         # choose the maximum score out of the top 10 best hosts
-        host_score = host_df.dist_norm_joint_prob.max()
+        host_score = get_host_score(host_df)
         update_score_factor(event_candidate, "host_distance_score", host_score)
 
     else:
