@@ -52,8 +52,12 @@ from candidate_vetting.public_catalogs.static_catalogs import (
     Sdss12Photoz,
     AsassnVariableStar,
     Gaiadr3Variable,
+    ZtfVarStar,
     Ps1PointSource,
-    Milliquas
+    Milliquas,
+    NedLvs,
+    TwoMass,
+    DesiDr1
 )
 
 # After we order the dataframe by the Pcc score, remove any host matches with a greater
@@ -274,13 +278,15 @@ def host_association(target_id:int, radius=50, pcc_threshold=PCC_THRESHOLD):
     Find all of the potential hosts associated with this target
     """
     catalogs = (
-        DesiSpec,
+        DesiDr1,
+        # DesiSpec, # this duplicates with DESI DR1 (which also includes the EDR data)
         GladePlus,
         Gwgc,
         Hecate,
         LsDr10,
         Ps1Galaxy,
-        Sdss12Photoz
+        Sdss12Photoz,
+        NedLvs
     )
 
     target = Target.objects.filter(id=target_id)[0]
@@ -291,6 +297,7 @@ def host_association(target_id:int, radius=50, pcc_threshold=PCC_THRESHOLD):
     res = []
     for catalog in catalogs:
         cat = catalog()
+        print(f"Querying {cat}...")
         query_set = cat.query(ra, dec, radius=radius)
             
         # if no queries are returned we can skip this catalog
@@ -431,7 +438,13 @@ def point_source_association(target_id:int, radius:float=2):
     point_source_catalogs = [
         AsassnVariableStar,
         Gaiadr3Variable,
-        Ps1PointSource
+        Ps1PointSource,
+        ZtfVarStar,
+
+        # this is the 2MASS point source catalog
+        # I'm leaving it commented out because we need to test it a bit more before
+        # using it!
+        #TwoMass 
     ]
 
     for catalog in point_source_catalogs:

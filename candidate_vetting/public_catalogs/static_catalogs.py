@@ -24,7 +24,11 @@ from ..models import (
     MilliquasQ3C,
     Ps1Q3C,
     RomaBzcatQ3C,
-    Sdss12PhotozQ3C
+    Sdss12PhotozQ3C,
+    ZtfVarstarQ3C,
+    TwomassQ3C,
+    NedlvsQ3C,
+    DesiDr1Q3C
 )
 
 class _Log10(Func):
@@ -33,6 +37,85 @@ class _Log10(Func):
 
 class AsassnVariableStar(StaticCatalog):
     catalog_model = AsassnQ3C
+
+class TwoMass(StaticCatalog):
+    catalog_model = TwomassQ3C
+    ra_colname = "ra"
+    dec_colname = "decl"
+    
+class DesiDr1(StaticCatalog):
+    catalog_model = DesiDr1Q3C
+    ra_colname = "target_ra"
+    dec_colname = "target_dec"
+
+    def __init__(self):
+        self.catalog_model.objects = self.catalog_model.objects.filter(
+            flux_r__gt=0, # anything with a negative flux (in the linear nanomaggy unit) can be ignored
+            zwarn = 0, # we don't want anything with ZWARN > 0: https://data.desi.lbl.gov/doc/releases/dr1/
+            zcat_primary = True # only take the best ("primary") redshift for this target
+        ).annotate(
+            default_mag=22.5-2.5*_Log10('flux_r')
+        )
+
+        self.colmap = {
+            "desiname":"name",
+            "z":"z",
+            "zerr":"z_err",
+            "target_ra":"ra",
+            "target_dec":"dec",
+            "default_mag":"default_mag"
+        }
+
+    def to_standardized_catalog(self, df):
+        df = self._standardize_df(df)
+        df["lumdist"] = cosmo.luminosity_distance(df.z).to(u.Mpc).value 
+        df["lumdist_err"] = cosmo.luminosity_distance(df.z_err).to(u.Mpc).value
+        df["z_neg_err"] = df.z_err
+        df["z_pos_err"] = df.z_err
+        df["lumdist_neg_err"] = df.lumdist_err 
+        df["lumdist_pos_err"] = df.lumdist_err
+        return df
+    
+class NedLvs(StaticCatalog):
+    catalog_model = NedlvsQ3C
+    colmap = {
+        "objname":"name",
+        "z":"z",
+        "z_unc":"z_err", 
+        "distmpc": "lumdist", # Mpc
+        "distmpc_unc":"lumdist_err", # Mpc
+        "ra":"ra",
+        "dec":"dec",
+        "m_j":"default_mag" # use 2MASS J for the Pcc magnitude
+    }
+
+    def to_standardized_catalog(self, df):
+        df = self._standardize_df(df)
+
+        # some rows don't have uncertainty on redshift
+        # we can assume these are spec-z's with very small uncertainty
+        df["z_err"] = df.z_err.fillna(1e-3)
+        df["z_neg_err"] = df.z_err
+        df["z_pos_err"] = df.z_err
+
+        
+        lumdist_err = pd.Series(
+            cosmo.luminosity_distance(df.z_err).to(u.Mpc).value,
+            index = df.index
+        ) 
+        # when lumdist_err is NaN is when the z_err column is also NaN
+        # so we assume an uncertainty on the distance of ~4.5 Mpc (the conversion
+        # from z_err = 1e-3 to Mpc)
+        df.lumdist_err = df.lumdist_err.fillna(lumdist_err)
+        df["lumdist_neg_err"] = df.lumdist_err
+        df["lumdist_pos_err"] = df.lumdist_err
+
+        return df
+    
+class ZtfVarStar(StaticCatalog):
+    catalog_model = ZtfVarstarQ3C
+    ra_colname = "radeg"
+    dec_colname = "dedeg"
     
 class DesiSpec(StaticCatalog):
     catalog_model = DesiSpecQ3C
