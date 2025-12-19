@@ -3,6 +3,7 @@ Define the static catalogs for querying
 """
 from astropy import units as u
 import pandas as pd
+import numpy as np
 
 from django.db.models import F, Q, Func, Value, IntegerField, Case, When, CharField
 from django.db.models.functions import Cast
@@ -173,9 +174,7 @@ class GladePlus(StaticCatalog):
     def to_standardized_catalog(self, df):
 
         def _parse_dist_flag_col(row):
-            if row.dist_flag == 0:
-                return np.nan
-            elif row.dist_flag == 1:
+            if row.dist_flag <= 1:
                 return "phot"
             return "spec"
         

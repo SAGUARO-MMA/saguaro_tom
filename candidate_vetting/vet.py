@@ -173,6 +173,7 @@ def _save_host_galaxy_df(df, target):
         "lumdist_err":"DistErr",
         "z":"z",
         "z_err":"zErr",
+        "z_type":"z_type",
         "default_mag":"Mags",
         "catalog":"Source"
     }
@@ -185,6 +186,7 @@ def _save_host_galaxy_df(df, target):
             "dec",
             "lumdist",
             "z",
+            "z_type",
             "default_mag",
             "catalog"
         ]
