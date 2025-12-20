@@ -114,8 +114,7 @@ class AsymmetricGaussian(rv_continuous):
         # of the same value repeated len(x) times
         
         # numerically integrate asymmetric Gaussian, for normalization
-        integ_x = np.logspace(np.log10(integ_a[0]), np.log10(integ_b[0]), 
-                              10000)
+        integ_x = np.linspace(integ_a[0], integ_b[0], x.shape[0])
         integ = np_trapz_fn(
             y=self._pdf_unnorm(integ_x, mean, unc_minus, unc_plus),
             x=integ_x
@@ -377,7 +376,6 @@ def _get_nle_distance_pdf(lumdist_array:np.ndarray, nonlocalized_event_name:str,
                   "distance array for calculating distance probability "+
                   "distribution functions")
         
-    # _lumdist = np.logspace(np.log10(D_LIM_LOWER), np.log10(D_LIM_UPPER), 10_000)
     test_pdf = norm.pdf(lumdist_array, loc=dist, scale=dist_err)
     return test_pdf
 
@@ -393,15 +391,14 @@ def host_distance_match(
         return host_df # continue to return an empty dataframe here, but with the correct columns
     
     # now crossmatch this distance to the host galaxy dataframe
-    _lumdist = np.linspace(0, 10_000, 10_000)
-
+    _lumdist = np.linspace(D_LIM_LOWER, D_LIM_UPPER, int(10*D_LIM_UPPER))
+    
     test_pdf = _get_nle_distance_pdf(
         _lumdist,
         nonlocalized_event_name,
         target_id,
         max_time=max_time
     )
-
     host_pdfs = np.array([ 
         AsymmetricGaussian().pdf(
             _lumdist,
@@ -413,12 +410,16 @@ def host_distance_match(
         ) for _,row in host_df.iterrows() 
     ])
     joint_prob = host_pdfs*test_pdf
-    
+
     # finally, compute the Bhattacharyya coefficient for the overlap of these
     # two distributions. https://en.wikipedia.org/wiki/Bhattacharyya_distance
     # This coefficient is non-parametric which is good for our Asymmetric Gaussian
     # Original paper: http://www.jstor.org/stable/25047806
-    host_df["dist_norm_joint_prob"] = trapezoid(np.sqrt(joint_prob), axis=1)
+    host_df["dist_norm_joint_prob"] = trapezoid(
+        np.sqrt(joint_prob),
+        x=_lumdist,
+        axis=1
+    )
     return host_df
 
 def get_distance_score(host_df, target_id, nonlocalized_event_name):
@@ -431,12 +432,15 @@ def get_distance_score(host_df, target_id, nonlocalized_event_name):
     # first check if this target has a measured redshift
     targ = Target.objects.get(id=target_id)
     if not np.isnan(targ.redshift):
-        _lumdist = np.linspace(0, 10_000, 10_000)
+        _lumdist = np.linspace(D_LIM_LOWER, D_LIM_UPPER, int(10*D_LIM_UPPER))
         nle_pdf = _get_nle_distance_pdf(_lumdist,  nonlocalized_event_name, target_id)
         targ_dist = cosmo.luminosity_distance(targ.redshift).to(u.Mpc).value
         targ_dist_err = cosmo.luminosity_distance(1e-3).to(u.Mpc).value
         targ_pdf = norm.pdf(_lumdist, loc=targ_dist, scale=targ_dist_err)
-        return trapezoid(np.sqrt(nle_pdf*targ_pdf))
+        return trapezoid(
+            np.sqrt(targ_pdf*nle_pdf),
+            x=_lumdist
+        )
     
     # then use the redshift independent measurements of distances
     ind_distance_hosts = host_df[host_df.z_type == "z ind."]
@@ -473,7 +477,7 @@ def get_eventcandidate_default_distance(target_id:int, nonlocalized_event_name:s
     # first thing we need to do is assign a rank ordering to the various catalogs,
     # this will help later
     host_df["_rank_order"] = host_df.Source.replace(GALAXY_CATALOG_RANKING)
-    host_df = host_df.sort_values("_rank_order")
+    host_df = host_df.sort_values(by=["_rank_order", "PCC"])
 
     # because we already sorted the dataframe by our "preferred" catalogs, we can
     # just always take the distances from the first row and return them
@@ -489,7 +493,7 @@ def get_eventcandidate_default_distance(target_id:int, nonlocalized_event_name:s
         
     # then photo-z's
     else:
-        to_ret = host_df
+        to_ret = host_df.iloc[0]
     
     return to_ret.Dist, to_ret.DistErr
 
