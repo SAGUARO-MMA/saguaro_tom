@@ -415,7 +415,6 @@ def host_association(target_id:int, radius=50, pcc_threshold=PCC_THRESHOLD):
     if not len(ret_df):
         # then we don't need to actually save any host information
         return ret_df
-
     _save_host_galaxy_df(ret_df, target)
     return ret_df
 
