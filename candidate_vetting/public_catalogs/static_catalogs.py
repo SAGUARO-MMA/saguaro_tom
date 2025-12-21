@@ -329,8 +329,8 @@ class Milliquas(StaticCatalog):
                 default=Value(1e-3)
             ), # this computes the z_err based on the assumptions outlined in the docs for this catalog
             z_type=Case(
-                When(num_decimal__lte = 2, then=Value("phot")),
-                default=Value("spec")
+                When(num_decimal__lte = 2, then=Value("phot-z")),
+                default=Value("spec-z")
             )
         )
 
