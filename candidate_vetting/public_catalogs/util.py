@@ -2,6 +2,9 @@
 Some useful variables that will be used throughout this entire directory
 """
 import numpy as np
+
+import warnings
+
 from django.db.models import (
     Func, BooleanField, FloatField, DecimalField, ExpressionWrapper
 )
@@ -33,10 +36,16 @@ def create_phot(target, time, fluxdict, source):
 
     Returns True if it was created, false if it already existed
     """
-    if not(("magnitude" in fluxdict.keys() and "error" in fluxdict.keys()) ^ 
+    if not fluxdict:
+        warnings.warn("fluxdict is empty")
+    elif "magnitude" in fluxdict.keys() and not("error" in fluxdict.keys()):
+        warnings.warn("Data point contains a magnitude but not an associated "+
+                      "error")
+    elif not(("magnitude" in fluxdict.keys() and "error" in fluxdict.keys()) ^ 
             ("limit" in fluxdict.keys())):
         raise ValueError("Must pass EITHER a magnitude and associated error "+
-                          "OR a limit, but not both")
+                         "OR a limit, but not both")
+        
     _, created = ReducedDatum.objects.get_or_create(
         timestamp = time,
         value = fluxdict,
