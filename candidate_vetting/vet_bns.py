@@ -222,4 +222,4 @@ def vet_bns(target_id:int, nonlocalized_event_name:Optional[str]=None):
             predet_score = PHOT_SCORE_MIN
             update_score_factor(event_candidate, "predetection_score", predet_score)
         else:
-            delete_score_factor(event_candidate, "predetction_score")
+            delete_score_factor(event_candidate, "predetection_score")
