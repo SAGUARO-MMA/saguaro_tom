@@ -65,7 +65,8 @@ class DesiDr1(StaticCatalog):
             "target_dec":"dec",
             "default_mag":"default_mag"
         }
-
+        
+        # then, of course, init the super class
         super().__init__()
         
     def to_standardized_catalog(self, df):
@@ -150,6 +151,7 @@ class DesiSpec(StaticCatalog):
             "default_mag":"default_mag",
         }
         
+        # then, of course, init the super class
         super().__init__()
 
     def to_standardized_catalog(self, df):
@@ -270,6 +272,7 @@ class LsDr10(StaticCatalog):
             "z_phot_std":"z_err",
         }
 
+	# then, of course, init the super class
         super().__init__()
 
     def to_standardized_catalog(self, df):
