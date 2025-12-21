@@ -66,8 +66,8 @@ class DesiDr1(StaticCatalog):
             "default_mag":"default_mag"
         }
     
-    # then, of course, init the super class
-    super().__init__()
+        # then, of course, init the super class
+        super().__init__()
 
     def to_standardized_catalog(self, df):
         df = self._standardize_df(df)
