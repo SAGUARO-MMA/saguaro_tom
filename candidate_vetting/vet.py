@@ -697,7 +697,7 @@ def agn_distance_match(
         agn_df["dist_norm_joint_prob"] = []
         return agn_df # continue to return an empty dataframe here, but with the correct columns
         
-    # now crossmatch this distance to the host galaxy dataframe
+    # now crossmatch this distance to the to the AGNs dataframe
     _lumdist = np.linspace(D_LIM_LOWER, D_LIM_UPPER, int(10*D_LIM_UPPER))
 
     test_pdf = _get_nle_distance_pdf(
