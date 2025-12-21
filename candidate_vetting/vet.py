@@ -664,7 +664,6 @@ def associate_agn_2d(target_id:int, radius:float=2):
     
     return ret_df
 
-
 def agn_distance_match(
         agn_df:pd.DataFrame,
         target_id:int,
@@ -694,19 +693,19 @@ def agn_distance_match(
         joint probability
 
     """
-    # find the distance at the healpix
-    dist, dist_err = _distance_at_healpix(nonlocalized_event_name, target_id, max_time=max_time)
-    
-    # let user know about hard-coded bounds on luminosity distance array
-    warnings.warn(f"Using hard-coded D_LIM_LOWER = {D_LIM_LOWER} and "+
-                  f"D_LIM_UPPER = {D_LIM_UPPER} to construct log-spaced "+
-                  "distance array for calculating distance probability "+
-                  "distribution functions")
+    if not len(agn_df):        
+        agn_df["dist_norm_joint_prob"] = []
+        return agn_df # continue to return an empty dataframe here, but with the correct columns
         
-    # now crossmatch this distance to the AGNs
-    _lumdist = np.linspace(0, 10_000, 10_000)
-    # _lumdist = np.logspace(np.log10(D_LIM_LOWER), np.log10(D_LIM_UPPER), 10_000)
-    test_pdf = norm.pdf(_lumdist, loc=dist, scale=dist_err)
+    # now crossmatch this distance to the host galaxy dataframe
+    _lumdist = np.linspace(D_LIM_LOWER, D_LIM_UPPER, int(10*D_LIM_UPPER))
+
+    test_pdf = _get_nle_distance_pdf(
+        _lumdist,
+        nonlocalized_event_name,
+        target_id,
+        max_time=max_time
+    )
     agn_pdfs = np.array([ 
         AsymmetricGaussian().pdf(
             _lumdist,
@@ -723,5 +722,9 @@ def agn_distance_match(
     # two distributions. https://en.wikipedia.org/wiki/Bhattacharyya_distance
     # This coefficient is non-parametric which is good for our Asymmetric Gaussian
     # Original paper: http://www.jstor.org/stable/25047806
-    agn_df["dist_norm_joint_prob"] = trapezoid(np.sqrt(joint_prob), axis=1)
+    agn_df["dist_norm_joint_prob"] = trapezoid(
+        np.sqrt(joint_prob), 
+        x=_lumdist,
+        axis=1
+    )
     return agn_df
