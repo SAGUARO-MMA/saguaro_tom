@@ -17,6 +17,8 @@ from .vet import (
     associate_agn_2d,
     agn_distance_match,
     update_score_factor,
+    delete_score_factor,
+    get_distance_score
 )
 from .vet_phot import (
     _get_post_disc_phot,
@@ -129,13 +131,16 @@ def vet_kn_in_sn(target_id:int, nonlocalized_event_name:Optional[str]=None):
         )
 
         # choose the maximum score out of the top 10 best hosts
-        host_score = host_df.dist_norm_joint_prob.max()
+        host_score = get_distance_score(host_df, target_id, nonlocalized_event_name)
         update_score_factor(event_candidate, "host_distance_score", host_score)
 
     else:
         # if no hosts are found we don't want to bias the final score if the host
         # is just too far
         host_score = 1
+        
+        # and we should also clear out any existing scores for it
+        delete_score_factor(event_candidate, "host_distance_score")
         
     ## photometry scoring
     allphot = _get_post_disc_phot(target_id=target_id, nonlocalized_event=nonlocalized_event)
@@ -148,10 +153,18 @@ def vet_kn_in_sn(target_id:int, nonlocalized_event_name:Optional[str]=None):
     )
     if lum is not None:
         update_score_factor(event_candidate, "phot_peak_lum", lum.value)
+    else:
+        delete_score_factor(event_candidate, "phot_peak_lum")
+        
     if max_time is not None:
         update_score_factor(event_candidate, "phot_peak_time", max_time)
+    else:
+        delete_score_factor(event_candidate, "phot_peak_time")
+        
     if decay_rate is not None:
         update_score_factor(event_candidate, "phot_decay_rate", decay_rate)
+    else:
+        delete_score_factor(event_candidate, "phot_decay_rate")
 
     # check for *reliable* predetections before time t_pre
     prephot = _get_pre_disc_phot(target.id,
@@ -171,4 +184,6 @@ def vet_kn_in_sn(target_id:int, nonlocalized_event_name:Optional[str]=None):
         if any(v >= PARAM_RANGES["max_predets"] for v in n_predets):
             predet_score = PHOT_SCORE_MIN
             update_score_factor(event_candidate, "predetection_score", predet_score)
+        else:
+            delete_score_factor(event_candidate, "predetection_score")
 
