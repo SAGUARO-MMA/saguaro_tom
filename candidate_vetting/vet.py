@@ -23,6 +23,9 @@ from astropy.time import Time
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
+from django.conf import settings
+cosmo = settings.COSMO
+
 from trove_targets.models import Target
 from tom_targets.models import TargetExtra
 from .models import ScoreFactor
@@ -66,6 +69,25 @@ PCC_THRESHOLD = 0.15 # this is the value used in Rastinejad+2022
 D_LIM_LOWER = 1e-5 # 0.00001 Mpc
 D_LIM_UPPER = 1e4  # 10,000 Mpc 
 
+# rank order of the galaxy catalogs for getting the "default" distance to this transient
+# this is kinda arbitrary, but generally I consider
+# 1) is this a redshift catalog or a galaxy distance catalog? An actual galaxy distance
+#    catalog is preferred over a general redshift catalog
+# 2) Does this catalog have spec-z's or photo-z's? A spec-z catalog is preferred.
+GALAXY_CATALOGS = [
+    GladePlus,
+    Gwgc,
+    Hecate,
+    DesiDr1,
+    # DesiSpec, # this duplicates with DESI DR1 (which also includes the EDR data)
+    NedLvs,
+    LsDr10,
+    Ps1Galaxy,
+    Sdss12Photoz
+]
+
+GALAXY_CATALOG_RANKING = {c.__name__:i for i,c in enumerate(GALAXY_CATALOGS)}
+
 class AsymmetricGaussian(rv_continuous):
     """
     Custom Asymmetric Gaussian distribution for uneven uncertainties
@@ -92,8 +114,7 @@ class AsymmetricGaussian(rv_continuous):
         # of the same value repeated len(x) times
         
         # numerically integrate asymmetric Gaussian, for normalization
-        integ_x = np.logspace(np.log10(integ_a[0]), np.log10(integ_b[0]), 
-                              10000)
+        integ_x = np.linspace(integ_a[0], integ_b[0], x.shape[0])
         integ = np_trapz_fn(
             y=self._pdf_unnorm(integ_x, mean, unc_minus, unc_plus),
             x=integ_x
@@ -156,6 +177,18 @@ def update_score_factor(event_candidate, key, value):
         key = key,
         defaults = dict(value = value)
     )
+
+def delete_score_factor(event_candidate, key):
+    """This is basically only used since we are updating various scores
+    and may want to delete some, rather than update them, in the process"""
+    # first get any score factors that match this event candidate and key
+    matches = ScoreFactor.objects.filter(
+        event_candidate=event_candidate,
+        key = key
+    )
+
+    if matches.count():
+        matches.delete()
 
 def _save_host_galaxy_df(df, target):
 
@@ -323,17 +356,6 @@ def host_association(target_id:int, radius=50, pcc_threshold=PCC_THRESHOLD):
     """
     Find all of the potential hosts associated with this target
     """
-    catalogs = (
-        DesiDr1,
-        # DesiSpec, # this duplicates with DESI DR1 (which also includes the EDR data)
-        GladePlus,
-        Gwgc,
-        Hecate,
-        LsDr10,
-        Ps1Galaxy,
-        Sdss12Photoz,
-        NedLvs
-    )
 
     target = Target.objects.filter(id=target_id)[0]
     ra, dec = target.ra, target.dec
@@ -341,7 +363,7 @@ def host_association(target_id:int, radius=50, pcc_threshold=PCC_THRESHOLD):
         
     start = time.time()
     res = []
-    for catalog in catalogs:
+    for catalog in GALAXY_CATALOGS:
         cat = catalog()
         print(f"Querying {cat}...")
         query_set = cat.query(ra, dec, radius=radius)
@@ -364,7 +386,7 @@ def host_association(target_id:int, radius=50, pcc_threshold=PCC_THRESHOLD):
             # had a derived distance in it already!
             df = df[df.z > 0.02] # otherwise it probably isn't a real redshift
         df = df.dropna(
-            subset=["default_mag", "ra", "dec", "lumdist"]
+            subset=["default_mag", "ra", "dec", "lumdist", "lumdist_err"]
         ) # drop rows without the information we need
                 
         # now save the cleaned dataset
@@ -397,6 +419,19 @@ def host_association(target_id:int, radius=50, pcc_threshold=PCC_THRESHOLD):
     _save_host_galaxy_df(ret_df, target)
     return ret_df
 
+def _get_nle_distance_pdf(lumdist_array:np.ndarray, nonlocalized_event_name:str, target_id, max_time=Time.now()):
+    # find the distance at the healpix
+    dist, dist_err = _distance_at_healpix(nonlocalized_event_name, target_id, max_time=max_time)
+
+    # let user know about hard-coded bounds on luminosity distance array
+    warnings.warn(f"Using hard-coded D_LIM_LOWER = {D_LIM_LOWER} and "+
+                  f"D_LIM_UPPER = {D_LIM_UPPER} to construct log-spaced "+
+                  "distance array for calculating distance probability "+
+                  "distribution functions")
+
+    test_pdf = norm.pdf(lumdist_array, loc=dist, scale=dist_err)
+    return test_pdf
+
 def host_distance_match(
         host_df:pd.DataFrame,
         target_id:int,
@@ -427,19 +462,20 @@ def host_distance_match(
         joint probability
 
     """
-    # find the distance at the healpix
-    dist, dist_err = _distance_at_healpix(nonlocalized_event_name, target_id, max_time=max_time)
-    
-    # let user know about hard-coded bounds on luminosity distance array
-    warnings.warn(f"Using hard-coded D_LIM_LOWER = {D_LIM_LOWER} and "+
-                  f"D_LIM_UPPER = {D_LIM_UPPER} to construct log-spaced "+
-                  "distance array for calculating distance probability "+
-                  "distribution functions")
+        
+    if not len(host_df):        
+        host_df["dist_norm_joint_prob"] = []
+        return host_df # continue to return an empty dataframe here, but with the correct columns
         
     # now crossmatch this distance to the host galaxy dataframe
-    _lumdist = np.linspace(0, 10_000, 10_000)
-    # _lumdist = np.logspace(np.log10(D_LIM_LOWER), np.log10(D_LIM_UPPER), 10_000)
-    test_pdf = norm.pdf(_lumdist, loc=dist, scale=dist_err)
+    _lumdist = np.linspace(D_LIM_LOWER, D_LIM_UPPER, int(10*D_LIM_UPPER))
+
+    test_pdf = _get_nle_distance_pdf(
+        _lumdist,
+        nonlocalized_event_name,
+        target_id,
+        max_time=max_time
+    )
     host_pdfs = np.array([ 
         AsymmetricGaussian().pdf(
             _lumdist,
@@ -456,8 +492,87 @@ def host_distance_match(
     # two distributions. https://en.wikipedia.org/wiki/Bhattacharyya_distance
     # This coefficient is non-parametric which is good for our Asymmetric Gaussian
     # Original paper: http://www.jstor.org/stable/25047806
-    host_df["dist_norm_joint_prob"] = trapezoid(np.sqrt(joint_prob), axis=1)
+    host_df["dist_norm_joint_prob"] = trapezoid(
+        np.sqrt(joint_prob),
+        x=_lumdist,
+        axis=1
+    )
     return host_df
+
+def get_distance_score(host_df, target_id, nonlocalized_event_name):
+    """
+    This get's the host score from the input host_df by first prioritizing target specific redshifts,
+    then spec-z's, and then photo-z's. It assumes that any potential host within a
+    Pcc < PCC_THRESHOLD is equally probable. It also uses the maximum probability galaxy
+    to soften the effects of poor distance associations.
+    """
+    # first check if this target has a measured redshift
+    targ = Target.objects.get(id=target_id)
+    if not np.isnan(targ.redshift):
+        _lumdist = np.linspace(D_LIM_LOWER, D_LIM_UPPER, int(10*D_LIM_UPPER))
+        nle_pdf = _get_nle_distance_pdf(_lumdist,  nonlocalized_event_name, target_id)
+        targ_dist = cosmo.luminosity_distance(targ.redshift).to(u.Mpc).value
+        targ_dist_err = cosmo.luminosity_distance(1e-3).to(u.Mpc).value
+        targ_pdf = norm.pdf(_lumdist, loc=targ_dist, scale=targ_dist_err)
+        return trapezoid(
+            np.sqrt(targ_pdf*nle_pdf),
+            x=_lumdist
+        )
+
+    # then use the redshift independent measurements of distances
+    ind_distance_hosts = host_df[host_df.z_type == "z ind."]
+    if len(ind_distance_hosts):
+        return ind_distance_hosts.dist_norm_joint_prob.max()
+
+    # then use the specz hosts
+    specz_hosts = host_df[host_df.z_type.str.contains("spec-z")]
+    if len(specz_hosts):
+        return specz_hosts.dist_norm_joint_prob.max()
+
+    # then if we don't know the spec-z or have an independent distance measure use the photo-z's
+    return host_df.dist_norm_joint_prob.max()
+
+def get_eventcandidate_default_distance(target_id:int, nonlocalized_event_name:str):
+
+    # first check if this target has a redshift associated with it
+    targ = Target.objects.get(id = target_id)
+    if not np.isnan(targ.redshift):
+        targ_dist = cosmo.luminosity_distance(targ.redshift).to(u.Mpc).value
+        targ_dist_err = cosmo.luminosity_distance(1e-3).to(u.Mpc).value
+        return targ_dist, targ_dist_err
+
+    # then try to get out the host galaxy json file from target extra
+    hosts = TargetExtra.objects.filter(target_id = target_id, key='Host Galaxies')
+    if not len(hosts):
+        return _distance_at_healpix(nonlocalized_event_name, target_id)
+
+    host_df = pd.read_json(hosts[0].value) # since we store the host info as a json str in the db
+    if not len(host_df):
+        return _distance_at_healpix(nonlocalized_event_name, target_id)
+
+    # if we've gotten to this point then the target has host galaxies associated with it!
+    # first thing we need to do is assign a rank ordering to the various catalogs,
+    # this will help later
+    host_df["_rank_order"] = host_df.Source.replace(GALAXY_CATALOG_RANKING)
+    host_df = host_df.sort_values(by=["_rank_order", "PCC"])
+
+    # because we already sorted the dataframe by our "preferred" catalogs, we can
+    # just always take the distances from the first row and return them
+    # so let's start with z independent measures of the distance
+    ind_distance_hosts = host_df[host_df.z_type == "z ind."]
+    specz_hosts = host_df[host_df.z_type.str.contains("spec-z")]
+    if len(ind_distance_hosts):
+        to_ret = ind_distance_hosts.iloc[0]
+
+    # then spec-z's
+    elif len(specz_hosts):
+        to_ret = specz_hosts.iloc[0]
+
+    # then photo-z's
+    else:
+        to_ret = host_df.iloc[0]
+
+    return to_ret.Dist, to_ret.DistErr
 
 def point_source_association(target_id:int, radius:float=2):
 
