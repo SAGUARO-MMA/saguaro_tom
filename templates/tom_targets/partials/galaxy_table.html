@@ -8,7 +8,7 @@
       <th scope="col">Off.  <br/> (")</th>
       <th scope="col">Dist. <br/> (Mpc)</th>
       <th scope="col">Redshift</th>
-      <th scope="col">Redshift Type</th>
+      <th scope="col">Distance Type</th>
       <th scope="col">Mag.  <br/> (AB)</th>
       <th scope="col">Source</th>
     </tr>
@@ -53,6 +53,6 @@
       <td>{{ galaxy.Source }}</td>
     </tr>
   {% empty %}
-    <tr><td colspan=9>No host galaxies stored</td></tr>
+    <tr><td colspan=9>No viable host galaxies stored</td></tr>
   {% endfor %}
 </table>

@@ -194,6 +194,26 @@ class Command(BaseCommand):
              
         logger.info(f"Added {len(new_targets):d} new targets from the TNS.")
 
+        # update the Trove Target table with redshift and classification info from TNS
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                -- Step 5: Update the trove_targets_target table with redshift and classifications from TNS
+                UPDATE trove_targets_target AS tt
+                  SET redshift = tns.redshift,
+                      classification = tns.objtype
+                  FROM tns_q3c AS tns
+                  INNER JOIN tom_targets_basetarget AS bt
+                  ON tns.name = REGEXP_REPLACE(bt.name, '^[^0-9]*', '')
+                  WHERE bt.id = tt.basetarget_ptr_id
+                RETURNING tt.basetarget_ptr_id;
+                """
+            )
+            
+            update_target_ids = [row[0] for row in cursor.fetchall()]
+        logger.info(f"Updated {len(update_target_ids):d} targets with classifications and/or redshifts from the TNS.")
+
+            
         # Finally, we need to insert these into the Trove Target table rather than
         # just the TOM BaseTarget table
 
