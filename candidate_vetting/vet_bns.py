@@ -43,7 +43,8 @@ PARAM_RANGES = dict(
     lum_max = [0*u.erg/u.s, 1e43*u.erg/u.s],
     peak_time = [0, 4],
     decay_rate = [-np.inf, -0.1],
-    max_predets = 3
+    max_predets = 3,
+    t_post=np.inf,
 )
 FILTER_PRIORITY_ORDER = ["r", "g", "V", "R", "G"]
 PHOT_SCORE_MIN = 0.1
@@ -183,7 +184,9 @@ def vet_bns(target_id:int, nonlocalized_event_name:Optional[str]=None):
         delete_score_factor(event_candidate, "host_distance_score")
         
     # Photometry scoring
-    allphot = _get_post_disc_phot(target_id=target_id, nonlocalized_event=nonlocalized_event)
+    allphot = _get_post_disc_phot(target_id=target_id, 
+                                  nonlocalized_event=nonlocalized_event,
+                                  t_post=PARAM_RANGES["t_post"])
     phot_score, lum, max_time, decay_rate, _, _ = _score_phot(
         allphot=allphot,
         target = target,
@@ -206,7 +209,8 @@ def vet_bns(target_id:int, nonlocalized_event_name:Optional[str]=None):
         delete_score_factor(event_candidate, "phot_decay_rate")
 
     # check for *reliable* predetections
-    prephot = _get_pre_disc_phot(target.id, nonlocalized_event)
+    prephot = _get_pre_disc_phot(target_id=target.id, 
+                                 nonlocalized_event=nonlocalized_event)
     predet_score = 1
     if prephot is not None and len(prephot):
         try:
