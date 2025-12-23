@@ -46,6 +46,7 @@ PARAM_RANGES = dict(
     decay_rate = [-0.1, 2.0],
     max_predets = 3,
     t_pre = -0.1,
+    t_post = np.inf
 )
 
 
@@ -143,7 +144,9 @@ def vet_kn_in_sn(target_id:int, nonlocalized_event_name:Optional[str]=None):
         delete_score_factor(event_candidate, "host_distance_score")
         
     ## photometry scoring
-    allphot = _get_post_disc_phot(target_id=target_id, nonlocalized_event=nonlocalized_event)
+    allphot = _get_post_disc_phot(target_id=target_id, 
+                                  nonlocalized_event=nonlocalized_event,
+                                  t_post=PARAM_RANGES["t_post"])
     phot_score, lum, max_time, decay_rate, _, _ = _score_phot(
         allphot=allphot,
         target = target,
@@ -167,9 +170,9 @@ def vet_kn_in_sn(target_id:int, nonlocalized_event_name:Optional[str]=None):
         delete_score_factor(event_candidate, "phot_decay_rate")
 
     # check for *reliable* predetections before time t_pre
-    prephot = _get_pre_disc_phot(target.id,
-                                 nonlocalized_event, 
-                                 PARAM_RANGES["t_pre"])
+    prephot = _get_pre_disc_phot(target_id=target.id,
+                                 nonlocalized_event=nonlocalized_event, 
+                                 t_pre=PARAM_RANGES["t_pre"])
     predet_score = 1
     if prephot is not None and len(prephot):
         try:
@@ -186,4 +189,3 @@ def vet_kn_in_sn(target_id:int, nonlocalized_event_name:Optional[str]=None):
             update_score_factor(event_candidate, "predetection_score", predet_score)
         else:
             delete_score_factor(event_candidate, "predetection_score")
-
