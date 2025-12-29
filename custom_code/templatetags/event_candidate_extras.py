@@ -30,12 +30,22 @@ DICT_TRANSIENTS_PARAM_RANGES = {
     "KN-in-SN":KN_IN_SN_PARAM_RANGES,
     "super-KN":SUPER_KN_PARAM_RANGES}
 
+
+# default subscore names 
+SUBSCORE_NAMES = ['host_distance_score',
+                  'predetection_score',
+                  'ps_score',
+                  'skymap_score',
+                  'phot_peak_lum',
+                  'phot_peak_time',
+                  'phot_decay_rate']
+
 register = template.Library()
 
 @register.simple_tag
 def get_event_candidate_scores(event_candidates, 
                                dict_transients_param_ranges=DICT_TRANSIENTS_PARAM_RANGES,
-                               *subscore_names):
+                               subscore_names=SUBSCORE_NAMES):
     """Get the event candidate scores for everything in subscore_names
 
     event_candidates should be a django queryset of EventCandidate objects
