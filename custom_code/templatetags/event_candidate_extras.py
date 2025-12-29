@@ -32,10 +32,11 @@ DICT_TRANSIENTS_PARAM_RANGES = {
 
 
 # default subscore names 
-SUBSCORE_NAMES = ['host_distance_score',
-                  'predetection_score',
+SUBSCORE_NAMES = ['skymap_score',
+                  'host_distance_score',
                   'ps_score',
-                  'skymap_score',
+                  'agn_score',
+                  'predetection_score',
                   'phot_peak_lum',
                   'phot_peak_time',
                   'phot_decay_rate']
