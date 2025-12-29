@@ -22,7 +22,7 @@
         </tr>
       </thead>
       <tbody>
-	{% get_event_candidate_scores object_list 'host_distance_score' 'predetection_score' 'ps_score' 'skymap_score' 'phot_peak_lum' 'phot_peak_time' 'phot_decay_rate' as candidates_to_display %}
+	{% get_event_candidate_scores object_list as candidates_to_display %}
 	{% for candidate in candidates_to_display %}
         <tr>
 	  <td>{{forloop.counter}}</td>
