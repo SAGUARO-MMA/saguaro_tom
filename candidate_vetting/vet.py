@@ -459,7 +459,7 @@ def get_eventcandidate_default_distance(target_id:int, nonlocalized_event_name:s
 
     # first check if this target has a redshift associated with it
     targ = Target.objects.get(id = target_id)
-    if not np.isnan(targ.redshift):
+    if targ.redshift is not None and not np.isnan(targ.redshift):
         targ_dist = cosmo.luminosity_distance(targ.redshift).to(u.Mpc).value
         targ_dist_err = cosmo.luminosity_distance(1e-3).to(u.Mpc).value
         return targ_dist, targ_dist_err
