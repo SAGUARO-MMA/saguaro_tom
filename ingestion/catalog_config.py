@@ -6,7 +6,7 @@ import logging
 from astropy.table import Table
 import fitsio
 import numpy as np
-import psycopg
+import psycopg2
 
 from ingest_extras import *
 import numpy2PGSQL
@@ -101,12 +101,12 @@ class BasicAstropyConfig(CatalogConfig):
         SQL_statement += f"DROP TABLE IF EXISTS {self.dbctxt.sql_table};\n"
         
         SQL_statement += f"CREATE TABLE {self.dbctxt.sql_table} {self.relational_schema};"
-        with psycopg.connect(host=self.dbctxt.POSTGRES_HOST, port=self.dbctxt.POSTGRES_PORT, dbname=self.dbctxt.POSTGRES_DB, user=self.dbctxt.POSTGRES_USER, password=self.dbctxt.POSTGRES_PASSWORD) as conn:
+        with psycopg2.connect(host=self.dbctxt.POSTGRES_HOST, port=self.dbctxt.POSTGRES_PORT, dbname=self.dbctxt.POSTGRES_DB, user=self.dbctxt.POSTGRES_USER, password=self.dbctxt.POSTGRES_PASSWORD) as conn:
             with conn.cursor() as cur:
                 try:
                     cur.execute(SQL_statement)
                     conn.commit()
-                except psycopg.errors.DuplicateTable:
+                except psycopg2.errors.DuplicateTable:
                     raise f"Table {self.dbctxt.sql_table} already exists. Attemtping to continue with existing schema..."
                 except Exception as e: raise
 
@@ -161,7 +161,7 @@ class BasicAstropyConfig(CatalogConfig):
             SQL_statement = f"INSERT INTO {self.dbctxt.sql_table} VALUES {stringified_chunk};"
 
             # connect to db & insert
-            with psycopg.connect(host=self.dbctxt.POSTGRES_HOST, user=self.dbctxt.POSTGRES_USER, port=self.dbctxt.POSTGRES_PORT, password=self.dbctxt.POSTGRES_PASSWORD, dbname=self.dbctxt.POSTGRES_DB) as conn:
+            with psycopg2.connect(host=self.dbctxt.POSTGRES_HOST, user=self.dbctxt.POSTGRES_USER, port=self.dbctxt.POSTGRES_PORT, password=self.dbctxt.POSTGRES_PASSWORD, dbname=self.dbctxt.POSTGRES_DB) as conn:
                 with conn.cursor() as cur:
                     try:
                         cur.execute(SQL_statement)
@@ -299,12 +299,12 @@ class TwoMASSConfig(CatalogConfig):
         
         comma_nl = ",\n"
         SQL_statement += f"CREATE TABLE {self.dbctxt.sql_table} (\n{comma_nl.join(self.relational_schema)});"
-        with psycopg.connect(host=self.dbctxt.POSTGRES_HOST, port=self.dbctxt.POSTGRES_PORT, dbname=self.dbctxt.POSTGRES_DB, user=self.dbctxt.POSTGRES_USER, password=self.dbctxt.POSTGRES_PASSWORD) as conn:
+        with psycopg2.connect(host=self.dbctxt.POSTGRES_HOST, port=self.dbctxt.POSTGRES_PORT, dbname=self.dbctxt.POSTGRES_DB, user=self.dbctxt.POSTGRES_USER, password=self.dbctxt.POSTGRES_PASSWORD) as conn:
             with conn.cursor() as cur:
                 try:
                     cur.execute(SQL_statement)
                     conn.commit()
-                except psycopg.errors.DuplicateTable:
+                except psycopg2.errors.DuplicateTable:
                     raise f"Table {self.dbctxt.sql_table} already exists. Attemtping to continue with existing schema..."
                 except Exception as e: raise
 
@@ -427,12 +427,12 @@ class ZTFVarStarConfig(CatalogConfig):
         SQL_statement += f"DROP TABLE IF EXISTS {self.dbctxt.sql_table};\n"
         
         SQL_statement += f"CREATE TABLE {self.dbctxt.sql_table} (\n{comma_nl.join(self.relational_schema)});"
-        with psycopg.connect(host=self.dbctxt.POSTGRES_HOST, port=self.dbctxt.POSTGRES_PORT, dbname=self.dbctxt.POSTGRES_DB, user=self.dbctxt.POSTGRES_USER, password=self.dbctxt.POSTGRES_PASSWORD) as conn:
+        with psycopg2.connect(host=self.dbctxt.POSTGRES_HOST, port=self.dbctxt.POSTGRES_PORT, dbname=self.dbctxt.POSTGRES_DB, user=self.dbctxt.POSTGRES_USER, password=self.dbctxt.POSTGRES_PASSWORD) as conn:
             with conn.cursor() as cur:
                 try:
                     cur.execute(SQL_statement)
                     conn.commit()
-                except psycopg.errors.DuplicateTable:
+                except psycopg2.errors.DuplicateTable:
                     raise f"Table {self.dbctxt.sql_table} already exists. Attemtping to continue with existing schema..."
                 except Exception as e: raise
         
