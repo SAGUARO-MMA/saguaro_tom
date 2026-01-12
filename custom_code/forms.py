@@ -164,7 +164,9 @@ class TargetReportForm(forms.Form):
     dec = forms.FloatField(label='Dec.')
     reporting_group = forms.ChoiceField(choices=TNS_GROUP_CHOICES, initial=(66, "SAGUARO"))
     discovery_data_source = forms.ChoiceField(choices=TNS_GROUP_CHOICES, initial=(66, "SAGUARO"))
-    reporter = forms.CharField(widget=forms.Textarea(attrs={'rows': 1}))
+    reporter = forms.CharField(widget=forms.Textarea(attrs={'rows': 1}),
+                               help_text="First1 Last1 (Affil1), First2 Last2 (Affil2), &hellip;, "
+                                         "on behalf of Survey (optional)")
     discovery_date = forms.DateTimeField(initial=datetime.utcnow())
     at_type = forms.ChoiceField(choices=[
         (0, "Other"),
@@ -295,7 +297,9 @@ class TargetReportForm(forms.Form):
 
 class TargetClassifyForm(forms.Form):
     name = forms.CharField()
-    classifier = forms.CharField(widget=forms.Textarea(attrs={'rows': 1}))
+    classifier = forms.CharField(widget=forms.Textarea(attrs={'rows': 1}),
+                                 help_text="FirstName1 LastName1 (Affil1), FirstName2 LastName2 (Affil2), &hellip;, "
+                                           "on behalf of SurveyName (optional)")
     classification = forms.ChoiceField(choices=TNS_CLASSIFICATION_CHOICES, initial=(1, "SN"))
     redshift = forms.FloatField(required=False)
     group = forms.ChoiceField(choices=TNS_GROUP_CHOICES, initial=(66, "SAGUARO"))

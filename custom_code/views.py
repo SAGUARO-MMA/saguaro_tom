@@ -211,7 +211,7 @@ class TargetReportView(PermissionListMixin, TemplateResponseMixin, FormMixin, Pr
         initial = {
             'ra': target.ra,
             'dec': target.dec,
-            'reporter': f'{self.request.user.get_full_name()}, on behalf of SAGUARO',
+            'reporter': f'{self.request.user.get_full_name()}',
         }
         photometry = target.reduceddatum_set.filter(data_type='photometry')
         if photometry.exists():
@@ -258,7 +258,7 @@ class TargetClassifyView(PermissionListMixin, TemplateResponseMixin, FormMixin, 
         target = Target.objects.get(pk=self.kwargs['pk'])
         initial = {
             'name': split_name(target.name)['basename'],
-            'classifier': f'{self.request.user.get_full_name()}, on behalf of SAGUARO',
+            'classifier': f'{self.request.user.get_full_name()}',
         }
         classifications = target.targetextra_set.filter(key='Classification')
         if classifications.exists():
