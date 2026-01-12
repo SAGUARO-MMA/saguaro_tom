@@ -36,11 +36,51 @@ TNS_FILTER_CHOICES = [
 ]
 
 TNS_INSTRUMENT_CHOICES = [
-    (0, "Other"),
+    (3, "Keck1 - LRIS"),
+    (4, "Keck2 - DEIMOS"),
+    (6, "Gemini-N - GMOS"),
+    (9, "Gemini-S - GMOS-S"),
+    (10, "Lick-3m - KAST"),
+    (43, "HET - HET-LRS"),
+    (44, "FLWO-1.5m - FAST"),
+    (58, "MMT - MMT-Blue"),
+    (68, "Bok - BC-Bok"),
+    (70, "APO-3.5m - DIS"),
+    (75, "Magellan-Baade - IMACS"),
+    (82, "Keck1 - HIRES"),
+    (83, "Magellan-Clay - MIKE"),
+    (96, "MMT - Hectospec"),
+    (100, "Keck2 - ESI"),
+    (107, "Lijiang-2.4m - YFOSC"),
+    (108, "FTN - FLOYDS-N"),
+    (115, "ANU-2.3m - WiFeS"),
+    (116, "Magellan-Baade - FIRE"),
+    (117, "SALT - RSS"),
+    (118, "SALT - HRS-SALT"),
+    (120, "LBT - MODS1"),
+    (121, "LBT - MODS2"),
+    (122, "IRTF - SpeX"),
+    (123, "HET - HET-HRS"),
+    (124, "HET - HET-MRS"),
+    (125, "FTS - FLOYDS-S"),
+    (127, "SOAR - Goodman"),
+    (130, "Keck1 - MOSFIRE"),
+    (137, "Magellan-Baade - MagE"),
+    (141, "APO-3.5m - APO-TSPEC"),
+    (151, "Magelaln-Baade - BC-Magellan"),
+    (166, "Gemini-N - GNIRS"),
+    (180, "MMT - MMIRS"),
+    (197, "Gemini-S - Flamingos-2"),
     (172, "CTIO-4m - DECAM"),
+    (208, "LCO1m - Sinistro"),
     (221, "MMT - BINOSPEC"),
-    (276, "CSS-0.7m - CSS-0.7m-CCD")
+    (252, "Keck2 - NIRES"),
+    (259, "Keck2 - KCWI"),
+    (260, "SOAR - TripleSpec"),
+    (287, "Rubin - LSSTCam"),
 ]
+TNS_INSTRUMENT_CHOICES.sort(key=lambda x: x[1])
+TNS_INSTRUMENT_CHOICES.insert(0, (0, "Other"))
 
 TNS_CLASSIFICATION_CHOICES = [
     (0, "Other"),
@@ -108,9 +148,15 @@ TNS_CLASSIFICATION_CHOICES = [
 ]
 
 TNS_GROUP_CHOICES = [
+    (30, "DLT40"),
+    (38, "Global SN Project"),
+    (52, "AZTEC"),
     (66, "SAGUARO"),
-    (179, "Shadow"),
+    (176, "TROVE"),
+    (177, "PASSTA"),
+    (178, "Shadow"),
 ]
+TNS_GROUP_CHOICES.sort(key=lambda x: x[1])
 
 
 class TargetReportForm(forms.Form):
