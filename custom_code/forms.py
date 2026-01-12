@@ -37,7 +37,9 @@ TNS_FILTER_CHOICES = [
 
 TNS_INSTRUMENT_CHOICES = [
     (0, "Other"),
+    (172, "CTIO-4m - DECAM"),
     (221, "MMT - BINOSPEC"),
+    (276, "CSS-0.7m - CSS-0.7m-CCD")
 ]
 
 TNS_CLASSIFICATION_CHOICES = [
@@ -105,16 +107,17 @@ TNS_CLASSIFICATION_CHOICES = [
     (210, "M dwarf"),
 ]
 
+TNS_GROUP_CHOICES = [
+    (66, "SAGUARO"),
+    (179, "Shadow"),
+]
+
 
 class TargetReportForm(forms.Form):
     ra = forms.FloatField(label='R.A.')
     dec = forms.FloatField(label='Dec.')
-    reporting_group = forms.ChoiceField(choices=[
-        (66, "SAGUARO"),
-    ], initial=(66, "SAGUARO"))
-    discovery_data_source = forms.ChoiceField(choices=[
-        (66, "SAGUARO"),
-    ], initial=(66, "SAGUARO"))
+    reporting_group = forms.ChoiceField(choices=TNS_GROUP_CHOICES, initial=(66, "SAGUARO"))
+    discovery_data_source = forms.ChoiceField(choices=TNS_GROUP_CHOICES, initial=(66, "SAGUARO"))
     reporter = forms.CharField(widget=forms.Textarea(attrs={'rows': 1}))
     discovery_date = forms.DateTimeField(initial=datetime.utcnow())
     at_type = forms.ChoiceField(choices=[
@@ -249,9 +252,7 @@ class TargetClassifyForm(forms.Form):
     classifier = forms.CharField(widget=forms.Textarea(attrs={'rows': 1}))
     classification = forms.ChoiceField(choices=TNS_CLASSIFICATION_CHOICES, initial=(1, "SN"))
     redshift = forms.FloatField(required=False)
-    group = forms.ChoiceField(choices=[
-        (66, "SAGUARO"),
-    ], initial=(66, "SAGUARO"))
+    group = forms.ChoiceField(choices=TNS_GROUP_CHOICES, initial=(66, "SAGUARO"))
     classification_remarks = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 1}))
     observation_date = forms.DateTimeField()
     instrument = forms.ChoiceField(choices=TNS_INSTRUMENT_CHOICES, initial=(0, "Other"))
