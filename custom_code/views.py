@@ -3,8 +3,8 @@ import logging
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Count
-from django.urls import reverse_lazy
+from django.db.models import Count, Q
+from django.urls import reverse_lazy, reverse
 from django.http import HttpResponseRedirect, StreamingHttpResponse
 from django.views.generic.base import RedirectView
 from django.views.generic.edit import CreateView, TemplateResponseMixin, FormMixin, ProcessFormView, UpdateView
@@ -380,11 +380,23 @@ class TargetNameSearchView(OldTargetNameSearchView):
     """
     View for searching by target name. If the search returns one result, the view redirects to the corresponding
     TargetDetailView. Otherwise, the view redirects to the TargetListView.
+
+    Same as built-in search except for:
+      (1) removes leading/trailing whitespace
+      (2) replaces "contains" with "endswith" for name matching
+      (3) does distinct() in Python instead of SQL
     """
 
     def get(self, request, *args, **kwargs):
-        self.kwargs['name'] = request.GET.get('name').strip()
-        return super().get(request, *args, **kwargs)
+        target_name = request.GET.get('name').strip()
+        targets = targets_for_user(request.user, Target.objects.all(), 'view_target').filter(
+            Q(name__iendswith=target_name) | Q(aliases__name__iendswith=target_name)
+        ).values_list('id', flat=True)
+        target_ids = set(targets)  # faster than .distinct()
+        if len(target_ids) == 1:
+            return HttpResponseRedirect(reverse('targets:detail', kwargs={'pk': target_ids.pop()}))
+        else:
+            return HttpResponseRedirect(reverse('targets:list') + f'?name={target_name}')
 
 
 class TargetListView(OldTargetListView):
