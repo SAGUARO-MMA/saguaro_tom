@@ -42,21 +42,22 @@ class Command(BaseCommand):
                     logger.info(f'Observation record {obs.observation_id} for target {obs.target.name} already exists')
                 else:
                     target = request['configurations'][0]['target']
-                    target_matches = cone_search_filter(Target.objects, target['ra'], target['dec'], 2. / 3600.)
+                    target_matches = cone_search_filter(Target.objects, target['ra'], target['dec'], 2. / 3600.).first()
 
-                    obs = ObservationRecord.objects.create(
-                        target=target_matches.first(),
-                        facility=facility.name,
-                        parameters={},
-                        status=request['state'],
-                        observation_id=request['id'],
-                        created=result['created'],
-                        modified=request['modified'],
-                    )
-                    logger.info(f'Created new observation record {obs.observation_id} for target {obs.target.name}')
+                    if target_matches:
+                        obs = ObservationRecord.objects.create(
+                            target=target_matches,
+                            facility=facility.name,
+                            parameters={},
+                            status=request['state'],
+                            observation_id=request['id'],
+                            created=result['created'],
+                            modified=request['modified'],
+                        )
+                        logger.info(f'Created new observation record {obs.observation_id} for target {obs.target.name}')
 
-                    obs.update_status()
-                    products = facility.data_products(obs.observation_id)
-                    for product in products:
-                        if product['filename'].endswith('.tar.gz'):
-                            facility.save_data_products(obs, product['id'])
+                        obs.update_status()
+                        products = facility.data_products(obs.observation_id)
+                        for product in products:
+                            if product['filename'].endswith('.tar.gz'):
+                                facility.save_data_products(obs, product['id'])
