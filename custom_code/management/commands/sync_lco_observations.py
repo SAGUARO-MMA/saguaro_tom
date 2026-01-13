@@ -3,6 +3,7 @@ from tom_observations.models import ObservationRecord
 from tom_observations.facilities import lco, ocs
 from tom_targets.models import get_target_model_class
 from tom_targets.utils import cone_search_filter
+from .update_status_and_download_data import update_status_and_download_data
 from datetime import datetime, timedelta
 from urllib.parse import urlencode, urljoin
 import logging
@@ -55,9 +56,4 @@ class Command(BaseCommand):
                             modified=request['modified'],
                         )
                         logger.info(f'Created new observation record {obs.observation_id} for target {obs.target.name}')
-
-                        obs.update_status()
-                        products = facility.data_products(obs.observation_id)
-                        for product in products:
-                            if product['filename'].endswith('.tar.gz'):
-                                facility.save_data_products(obs, product['id'])
+                        update_status_and_download_data(obs)
