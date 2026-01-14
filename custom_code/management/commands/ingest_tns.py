@@ -22,17 +22,20 @@ slack_tns = WebClient(settings.SLACK_TOKEN_TNS)
 slack_tns50 = WebClient(settings.SLACK_TOKEN_TNS50)
 slack_ep = WebClient(settings.SLACK_TOKEN_EP)
 
+ALERT_LINKS = ' '.join([f'<{link}|{service}>' for link, service in settings.TARGET_LINKS])
+ALERT_CANDIDATE = ('<{target_link}|{{target.name}}> falls in the {{credible_region:d}}% '
+                   'localization region of <{nle_link}|{{nle.event_id}}>')
 
-def send_alert_if_nearby(target, max_dist, target_link, slack_client=None):
+
+def send_alert_if_nearby(target, max_dist, slack_client=None):
     """check if any of the possible host galaxies are within some distance threshold"""
     target_extra = target.targetextra_set.filter(key='Host Galaxies').first()
     if target_extra is None:
         return
-    target.basename = split_name(target.name)['basename']
     for galaxy in json.loads(target_extra.value):
         if galaxy['Source'] in ['GLADE', 'GWGC', 'HECATE'] and galaxy['Dist'] <= max_dist:  # catalogs that have dist
-            slack_alert = (f'<{target_link}|{{target.name}}> is {galaxy["Offset"]:.1f}" from '
-                           f'galaxy {galaxy["ID"]} at {galaxy["Dist"]:.1f} Mpc.').format(target=target)
+            slack_alert = (f'{target.name} is {galaxy["Offset"]:.1f}" from '
+                           f'galaxy {galaxy["ID"]} at {galaxy["Dist"]:.1f} Mpc.')
             break
     else:
         return
@@ -59,6 +62,8 @@ def send_alert_if_nearby(target, max_dist, target_link, slack_client=None):
                 slack_alert += ' but it does not constrain the rise rate.'
         else:
             slack_alert += ' No nondetection was reported.'
+    target.tns_objname = split_name(target.name)['tns_objname']
+    slack_alert += ' ' + ALERT_LINKS.format(target=target)
     logger.info(f'Sending TNS alert: {slack_alert}')
     if slack_client is not None:  # otherwise just print the alert to the log for testing
         slack_client.chat_postMessage(channel='alerts-tns', text=slack_alert)
@@ -221,9 +226,9 @@ class Command(BaseCommand):
         for targets in [new_targets, updated_targets]:
             for target in targets:
                 vet_or_post_error(target, slack_tns, channel='alerts-tns')
-                send_alert_if_nearby(target, 40., settings.TARGET_LINKS[0][0], slack_tns)
+                send_alert_if_nearby(target, 40., slack_tns)
                 if target.dec < 40.:  # only southern and equatorial targets
-                    send_alert_if_nearby(target, 50., 'https://www.wis-tns.org/object/{target.basename}', slack_tns50)
+                    send_alert_if_nearby(target, 50., slack_tns50)
 
         for target in updated_targets_coords:
             vet_or_post_error(target, slack_tns, channel='alerts-tns')
@@ -243,12 +248,11 @@ class Command(BaseCommand):
             candidates = create_candidates_from_targets(seq, target_ids=target_ids)
             for candidate in candidates:
                 credible_region = candidate.credibleregions.get(localization=localization).smallest_percent
+                candidate.target.tns_objname = split_name(candidate.target.name)['tns_objname']
                 format_kwargs = {'nle': nle, 'target': candidate.target, 'credible_region': credible_region}
-                slack_alert = ('<{target_link}|{{target.name}}> falls in the {{credible_region:d}}% '
-                               'localization region of <{nle_link}|{{nle.event_id}}>')
                 if nle.event_type == nle.NonLocalizedEventType.GRAVITATIONAL_WAVE:
-                    send_slack(slack_alert, format_kwargs, *pick_slack_channel(seq))
+                    send_slack(ALERT_CANDIDATE, format_kwargs, *pick_slack_channel(seq))
                 elif nle.event_type == nle.NonLocalizedEventType.UNKNOWN:
-                    body = slack_alert.format(nle_link=settings.NLE_LINKS[0][0],
-                                              target_link=settings.TARGET_LINKS[0][0])
+                    body = ALERT_CANDIDATE.format(nle_link=settings.NLE_LINKS[0][0],
+                                                  target_link=settings.TARGET_LINKS[0][0])
                     slack_ep.chat_postMessage(channel='alerts-ep', text=body.format(**format_kwargs))
