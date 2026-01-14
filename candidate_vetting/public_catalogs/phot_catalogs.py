@@ -481,20 +481,30 @@ class ATLAS_Forced_Phot(PhotCatalog):
             for k, v in list(distinctMjds.items()):
                 # GIVE ME THE MEAN MJD
                 meanMjd = sum(v["mjds"]) / len(v["mjds"])
-                summedMagnitudes[fil]["mjds"].append(meanMjd)
+
                 # GIVE ME THE MEAN FLUX
                 meanFLux = sum(v["mags"]) / len(v["mags"])
-                summedMagnitudes[fil]["mags"].append(meanFLux)
+
                 # GIVE ME THE COMBINED ERROR
                 sum_of_squares = sum(x ** 2 for x in v["magErrs"])
                 combError = math.sqrt(sum_of_squares) / len(v["magErrs"])
-                summedMagnitudes[fil]["magErrs"].append(combError)
+
                 # 5-sigma limits
-                comb5SigLimit = 23.9 - 2.5 * math.log10(5. * combError)
-                summedMagnitudes[fil]["lim5sig"].append(comb5SigLimit)
+                try:
+                    comb5SigLimit = 23.9 - 2.5 * math.log10(5. * combError)
+                except ValueError:
+                    logger.warn("Skipping this ATLAS photometry point because math.log10 raises a domain error!")
+                    continue # this skips to the next for-loop iteration
+                    
                 # GIVE ME NUMBER OF DATA POINTS COMBINED
                 n = len(v["mjds"])
+                
+                summedMagnitudes[fil]["mjds"].append(meanMjd)
+                summedMagnitudes[fil]["mags"].append(meanFLux)
+                summedMagnitudes[fil]["magErrs"].append(combError)
+                summedMagnitudes[fil]["lim5sig"].append(comb5SigLimit)
                 summedMagnitudes[fil]["n"].append(n)
+
                 allData.append({
                     'mjd': meanMjd,
                     'uJy': meanFLux,
