@@ -10,8 +10,8 @@ def update_status_and_download_data(record):
     products = facility.data_products(record.observation_id)
     for product in products:
         if (product['filename'].endswith('.tar.gz')
-                or product['filename'].endswith('.e91-1d.fits.fz')
-                or product['filename'].endswith('.fits.fz')
+                or product['filename'].endswith('-e91-1d.fits.fz')
+                or product['filename'].endswith('-e91.fits.fz')
                 or product['filename'] == 'obj_abs_1D.tar'):
             facility.save_data_products(record, product['id'])
 
