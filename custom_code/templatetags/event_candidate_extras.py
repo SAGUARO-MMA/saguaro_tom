@@ -30,10 +30,23 @@ DICT_TRANSIENTS_PARAM_RANGES = {
     "KN-in-SN":KN_IN_SN_PARAM_RANGES,
     "super-KN":SUPER_KN_PARAM_RANGES}
 
+
+# default subscore names 
+SUBSCORE_NAMES = ['skymap_score',
+                  'host_distance_score',
+                  'ps_score',
+                  'agn_score',
+                  'predetection_score',
+                  'phot_peak_lum',
+                  'phot_peak_time',
+                  'phot_decay_rate']
+
 register = template.Library()
 
 @register.simple_tag
-def get_event_candidate_scores(event_candidates, *subscore_names):
+def get_event_candidate_scores(event_candidates, 
+                               dict_transients_param_ranges=DICT_TRANSIENTS_PARAM_RANGES,
+                               subscore_names=SUBSCORE_NAMES):
     """Get the event candidate scores for everything in subscore_names
 
     event_candidates should be a django queryset of EventCandidate objects
@@ -54,7 +67,7 @@ def get_event_candidate_scores(event_candidates, *subscore_names):
         }
         for transient in TRANSIENTS: 
             # allowed parameter ranges for given transient
-            param_ranges = DICT_TRANSIENTS_PARAM_RANGES[transient]
+            param_ranges = dict_transients_param_ranges[transient]
             
             phot_score = 1 # reset to 1.0 for each transient
             

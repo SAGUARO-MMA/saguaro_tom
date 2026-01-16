@@ -50,7 +50,8 @@ PARAM_RANGES = dict(
 )
 
 
-def vet_kn_in_sn(target_id:int, nonlocalized_event_name:Optional[str]=None):
+def vet_kn_in_sn(target_id:int, nonlocalized_event_name:Optional[str]=None,
+                 param_ranges:dict=PARAM_RANGES):
 
     # get the correct EventCandidate object for this target_id and nonlocalized event
     nonlocalized_event = NonLocalizedEvent.objects.get(
@@ -146,12 +147,12 @@ def vet_kn_in_sn(target_id:int, nonlocalized_event_name:Optional[str]=None):
     ## photometry scoring
     allphot = _get_post_disc_phot(target_id=target_id, 
                                   nonlocalized_event=nonlocalized_event,
-                                  t_post=PARAM_RANGES["t_post"])
+                                  t_post=param_ranges["t_post"])
     phot_score, lum, max_time, decay_rate, _, _ = _score_phot(
         allphot=allphot,
         target = target,
         nonlocalized_event = nonlocalized_event,
-        param_ranges=PARAM_RANGES,
+        param_ranges=param_ranges,
         filt = ["g", "r", "i", "o", "c"] # use the common optical filters
     )
     if lum is not None:
@@ -172,7 +173,7 @@ def vet_kn_in_sn(target_id:int, nonlocalized_event_name:Optional[str]=None):
     # check for *reliable* predetections before time t_pre
     prephot = _get_pre_disc_phot(target_id=target.id,
                                  nonlocalized_event=nonlocalized_event, 
-                                 t_pre=PARAM_RANGES["t_pre"])
+                                 t_pre=param_ranges["t_pre"])
     predet_score = 1
     if prephot is not None and len(prephot):
         try:
@@ -184,7 +185,7 @@ def vet_kn_in_sn(target_id:int, nonlocalized_event_name:Optional[str]=None):
             )
         except ValueError:
             n_predets = [0] # this ValueError only happens when there aren't any predets
-        if any(v >= PARAM_RANGES["max_predets"] for v in n_predets):
+        if any(v >= param_ranges["max_predets"] for v in n_predets):
             predet_score = PHOT_SCORE_MIN
             update_score_factor(event_candidate, "predetection_score", predet_score)
         else:
