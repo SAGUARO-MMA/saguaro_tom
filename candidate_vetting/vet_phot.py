@@ -260,6 +260,9 @@ def estimate_max_find_decay_rate(
         bpl_model_y = _broken_powerlaw(dt_days, *bpl_popt)
         bpl_ssr = _ssr(bpl_model_y, mag)
         bpl_info_crit = info_crit(bpl_ssr, bpl_nparams, len(mag))
+    else:
+        pl_info_crit = np.inf
+        bpl_info_crit = np.inf
         
     # now we can prefer the model with the lower AIC score
     if (not pl_failed and bpl_failed) or (pl_info_crit < bpl_info_crit and not pl_failed):
@@ -492,11 +495,15 @@ def _score_phot(allphot, target, nonlocalized_event,
     # at this filter
     if len(phot) > 1: # has to be at least 2 points to fit the powerlaw        
         # find the maximum and decay rate
-        _model,_best_fit_params,max_time,decay_rate = estimate_max_find_decay_rate(
-            phot.dt,
-            phot.mag,
-            phot.magerr
-        )
+        try:
+            _model,_best_fit_params,max_time,decay_rate = estimate_max_find_decay_rate(
+                phot.dt,
+                phot.mag,
+                phot.magerr
+            )
+        except RuntimeError:
+            print("Could not fit a power law or broken power law --> not setting peak_time or decay_rate")
+            return phot_score, lum, None, None, None, None 
         
         # check if these are within the appropriate ranges
         if max_time < param_ranges["peak_time"][0] or max_time > param_ranges["peak_time"][1]:
