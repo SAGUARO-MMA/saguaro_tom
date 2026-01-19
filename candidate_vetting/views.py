@@ -18,6 +18,8 @@ from candidate_vetting.vet_phot import find_public_phot
 
 import requests
 
+from .config import FORM_CHOICE_FUNC_MAP
+
 class TargetVettingFormView(FormView):
     template_name = "candidate_vetting/vetting_form.html"
     form_class = VettingChoiceForm
