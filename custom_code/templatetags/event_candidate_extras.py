@@ -11,6 +11,7 @@ from django.db.models import FloatField
 from django.db.models.functions import Cast
 from tom_nonlocalizedevents.models import EventCandidate, NonLocalizedEvent
 from trove_targets.models import Target
+from tom_targets.models import TargetExtra
 from candidate_vetting.models import ScoreFactor
 from candidate_vetting.vet_bns import (
     PARAM_RANGES as KN_PARAM_RANGES,
@@ -112,10 +113,26 @@ def display_score_details(target_id):
         return "Target ID is None!"
 
     target = Target.objects.get(id=target_id)
-    
+
+    basic_score_details = []
+    targetextra_keys = [
+        "ps_score",
+        "mpc_match_name",
+        "mpc_match_sep",
+        "mpc_match_date",
+        "mpc_match_date"
+    ]
+    te = TargetExtra.objects.filter(target_id=target_id)
+    for key in targetextra_keys:
+        basic_score_details.append(te.filter(key=key))
+
     score_details = []
     for event_candidate in target.eventcandidate_set.all():
-        score_details.append(event_candidate.scorefactor_set.all())
+        sf_set = event_candidate.scorefactor_set.exclude(
+            key__in=targetextra_keys # we want the value from TargetExtra
+        ).all()
+        print(sf_set)
+        score_details.append(sf_set)
 
     res = {}
     keymap = dict(
@@ -124,8 +141,31 @@ def display_score_details(target_id):
         host_distance_score = ("3D Association Score", _float_format),
         phot_peak_lum = ("Maximum Luminosity", partial(_sci_format, unit="erg/s")),
         phot_peak_time = ("Time of Maximum Light Curve", partial(_float_format, unit="days")),
-        phot_decay_rate = ("Light Curve Slope (positive is brightening)", partial(_float_format, unit="mag/day"))
+        phot_decay_rate = ("Light Curve Slope (positive is brightening)", partial(_float_format, unit="mag/day")),
+        mpc_match_name = ("MPC Match Name", _str_format),
+        mpc_match_date = ("MPC Match Date", _str_format),
+        mpc_match_sep = ('MPC Match Separation (")', _float_format),
     )
+
+    # first the basic score details
+    basic_score_key = "Basic Score Details"
+    for qs in basic_score_details:
+        for te in qs:
+            if basic_score_key not in res:
+                res[basic_score_key] = ""
+            if te.key in keymap:
+                label, fmter = keymap[te.key]
+            else:
+                label = te.key
+                fmter = _float_format
+            if te.value is None or isinstance(te.value, str):
+                s = te.value
+            else:
+                s = fmter(float(te.value))
+            res[basic_score_key] += f"&emsp;{label}: {s}\n" 
+            
+    
+    # then the NLE specific ones
     for queryset in score_details:
         for score_factor in queryset:
             nle = score_factor.event_candidate.nonlocalizedevent
@@ -157,3 +197,6 @@ def _sci_format(flt, unit=""):
 
 def _bool_format(flt):
     return int(flt)
+
+def _str_format(s):
+    return s
