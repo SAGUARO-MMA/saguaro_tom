@@ -100,7 +100,7 @@ def _score_phot(allphot, target, nonlocalized_event, filt=None):
                 phot.magerr
             )
         except RuntimeError:
-            print("Could not fit a power law or broken power law --> not setting peak_time or decay_rate")
+            logger.warning("Could not fit a power law or broken power law --> not setting peak_time or decay_rate")
             return phot_score, lum, None, None, None, None 
         
         # check if these are within the appropriate ranges
