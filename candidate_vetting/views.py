@@ -37,7 +37,7 @@ class TargetVettingFormView(FormView):
     
     def form_valid(self, form):
         pk = self.kwargs["pk"]
-        vetting_mode = form.cleaned_data["picked"]
+        vetting_mode = form.cleaned_data["vetting_method"]
         
         # generate the base url
         base_url = reverse(

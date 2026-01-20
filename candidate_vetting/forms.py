@@ -6,7 +6,7 @@ from django.forms import (
 from .config import VETTING_FORM_CHOICES
 
 class VettingChoiceForm(Form):
-    picked = ChoiceField(
+    vetting_method = ChoiceField(
         choices = VETTING_FORM_CHOICES,
         widget = RadioSelect()
     )
