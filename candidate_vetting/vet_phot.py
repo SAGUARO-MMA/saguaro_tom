@@ -249,6 +249,9 @@ def estimate_max_find_decay_rate(
         bpl_model_y = _broken_powerlaw(dt_days, *bpl_popt)
         bpl_ssr = _ssr(bpl_model_y, mag)
         bpl_info_crit = info_crit(bpl_ssr, bpl_nparams, len(mag))
+    else:
+        pl_info_crit = np.inf
+        bpl_info_crit = np.inf
         
     # now we can prefer the model with the lower AIC score
     if (not pl_failed and bpl_failed) or (pl_info_crit < bpl_info_crit and not pl_failed):
