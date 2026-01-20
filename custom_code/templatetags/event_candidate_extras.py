@@ -21,12 +21,35 @@ from astropy.units import Quantity
 
 register = template.Library()
 
+# These should now be stored in a TargetExtra object so the score needs to be
+# accessed differently
+TARGETEXTRA_KEYS = [
+    "ps_score",
+    "mpc_match_name",
+    "mpc_match_sep",
+    "mpc_match_date",
+]
+MPC_KEYS = [
+    "mpc_match_name",
+    "mpc_match_sep",
+    "mpc_match_date",
+]
+
 @register.simple_tag
 def get_event_candidate_scores(event_candidates, *subscore_names):
     """Get the event candidate scores for everything in subscore_names
 
     event_candidates should be a django queryset of EventCandidate objects
     """ 
+    # some of the keys in ScoreFactor are really just calculated values
+    # where the score depends on the type of non-localized event. So we need to convert
+    # these to scores.
+    # I'm writing this just for KN for now, but we can modify as needed!
+    val_not_score_keys = {
+        "phot_peak_lum":"lum_max",
+        "phot_peak_time":"peak_time",
+        "phot_decay_rate":"decay_rate"
+    }
 
     ecs_out = []
     for ec in event_candidates:
@@ -40,15 +63,6 @@ def get_event_candidate_scores(event_candidates, *subscore_names):
         )
 
         
-        # some of the keys in ScoreFactor are really just calculated values
-        # where the score depends on the type of non-localized event. So we need to convert
-        # these to scores.
-        # I'm writing this just for KN for now, but we can modify as needed!
-        val_not_score_keys = {
-            "phot_peak_lum":"lum_max",
-            "phot_peak_time":"peak_time",
-            "phot_decay_rate":"decay_rate"
-        }
         phot_score = 1
         subscore_keys = subscores.values_list("key", flat=True)        
         for subscore_key, param_range_key in val_not_score_keys.items():
@@ -69,7 +83,7 @@ def get_event_candidate_scores(event_candidates, *subscore_names):
              
             
         subscores = subscores.exclude(
-            key__in = list(val_not_score_keys.keys())
+            key__in = list(val_not_score_keys.keys()) + TARGETEXTRA_KEYS
         ) # this removes those rows from the queryset
         
         # now we can compute the score just using multiplication
@@ -78,12 +92,23 @@ def get_event_candidate_scores(event_candidates, *subscore_names):
         )
         subscore_list.append(phot_score)
 
+        # now get all the scores stored in TargetExtra objects and append those
+        te = TargetExtra.objects.filter(target_id = ec.target.id)
+        ps_score_qs = te.filter(key="ps_score")
+        if ps_score_qs.exists():
+            ps_score = float(ps_score_qs.first().value)
+            subscore_list.append(ps_score)
+
+        mpc_match_name = te.filter(key="mpc_match_name")
+        if mpc_match_name.exists():
+            mpc_score = int(mpc_match_name.first().value == str(None))
+            subscore_list.append(mpc_score)
+        
         # save the score to a temporary field in the EventCandidate object
         ec.score = math.prod(subscore_list) # multiply the subscores
         ecs_out.append(ec)
         
-    return sorted(ecs_out, reverse=True, key = lambda x : x.score)
-    
+    return sorted(ecs_out, reverse=True, key = lambda x : x.score)    
 
 #@register.inclusion_tag('tom_targets/partials/target_data.html', takes_context=True)
 @register.simple_tag
@@ -104,8 +129,6 @@ def get_target_score(target_id):
     
     return out
 
-
-
 @register.simple_tag
 def display_score_details(target_id):
 
@@ -115,23 +138,15 @@ def display_score_details(target_id):
     target = Target.objects.get(id=target_id)
 
     basic_score_details = []
-    targetextra_keys = [
-        "ps_score",
-        "mpc_match_name",
-        "mpc_match_sep",
-        "mpc_match_date",
-        "mpc_match_date"
-    ]
     te = TargetExtra.objects.filter(target_id=target_id)
-    for key in targetextra_keys:
+    for key in TARGETEXTRA_KEYS:
         basic_score_details.append(te.filter(key=key))
 
     score_details = []
     for event_candidate in target.eventcandidate_set.all():
         sf_set = event_candidate.scorefactor_set.exclude(
-            key__in=targetextra_keys # we want the value from TargetExtra
+            key__in=TARGETEXTRA_KEYS # we want these values from TargetExtra, not ScoreFactor
         ).all()
-        print(sf_set)
         score_details.append(sf_set)
 
     res = {}
