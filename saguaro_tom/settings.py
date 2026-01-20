@@ -404,3 +404,6 @@ TOM_REGISTRATION = {
     'SEND_APPROVAL_EMAILS': True,
     'APPROVAL_SUBJECT': f'Congratulations!! Welcome to {TOM_NAME}!',
 }
+
+# for ZTF forced photometry, we need to save the logs to a temporary directory
+ZTFTMPDIR = os.getcwd()

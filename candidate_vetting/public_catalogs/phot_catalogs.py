@@ -519,17 +519,250 @@ class ATLAS_Forced_Phot(PhotCatalog):
     
 class ZTF_Forced_Phot(PhotCatalog):
     """ZTF Forced photometry server
+    
+    Most of this code was yoinked from Dave Coulter's YSE PZ code:
+    https://github.com/davecoulter/YSE_PZ/blob/58f3e6a1622ec5755e5322aee2d00f3941510749/YSE_App/data_ingest/ZTF_Forced_Phot.py
+
+    Noah: I'm hacking it together from there to resemble e.g., the ATLAS_Forced_Phot.query
+    function call
     """
 
+    def __init__(self):
+
+        self._generic_ztfuser = "ztffps"
+        self._generic_ztfinfo = "dontgocrazy!"
+        
+        self._ztffp_email_address = settings.ZTF_INFO.get("email_address")
+        self._ztffp_email_password = settings.ZTF_INFO.get("email_password")
+        self._ztffp_email_server = settings.ZTF_INFO.get("email_server")
+        self._ztffp_user_address = settings.ZTF_INFO.get("user_address")
+        self._ztffp_user_password = settings.ZTF_INFO.get("user_password")
+        
+        suepr().__init__()
+        
     def query(
             self,
-            ra:float,
-            dec:float,
-            radius:float = RADIUS_ARCSEC
+            target:Target,
+            radius:float=RADIUS_ARCSEC,
+            days_ago: float = 200.
     ):
         f"""Query the ZTF forced photometry service
 
         {_QUERY_METHOD_DOCSTRING}
         """
-        pass
 
+        ztf_logs = self._ztf_forced_photometry(
+            target.ra,
+            target.dec,
+            days=days_ago
+        )
+        
+    def _query_ztf_email(self,log_file_name, source_name=None, verbose=True):
+        """This checks the trove email address for new emails from ZTF withd dataproducts"""
+
+        downloaded_file_names = None
+
+        if not os.path.exists(log_file_name):
+
+            print("%s does not exist."%log_file_name)
+            return -1
+
+
+        # Interpret the request sent to the ZTF forced photometry server
+        job_info = self._read_job_log(log_file_name)
+
+        try:
+
+            imap = imaplib.IMAP4_SSL(self._ztffp_email_server)
+            imap.login(self._ztffp_email_address, self._ztffp_email_password)
+
+            status, messages = imap.select("INBOX")
+            processing_match = False
+            # if it's not in the first 100 messages, then I don't care
+            for i in range(int(messages[0]), 0, -1)[0:100]:
+                if processing_match:
+                    break
+
+                # Fetch the email message by ID
+                res, msg = imap.fetch(str(i), "(RFC822)")
+                for response in msg:
+                    if isinstance(response, tuple):
+                        # Parse a bytes email into a message object
+                        msg = email.message_from_bytes(response[1])
+                        # decode the email subject
+                        sender, encoding = email.header.decode_header(msg.get("From"))[0]
+
+                        if not isinstance(sender, bytes) and re.search("ztfpo@ipac\.caltech\.edu", sender):
+
+
+                            # Get message body
+                            content_type = msg.get_content_type()
+                            body = msg.get_payload(decode=True).decode()
+
+                            this_date = msg['Date']
+                            this_date_tuple = email.utils.parsedate_tz(msg['Date'])
+                            local_date = datetime.fromtimestamp(email.utils.mktime_tz(this_date_tuple))
+
+
+                            # Check if this is the correct one
+                            if content_type=="text/plain":
+                                processing_match = match_ztf_message(job_info, body, local_date)
+                                subject, encoding = email.header.decode_header(msg.get("Subject"))[0]
+
+                                if processing_match:
+
+                                    # Grab the appropriate URLs
+                                    lc_url = 'https' + (body.split('_lc.txt')[0] + '_lc.txt').split('https')[-1]
+                                    log_url = 'https' + (body.split('_log.txt')[0] + '_log.txt').split('https')[-1]
+
+
+                                    # Download each file
+                                    lc_initial_file_name = self._download_ztf_url(lc_url, verbose=verbose)
+                                    log_initial_file_name = self._download_ztf_url(log_url, verbose=verbose)
+
+
+                                    # Rename
+                                    if source_name is None:
+                                        downloaded_file_names = [lc_initial_file_name, log_initial_file_name]
+                                    else:
+                                        lc_final_name = source_name.replace(' ','')+"_"+lc_initial_file_name.split('_')[-1]
+                                        log_final_name = source_name.replace(' ','')+"_"+log_initial_file_name.split('_')[-1]
+                                        os.rename(lc_initial_file_name, lc_final_name)
+                                        os.rename(log_initial_file_name, log_final_name)
+                                        downloaded_file_names = [lc_final_name, log_final_name]
+
+            imap.close()
+            imap.logout()
+
+
+        # Connection could be broken
+        except Exception as e:
+            pass
+
+        if downloaded_file_names is not None:
+
+            for file_name in downloaded_file_names:
+                if verbose:
+                    print("Downloaded: %s"%file_name)
+
+        return downloaded_file_names
+
+    def _ztf_forced_photometry(self,ra, decl, jdstart=None, jdend=None, days=60, send=True, verbose=True):
+        """Start the ZTF forced photometry job"""
+        
+        if jdend is None:
+            jdend = Time(datetime.utcnow(), scale='utc').jd
+
+        if jdstart is None:
+            jdstart = jdend - days
+
+        if ra is None or dec is None:
+            raise RuntimeError("Missing necessary R.A. or declination.")
+
+        # convert ra and decl to a skycoord object
+        skycoord = SkyCoord(ra, decl, frame='icrs', unit='deg')
+        
+        # Convert to string to keep same precision. This will make matching easier
+        # in the case of submitting multiple jobs.
+        jdend_str = np.format_float_positional(float(jdend), precision=6)
+        jdstart_str = np.format_float_positional(float(jdstart), precision=6)
+        ra_str = np.format_float_positional(float(skycoord.ra.deg), precision=6)
+        decl_str = np.format_float_positional(float(skycoord.dec.deg), precision=6)
+
+        log_file_name = self._random_log_file_name(log_file_dir=settings.ZTFTMPDIR) # Unique file name
+
+        logger.info("Sending ZTF request for (R.A.,Decl)=(%s,%s)"%(ra,decl))
+
+        wget_command = "wget --http-user=%s --http-passwd=%s -O %s \"https://ztfweb.ipac.caltech.edu/cgi-bin/requestForcedPhotometry.cgi?"%(self._generic_ztfuser,self._generic_ztfinfo,log_file_name) + \
+                       "ra=%s&"%ra_str + \
+                       "dec=%s&"%decl_str + \
+                       "jdstart=%s&"%jdstart_str +\
+                       "jdend=%s&"%jdend_str + \
+                       "email=%s&userpass=%s\""%(self._ztffp_user_address,self._ztffp_user_password)
+        logger.info(wget_command)
+
+        if send:
+            p = subprocess.Popen(wget_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+            stdout, stderr = p.communicate()
+
+        os.chmod(log_file_name,0o0777)
+        return log_file_name
+
+
+    def _random_log_file_name(log_file_dir='/tmp'):
+
+        log_file_name = None
+        while log_file_name is None or os.path.exists(log_file_name):
+            log_file_name = f"{log_file_dir}/forced_phot_out/ztffp_%s.txt"%''.join([random.choice(string.ascii_uppercase + string.digits) for i in range(10)])
+            #random.choices(string.ascii_uppercase + string.digits, k=10))
+
+        return log_file_name
+
+    def _download_ztf_url(url, verbose=True):
+
+        wget_command = "wget --http-user=%s --http-password=%s -O %s \"%s\""%(
+            self._generic_ztfuser,
+            self._generic_ztfinfo,
+            url.split('/')[-1],
+            url
+        )
+
+        logger.info("Downloading file...")
+        logger.info('\t' + wget_command)
+
+        p = subprocess.Popen(wget_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+        stdout, stderr = p.communicate()
+
+        return url.split('/')[-1]
+
+
+
+    def _match_ztf_message(job_info, message_body, message_time_epoch):
+
+        match = False
+
+        message_lines = message_body.splitlines()
+
+        for line in message_lines:
+            if re.search("reqid", line):
+
+                inputs = line.split('(')[-1]
+
+                # Two ways
+                # Processing has completed for reqid=XXXX ()
+                test_ra = inputs.split('ra=')[-1].split(',')[0]
+                test_decl = inputs.split('dec=')[-1].split(')')[0]
+                if re.search('minJD', line) and re.search('maxJD', line):
+                    test_minjd = inputs.split('minJD=')[-1].split(',')[0]
+                    test_maxjd = inputs.split('maxJD=')[-1].split(',')[0]
+                else:
+                    test_minjd = inputs.split('startJD=')[-1].split(',')[0]
+                    test_maxjd = inputs.split('endJD=')[-1].split(',')[0]
+
+                # Call this a match only if parameters match
+                if np.format_float_positional(float(test_ra), precision=6, pad_right=6).replace(' ','0') == job_info['ra'].to_list()[0] and \
+                   np.format_float_positional(float(test_decl), precision=6, pad_right=6).replace(' ','0') == job_info['dec'].to_list()[0] and \
+                   np.format_float_positional(float(test_minjd), precision=6, pad_right=6).replace(' ','0') == job_info['jdstart'].to_list()[0] and \
+                   np.format_float_positional(float(test_maxjd), precision=6, pad_right=6).replace(' ','0') == job_info['jdend'].to_list()[0]:
+
+                   match = True
+
+        #import pdb; pdb.set_trace()
+
+        return match
+
+
+
+    def read_job_log(file_name):
+
+        job_info = pd.read_html(file_name)[0]
+        job_info['ra'] = np.format_float_positional(float(job_info['ra'].to_list()[0]), precision=6, pad_right=6).replace(' ','0')
+        job_info['dec'] = np.format_float_positional(float(job_info['dec'].to_list()[0]), precision=6, pad_right=6).replace(' ','0')
+        job_info['jdstart'] = np.format_float_positional(float(job_info['jdstart'].to_list()[0]), precision=6, pad_right=6).replace(' ','0')
+        job_info['jdend'] = np.format_float_positional(float(job_info['jdend'].to_list()[0]), precision=6, pad_right=6).replace(' ','0')
+        job_info['isostart'] = Time(float(job_info['jdstart'].to_list()[0]), format='jd', scale='utc').iso
+        job_info['isoend'] = Time(float(job_info['jdend'].to_list()[0]), format='jd', scale='utc').iso
+        job_info['ctime'] = os.path.getctime(file_name) - time.localtime().tm_gmtoff
+        job_info['cdatetime'] = datetime.fromtimestamp(os.path.getctime(file_name))
+
+        return job_info
