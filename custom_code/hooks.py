@@ -112,8 +112,8 @@ def target_post_save(target, created=True, lookback_days_nle=7, lookback_days_ob
                 update_or_create_target_extra(target, 'MW E(B-V)', mwebv)
                 messages.append(f'MW E(B-V) set to {mwebv:.4f}')
 
-        # then query for new photometry
-        find_public_phot(target)
+        # do the "basic" vetting (PS, MPC, Host association)
+        vet_basic(target.id)
         
         # then check if this target is associated with any NLEs
         new_candidates = associate_nle_with_target(
