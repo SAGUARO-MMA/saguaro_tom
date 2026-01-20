@@ -30,7 +30,12 @@ from .vet_phot import find_public_phot
 
 from trove_mpc import Transient
 
-def vet_basic(target_id:int, days_ago_max:int=200, overwrite:bool=False):
+def vet_basic(
+        target_id:int,
+        days_ago_max:int=200,
+        overwrite:bool=False,
+        queue_priority:int=0
+):
     print("Running basic vetting")
     # get the Target object associated with this target_id
     target = Target.objects.get(id=target_id)
@@ -40,6 +45,7 @@ def vet_basic(target_id:int, days_ago_max:int=200, overwrite:bool=False):
         target=target,
         forced_phot_tol = 0,
         days_ago_max=days_ago_max,
+        queue_priority=queue_priority
     )
 
     te = TargetExtra.objects.filter(target_id=target.id)
