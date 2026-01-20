@@ -241,6 +241,11 @@ class Hecate(StaticCatalog):
 
         self.colmap["lumdist_neg_err"] = "lumdist_neg_err"
         self.colmap["lumdist_pos_err"] = "lumdist_pos_err"
+
+        df["z_type"] = df.apply(
+            lambda row : "z ind." if row.dmethod == "N" else "spec-z",
+            axis=1
+        )
         
         df["z_type"] = df.apply(
             lambda row : "z ind." if row.dmethod == "N" else "spec-z",

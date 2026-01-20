@@ -18,7 +18,9 @@ from .vet import (
     agn_distance_match,
     update_score_factor,
     delete_score_factor,
-    get_distance_score
+    get_distance_score,
+    get_eventcandidate_default_distance,
+    _distance_at_healpix
 )
 from .vet_phot import (
     _get_post_disc_phot,
@@ -48,7 +50,6 @@ PARAM_RANGES = dict(
     t_pre = 0,
     t_post = np.inf
 )
-
 
 def vet_bns(target_id:int, nonlocalized_event_name:Optional[str]=None,
             param_ranges:dict=PARAM_RANGES):

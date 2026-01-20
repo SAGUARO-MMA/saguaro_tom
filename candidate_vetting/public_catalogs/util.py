@@ -45,7 +45,7 @@ def create_phot(target, time, fluxdict, source):
             ("limit" in fluxdict.keys())):
         raise ValueError("Must pass EITHER a magnitude and associated error "+
                          "OR a limit, but not both")
-    
+        
     _, created = ReducedDatum.objects.get_or_create(
         timestamp = time,
         value = fluxdict,

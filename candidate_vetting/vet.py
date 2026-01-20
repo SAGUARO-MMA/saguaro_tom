@@ -87,7 +87,7 @@ GALAXY_CATALOGS = [
 ]
 
 GALAXY_CATALOG_RANKING = {c.__name__:i for i,c in enumerate(GALAXY_CATALOGS)}
-
+    
 class AsymmetricGaussian(rv_continuous):
     """
     Custom Asymmetric Gaussian distribution for uneven uncertainties
@@ -466,6 +466,20 @@ def host_distance_match(
         host_df["dist_norm_joint_prob"] = []
         return host_df # continue to return an empty dataframe here, but with the correct columns
         
+    test_pdf = norm.pdf(lumdist_array, loc=dist, scale=dist_err)
+    return test_pdf
+
+def host_distance_match(
+        host_df:pd.DataFrame,
+        target_id:int,
+        nonlocalized_event_name:str,
+        max_time:Time=Time.now()
+):
+    
+    if not len(host_df):        
+        host_df["dist_norm_joint_prob"] = []
+        return host_df # continue to return an empty dataframe here, but with the correct columns
+    
     # now crossmatch this distance to the host galaxy dataframe
     _lumdist = np.linspace(D_LIM_LOWER, D_LIM_UPPER, int(10*D_LIM_UPPER))
 
@@ -486,7 +500,7 @@ def host_distance_match(
         ) for _,row in host_df.iterrows() 
     ])
     joint_prob = host_pdfs*test_pdf
-    
+
     # finally, compute the Bhattacharyya coefficient for the overlap of these
     # two distributions. https://en.wikipedia.org/wiki/Bhattacharyya_distance
     # This coefficient is non-parametric which is good for our Asymmetric Gaussian
@@ -562,15 +576,15 @@ def get_eventcandidate_default_distance(target_id:int, nonlocalized_event_name:s
     specz_hosts = host_df[host_df.z_type.str.contains("spec-z")]
     if len(ind_distance_hosts):
         to_ret = ind_distance_hosts.iloc[0]
-
+        
     # then spec-z's
     elif len(specz_hosts):
         to_ret = specz_hosts.iloc[0]
-
+        
     # then photo-z's
     else:
         to_ret = host_df.iloc[0]
-
+    
     return to_ret.Dist, to_ret.DistErr
 
 def point_source_association(target_id:int, radius:float=2):

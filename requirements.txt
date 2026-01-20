@@ -8,6 +8,7 @@ django-filter
 django-guardian
 django-tasks
 dustmaps
+fitsio
 healpix-alchemy
 healpy
 lightcurve-fitting
@@ -29,3 +30,5 @@ specutils
 SQLAlchemy
 whitenoise
 trove_mpc @ git+https://github.com/astro-trove/trove-mpc.git
+fundamentals
+skypatrol
