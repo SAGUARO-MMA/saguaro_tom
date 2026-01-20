@@ -1,6 +1,7 @@
 """
 Some general functions useful for vetting photometry
 """
+import logging
 from typing import Tuple, Optional, Iterable
 from datetime import datetime, timezone, timedelta
 
@@ -22,6 +23,7 @@ from candidate_vetting.tasks import async_atlas_query
 from .vet import (get_eventcandidate_default_distance, 
                   _distance_at_healpix)
 
+logger = logging.getLogger(__name__)
 
 FILTER_PRIORITY_ORDER = ["r", "g", "V", "R", "G"]
 PHOT_SCORE_MIN = 0.1
@@ -241,7 +243,7 @@ def estimate_max_find_decay_rate(
             # RuntimeError will throw if it doesn't converge
             # TypeError will throw if there are <5 photometry points (and we should be
             # using the single powerlaw anyways with so few points!)
-            print(f"Failed on the Broken Powerlaw fit with {exc}")
+            logger.warning(f"Failed on the Broken Powerlaw fit with {exc}")
             bpl_popt, bpl_pcov = None, None
     else:
         bpl_popt, bpl_pcov = None, None
@@ -260,15 +262,18 @@ def estimate_max_find_decay_rate(
         bpl_model_y = _broken_powerlaw(dt_days, *bpl_popt)
         bpl_ssr = _ssr(bpl_model_y, mag)
         bpl_info_crit = info_crit(bpl_ssr, bpl_nparams, len(mag))
+    else:
+        pl_info_crit = np.inf
+        bpl_info_crit = np.inf
         
     # now we can prefer the model with the lower AIC score
     if (not pl_failed and bpl_failed) or (pl_info_crit < bpl_info_crit and not pl_failed):
-        print(f"Powerlaw fits better")
+        logger.info(f"Powerlaw fits better")
         model = _powerlaw
         best_fit_params = pl_popt
         decay_rate = pl_popt[0] # this is the slope
     elif not bpl_failed:
-        print("Broken Powerlaw fits better")
+        logger.info("Broken Powerlaw fits better")
         model = _broken_powerlaw
         best_fit_params = bpl_popt
         decay_rate = -bpl_popt[0] # this is the decay slope since we force -inf < a1 < 0 with the bounds, negate b/c magnitudes
@@ -492,11 +497,15 @@ def _score_phot(allphot, target, nonlocalized_event,
     # at this filter
     if len(phot) > 1: # has to be at least 2 points to fit the powerlaw        
         # find the maximum and decay rate
-        _model,_best_fit_params,max_time,decay_rate = estimate_max_find_decay_rate(
-            phot.dt,
-            phot.mag,
-            phot.magerr
-        )
+        try:
+            _model,_best_fit_params,max_time,decay_rate = estimate_max_find_decay_rate(
+                phot.dt,
+                phot.mag,
+                phot.magerr
+            )
+        except RuntimeError:
+            logger.warning("Could not fit a power law or broken power law --> not setting peak_time or decay_rate")
+            return phot_score, lum, None, None, None, None 
         
         # check if these are within the appropriate ranges
         if max_time < param_ranges["peak_time"][0] or max_time > param_ranges["peak_time"][1]:
