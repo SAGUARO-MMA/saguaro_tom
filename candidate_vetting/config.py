@@ -8,7 +8,7 @@ from .vet_super_kn import vet_super_kn
 
 VETTING_FORM_CHOICES = [ # these tuples are (value to save, value to show)
     ("KN", "Classical Kilonova"),
-    ("KN-in-SN", "Kilonova-within-a-Supernova"),
+    ("KN-in-SN", "Kilonova-in-Supernova"),
     ("super-KN", "Super-Kilonova"),
     #("AGN-flare", "BBH-induced AGN Flare"),
     ("basic", "Basic Vetting")
