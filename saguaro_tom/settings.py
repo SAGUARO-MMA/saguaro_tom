@@ -406,4 +406,4 @@ TOM_REGISTRATION = {
 }
 
 # for ZTF forced photometry, we need to save the logs to a temporary directory
-ZTFTMPDIR = os.getcwd()
+ZTFTMPDIR = os.path.join(os.getcwd(), "ztf-forced-phot-logs")

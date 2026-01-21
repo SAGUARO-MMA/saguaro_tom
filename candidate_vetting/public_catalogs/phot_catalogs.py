@@ -1,6 +1,7 @@
 """
 Code to query dynamically updating photometry catalogs
 """
+# packages built into python
 import os
 import requests
 import time
@@ -9,12 +10,21 @@ import logging
 import re
 import csv
 import math
+import random
+import string
+import imaplib
+import subprocess
+import time
+from datetime import datetime
 from operator import itemgetter
 from collections import OrderedDict
 
+# other packages
 import numpy as np
+import pandas as pd
 from astropy.time import Time, TimezoneInfo
 from astropy import units
+from astropy.coordinates import SkyCoord
 from fundamentals.stats import rolling_window_sigma_clip
 from django.conf import settings
 
@@ -538,13 +548,16 @@ class ZTF_Forced_Phot(PhotCatalog):
         self._ztffp_user_address = settings.ZTF_INFO.get("user_address")
         self._ztffp_user_password = settings.ZTF_INFO.get("user_password")
         
-        suepr().__init__()
+        super().__init__("ZTF Forced Photometry")
         
     def query(
             self,
             target:Target,
             radius:float=RADIUS_ARCSEC,
-            days_ago: float = 200.
+            days_ago: float = 200,
+            wait_for_results = True,
+            max_wait_time = 24*60*60, # default to a day long max wait time (in seconds)
+            dt_wait_time = 5*60, # wait 5 minutes between every email query
     ):
         f"""Query the ZTF forced photometry service
 
@@ -556,8 +569,26 @@ class ZTF_Forced_Phot(PhotCatalog):
             target.dec,
             days=days_ago
         )
+
+        if not wait_for_results:
+            return
         
-    def _query_ztf_email(self,log_file_name, source_name=None, verbose=True):
+        ztf_forced_phot_file = None
+        start_time = time.time()
+        total_time_waited = 0
+        while ztf_forced_phot_file is None:
+            # wait for the ZTF email to arrive
+            ztf_forced_phot_file = self._query_ztf_email(ztf_logs)
+            
+            # wait the "dt_wait_time" before trying again
+            time.sleep(dt_wait_time)
+
+            total_time_waited += dt_wait_time
+
+            if total_time_waited > max_wait_time:
+                break
+            
+    def _query_ztf_email(self, log_file_name, source_name=None):
         """This checks the trove email address for new emails from ZTF withd dataproducts"""
 
         downloaded_file_names = None
@@ -565,7 +596,7 @@ class ZTF_Forced_Phot(PhotCatalog):
         if not os.path.exists(log_file_name):
 
             print("%s does not exist."%log_file_name)
-            return -1
+            return
 
 
         # Interpret the request sent to the ZTF forced photometry server
@@ -586,50 +617,56 @@ class ZTF_Forced_Phot(PhotCatalog):
                 # Fetch the email message by ID
                 res, msg = imap.fetch(str(i), "(RFC822)")
                 for response in msg:
-                    if isinstance(response, tuple):
-                        # Parse a bytes email into a message object
-                        msg = email.message_from_bytes(response[1])
-                        # decode the email subject
-                        sender, encoding = email.header.decode_header(msg.get("From"))[0]
+                    if not isinstance(response, tuple):
+                        continue
+                    
+                    # Parse a bytes email into a message object
+                    msg = email.message_from_bytes(response[1])
+                    # decode the email subject
+                    sender, encoding = email.header.decode_header(msg.get("From"))[0]
 
-                        if not isinstance(sender, bytes) and re.search("ztfpo@ipac\.caltech\.edu", sender):
+                    if (
+                            isinstance(sender, bytes) or
+                            not re.search("ztfpo@ipac\.caltech\.edu", sender)
+                    ): continue # move onto the next email
+                    
+                    # Get message body
+                    content_type = msg.get_content_type()
+                    body = msg.get_payload(decode=True).decode()
+
+                    this_date = msg['Date']
+                    this_date_tuple = email.utils.parsedate_tz(msg['Date'])
+                    local_date = datetime.fromtimestamp(email.utils.mktime_tz(this_date_tuple))
+
+                    # Check if this is the correct one
+                    if not content_type=="text/plain":
+                        continue # move onto the next email 
+
+                    processing_match = self._match_ztf_message(job_info, body, local_date)
+                    subject, encoding = email.header.decode_header(msg.get("Subject"))[0]
+
+                    if not processing_match:
+                        continue # move onto the next email
+
+                    # Grab the appropriate URLs
+                    lc_url = 'https' + (body.split('_lc.txt')[0] + '_lc.txt').split('https')[-1]
+                    log_url = 'https' + (body.split('_log.txt')[0] + '_log.txt').split('https')[-1]
 
 
-                            # Get message body
-                            content_type = msg.get_content_type()
-                            body = msg.get_payload(decode=True).decode()
-
-                            this_date = msg['Date']
-                            this_date_tuple = email.utils.parsedate_tz(msg['Date'])
-                            local_date = datetime.fromtimestamp(email.utils.mktime_tz(this_date_tuple))
+                    # Download each file
+                    lc_initial_file_name = self._download_ztf_url(lc_url)
+                    log_initial_file_name = self._download_ztf_url(log_url)
 
 
-                            # Check if this is the correct one
-                            if content_type=="text/plain":
-                                processing_match = match_ztf_message(job_info, body, local_date)
-                                subject, encoding = email.header.decode_header(msg.get("Subject"))[0]
-
-                                if processing_match:
-
-                                    # Grab the appropriate URLs
-                                    lc_url = 'https' + (body.split('_lc.txt')[0] + '_lc.txt').split('https')[-1]
-                                    log_url = 'https' + (body.split('_log.txt')[0] + '_log.txt').split('https')[-1]
-
-
-                                    # Download each file
-                                    lc_initial_file_name = self._download_ztf_url(lc_url, verbose=verbose)
-                                    log_initial_file_name = self._download_ztf_url(log_url, verbose=verbose)
-
-
-                                    # Rename
-                                    if source_name is None:
-                                        downloaded_file_names = [lc_initial_file_name, log_initial_file_name]
-                                    else:
-                                        lc_final_name = source_name.replace(' ','')+"_"+lc_initial_file_name.split('_')[-1]
-                                        log_final_name = source_name.replace(' ','')+"_"+log_initial_file_name.split('_')[-1]
-                                        os.rename(lc_initial_file_name, lc_final_name)
-                                        os.rename(log_initial_file_name, log_final_name)
-                                        downloaded_file_names = [lc_final_name, log_final_name]
+                    # Rename
+                    if source_name is None:
+                        downloaded_file_names = [lc_initial_file_name, log_initial_file_name]
+                    else:
+                        lc_final_name = source_name.replace(' ','')+"_"+lc_initial_file_name.split('_')[-1]
+                        log_final_name = source_name.replace(' ','')+"_"+log_initial_file_name.split('_')[-1]
+                        os.rename(lc_initial_file_name, lc_final_name)
+                        os.rename(log_initial_file_name, log_final_name)
+                        downloaded_file_names = [lc_final_name, log_final_name]
 
             imap.close()
             imap.logout()
@@ -642,12 +679,11 @@ class ZTF_Forced_Phot(PhotCatalog):
         if downloaded_file_names is not None:
 
             for file_name in downloaded_file_names:
-                if verbose:
-                    print("Downloaded: %s"%file_name)
+                logger.info("Downloaded: %s"%file_name)
 
         return downloaded_file_names
 
-    def _ztf_forced_photometry(self,ra, decl, jdstart=None, jdend=None, days=60, send=True, verbose=True):
+    def _ztf_forced_photometry(self,ra, decl, jdstart=None, jdend=None, days=60, send=True):
         """Start the ZTF forced photometry job"""
         
         if jdend is None:
@@ -656,7 +692,7 @@ class ZTF_Forced_Phot(PhotCatalog):
         if jdstart is None:
             jdstart = jdend - days
 
-        if ra is None or dec is None:
+        if ra is None or decl is None:
             raise RuntimeError("Missing necessary R.A. or declination.")
 
         # convert ra and decl to a skycoord object
@@ -689,16 +725,21 @@ class ZTF_Forced_Phot(PhotCatalog):
         return log_file_name
 
 
-    def _random_log_file_name(log_file_dir='/tmp'):
+    def _random_log_file_name(self, log_file_dir='/tmp'):
 
         log_file_name = None
         while log_file_name is None or os.path.exists(log_file_name):
-            log_file_name = f"{log_file_dir}/forced_phot_out/ztffp_%s.txt"%''.join([random.choice(string.ascii_uppercase + string.digits) for i in range(10)])
-            #random.choices(string.ascii_uppercase + string.digits, k=10))
-
+            log_file_name = f"{log_file_dir}/ztffp_%s.txt"%''.join(
+                [
+                    random.choice(
+                        string.ascii_uppercase + string.digits
+                    ) for i in range(10)
+                ]
+            )
+            
         return log_file_name
 
-    def _download_ztf_url(url, verbose=True):
+    def _download_ztf_url(self, url):
 
         wget_command = "wget --http-user=%s --http-password=%s -O %s \"%s\""%(
             self._generic_ztfuser,
@@ -715,9 +756,7 @@ class ZTF_Forced_Phot(PhotCatalog):
 
         return url.split('/')[-1]
 
-
-
-    def _match_ztf_message(job_info, message_body, message_time_epoch):
+    def _match_ztf_message(self, job_info, message_body, message_time_epoch):
 
         match = False
 
@@ -747,13 +786,11 @@ class ZTF_Forced_Phot(PhotCatalog):
 
                    match = True
 
-        #import pdb; pdb.set_trace()
-
         return match
 
 
 
-    def read_job_log(file_name):
+    def _read_job_log(self, file_name):
 
         job_info = pd.read_html(file_name)[0]
         job_info['ra'] = np.format_float_positional(float(job_info['ra'].to_list()[0]), precision=6, pad_right=6).replace(' ','0')

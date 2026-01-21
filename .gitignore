@@ -9,3 +9,4 @@ saguaro_tom/settings_local.py
 venv/
 candidate_vetting/vetting_app/vetting_app/settings_local.py
 MPCORB.csv
+ztf-forced-phot-logs/
