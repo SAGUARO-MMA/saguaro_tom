@@ -4,8 +4,12 @@ import numpy as np
 from tom_targets.models import TargetExtra
 from tom_nonlocalizedevents.models import NonLocalizedEvent
 from tom_dataproducts.models import ReducedDatum
-from candidate_vetting.vet_bns import vet_bns
+
 from candidate_vetting.vet_phot import find_public_phot
+from candidate_vetting.vet_bns import vet_bns
+from candidate_vetting.vet_kn_in_sn import vet_kn_in_sn
+from candidate_vetting.vet_super_kn import vet_super_kn
+
 from candidate_vetting.public_catalogs.phot_catalogs import TNS_Phot
 from custom_code.healpix_utils import create_candidates_from_targets
 from custom_code.templatetags.skymap_extras import get_preferred_localization
@@ -123,10 +127,12 @@ def target_post_save(target, created=True, lookback_days_nle=7, lookback_days_ob
         )
         
         # TODO: add a check for the type of non-localized event
-        #       For now we are just always running the BNS vetting
+        #       For now we are just always all types of vetting
         if len(new_candidates):
             for cand in new_candidates:
                 vet_bns(cand.target.id, cand.nonlocalizedevent.event_id)
+                vet_kn_in_sn(cand.target.id, cand.nonlocalizedevent.event_id)
+                vet_super_kn(cand.target.id, cand.nonlocalizedevent.event_id)
         else:
             messages.append("Could not run vetting on this target because there are no non-localized events associated with it!")
             

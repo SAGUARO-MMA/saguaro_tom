@@ -62,11 +62,4 @@
   <dd class="col-sm-6">{{ value }}</dd>
 {% endfor %}
 </dl>
-{% get_target_score target.id as scores %}
-<h4>Scores:</h4>
-<dl class="row">
-  {% for nonlocalized_name, score in scores.items %}
-  <dd class="col-sm-6">{{ nonlocalized_name }}</dd>
-  <dd class="col-sm-6">{{ score }}</dd>
-  {% endfor %}
 <h4>Photometry:</h4>

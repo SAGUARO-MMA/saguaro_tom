@@ -14,6 +14,8 @@ from django.shortcuts import redirect
 from trove_targets.models import Target
 from .forms import VettingChoiceForm 
 from candidate_vetting.vet_bns import vet_bns
+from candidate_vetting.vet_kn_in_sn import vet_kn_in_sn
+from candidate_vetting.vet_super_kn import vet_super_kn
 from candidate_vetting.vet_basic import vet_basic
 from candidate_vetting.vet_phot import find_public_phot
 
@@ -62,7 +64,8 @@ class TargetVettingView(LoginRequiredMixin, RedirectView):
     """
     def get(self, request, *args, **kwargs):
         """
-        Method that handles the GET requests for this view. Calls the kilonova vetting code.
+        Method that handles the GET requests for this view. Calls the vetting 
+        code for different transients.
         """        
         target_pk = kwargs['pk']
         target = Target.objects.get(pk=target_pk)

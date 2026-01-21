@@ -1,6 +1,7 @@
 """
 Some general functions useful for vetting photometry
 """
+import logging
 from typing import Tuple, Optional, Iterable
 from datetime import datetime, timezone, timedelta
 
@@ -18,6 +19,16 @@ from tom_dataproducts.models import ReducedDatum
 from trove_targets.models import Target
 from candidate_vetting.public_catalogs.phot_catalogs import TNS_Phot
 from candidate_vetting.tasks import async_atlas_query
+
+from .vet import (get_eventcandidate_default_distance, 
+                  _distance_at_healpix)
+
+logger = logging.getLogger(__name__)
+
+FILTER_PRIORITY_ORDER = ["r", "g", "V", "R", "G"]
+PHOT_SCORE_MIN = 0.1
+PREDETECTION_SNR_THRESHOLD = 5 # require a S/N of 5 for a predetection to be considered real
+
 
 def _powerlaw(x, a, y0):
     """
@@ -117,22 +128,24 @@ def _get_phot(target_id:int, nonlocalized_event:NonLocalizedEvent) -> pd.DataFra
 def _get_post_disc_phot(
         target_id:int,
         nonlocalized_event:NonLocalizedEvent,
-        t_post:float=np.inf
+        t_post:float=np.inf,
+        t_pre:float=0
 ) -> pd.DataFrame:
     photdf = _get_phot(target_id, nonlocalized_event)
     if not len(photdf):
         return 
-    phot_post_disc = photdf.loc[(t_post >= photdf.dt) & (photdf.dt >= 0)]
+    phot_post_disc = photdf.loc[(t_post >= photdf.dt) & (photdf.dt >= t_pre)]
     return phot_post_disc
     
 def _get_pre_disc_phot(
         target_id:int,
-        nonlocalized_event:NonLocalizedEvent
+        nonlocalized_event:NonLocalizedEvent,
+        t_pre:float=0,
 ) -> pd.DataFrame:
     photdf = _get_phot(target_id, nonlocalized_event)
     if not len(photdf):
         return
-    phot_pre_disc = photdf[photdf.dt < 0]
+    phot_pre_disc = photdf[photdf.dt < t_pre]
     return phot_pre_disc
 
 def _get_window_stats(min_idx, max_idx, isdet):
@@ -230,7 +243,7 @@ def estimate_max_find_decay_rate(
             # RuntimeError will throw if it doesn't converge
             # TypeError will throw if there are <5 photometry points (and we should be
             # using the single powerlaw anyways with so few points!)
-            print(f"Failed on the Broken Powerlaw fit with {exc}")
+            logger.warning(f"Failed on the Broken Powerlaw fit with {exc}")
             bpl_popt, bpl_pcov = None, None
     else:
         bpl_popt, bpl_pcov = None, None
@@ -255,12 +268,12 @@ def estimate_max_find_decay_rate(
         
     # now we can prefer the model with the lower AIC score
     if (not pl_failed and bpl_failed) or (pl_info_crit < bpl_info_crit and not pl_failed):
-        print(f"Powerlaw fits better")
+        logger.info(f"Powerlaw fits better")
         model = _powerlaw
         best_fit_params = pl_popt
         decay_rate = pl_popt[0] # this is the slope
     elif not bpl_failed:
-        print("Broken Powerlaw fits better")
+        logger.info("Broken Powerlaw fits better")
         model = _broken_powerlaw
         best_fit_params = bpl_popt
         decay_rate = -bpl_popt[0] # this is the decay slope since we force -inf < a1 < 0 with the bounds, negate b/c magnitudes
@@ -438,3 +451,69 @@ def find_public_phot(
                 days_ago
             ) # this min ensures we never query more than days_ago_max
         )
+
+def _score_phot(allphot, target, nonlocalized_event, 
+                param_ranges,
+                filt=None):
+    if allphot is None: # this is if there is no photometry
+        return 1, None, None, None, None, None
+    
+    phot = allphot[~allphot.upperlimit]
+    if not len(phot):
+        # then there is no photometry for this object and we're done!
+        return 1, None, None, None, None, None
+    
+    # find the filter we will use for the photometry analysis
+    if filt is None:
+        for filt in FILTER_PRIORITY_ORDER:
+            if filt in phot["filter"].values:
+                break
+        else:
+            # This target does not have any photometry with the correct filters!
+            # so we return a score of 1
+            return 1, None, None, None, None, None
+
+    # now filter down the photometry
+    if isinstance(filt, list) or isinstance(filt, set):
+        phot = phot[phot["filter"].isin(filt)]
+    elif filt != "all" and isinstance(filt, str):
+        phot = phot[phot["filter"] == filt]
+    
+    # if we've made it to this point we have at least one detection so
+    # we can calculate the luminosity
+    dist, _ = get_eventcandidate_default_distance(
+        target.id,
+        nonlocalized_event.event_id
+    )
+    lum = compute_peak_lum(phot.mag, phot.magerr, phot["filter"].tolist(), dist*u.Mpc)
+
+    phot_score = 1
+    if lum is not None and (
+            lum < param_ranges["lum_max"][0] or lum > param_ranges["lum_max"][1]
+    ):
+        phot_score *= PHOT_SCORE_MIN
+
+    # then we can only do the next stuff if there is more than one photometry point
+    # at this filter
+    if len(phot) > 1: # has to be at least 2 points to fit the powerlaw        
+        # find the maximum and decay rate
+        try:
+            _model,_best_fit_params,max_time,decay_rate = estimate_max_find_decay_rate(
+                phot.dt,
+                phot.mag,
+                phot.magerr
+            )
+        except RuntimeError:
+            logger.warning("Could not fit a power law or broken power law --> not setting peak_time or decay_rate")
+            return phot_score, lum, None, None, None, None 
+        
+        # check if these are within the appropriate ranges
+        if max_time < param_ranges["peak_time"][0] or max_time > param_ranges["peak_time"][1]:
+            phot_score *= PHOT_SCORE_MIN
+        
+        if decay_rate < param_ranges["decay_rate"][0] or decay_rate > param_ranges["decay_rate"][1]:
+            phot_score *= PHOT_SCORE_MIN
+
+        return phot_score, lum, max_time, decay_rate, _model, _best_fit_params
+    
+    return phot_score, lum, None, None, None, None

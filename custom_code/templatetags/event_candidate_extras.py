@@ -13,11 +13,34 @@ from tom_nonlocalizedevents.models import EventCandidate, NonLocalizedEvent
 from trove_targets.models import Target
 from tom_targets.models import TargetExtra
 from candidate_vetting.models import ScoreFactor
-from candidate_vetting.vet_bns import (
-    PARAM_RANGES as KN_PARAM_RANGES,
-    PHOT_SCORE_MIN as KN_PHOT_SCORE_MIN
-)
+
+from candidate_vetting.vet_phot import PHOT_SCORE_MIN
+from candidate_vetting.vet_bns import PARAM_RANGES as KN_PARAM_RANGES
+from candidate_vetting.vet_kn_in_sn import PARAM_RANGES as KN_IN_SN_PARAM_RANGES
+from candidate_vetting.vet_super_kn import PARAM_RANGES as SUPER_KN_PARAM_RANGES
+
+
 from astropy.units import Quantity
+
+# map imported parameter ranges to transients
+TRANSIENTS = ["KN",
+              "KN-in-SN",
+              "super-KN"]
+DICT_TRANSIENTS_PARAM_RANGES = {
+    "KN":KN_PARAM_RANGES,
+    "KN-in-SN":KN_IN_SN_PARAM_RANGES,
+    "super-KN":SUPER_KN_PARAM_RANGES}
+
+
+# default subscore names 
+SUBSCORE_NAMES = ['skymap_score',
+                  'host_distance_score',
+                  'ps_score',
+                  'agn_score',
+                  'predetection_score',
+                  'phot_peak_lum',
+                  'phot_peak_time',
+                  'phot_decay_rate']
 
 register = template.Library()
 
@@ -36,7 +59,9 @@ MPC_KEYS = [
 ]
 
 @register.simple_tag
-def get_event_candidate_scores(event_candidates, *subscore_names):
+def get_event_candidate_scores(event_candidates, 
+                               dict_transients_param_ranges=DICT_TRANSIENTS_PARAM_RANGES,
+                               subscore_names=SUBSCORE_NAMES):
     """Get the event candidate scores for everything in subscore_names
 
     event_candidates should be a django queryset of EventCandidate objects
@@ -44,7 +69,6 @@ def get_event_candidate_scores(event_candidates, *subscore_names):
     # some of the keys in ScoreFactor are really just calculated values
     # where the score depends on the type of non-localized event. So we need to convert
     # these to scores.
-    # I'm writing this just for KN for now, but we can modify as needed!
     val_not_score_keys = {
         "phot_peak_lum":"lum_max",
         "phot_peak_time":"peak_time",
@@ -53,62 +77,74 @@ def get_event_candidate_scores(event_candidates, *subscore_names):
 
     ecs_out = []
     for ec in event_candidates:
-
-        # first get all the subscores for this object
-        subscores = ScoreFactor.objects.filter(
-            event_candidate = ec,
-            key__in = subscore_names
-        ).annotate(
-            value_float = Cast("value", FloatField())
-        )
-
+        # set ec.score to be a dictionary mapping transient : score
+        ec.score = {}
         
-        phot_score = 1
-        subscore_keys = subscores.values_list("key", flat=True)        
-        for subscore_key, param_range_key in val_not_score_keys.items():
-            if subscore_key in subscore_names and subscore_key in subscore_keys:
-                val = subscores.get(
-                    key = subscore_key
-                ).value_float
-
-                val_max = max(KN_PARAM_RANGES[param_range_key])
-                val_min = min(KN_PARAM_RANGES[param_range_key])
-                if isinstance(val_min, Quantity):
-                    val_min = val_min.value
-                if isinstance(val_max, Quantity):
-                    val_max = val_max.value
-                
-                if val < val_min or val > val_max:
-                    phot_score *= KN_PHOT_SCORE_MIN
-             
+        for transient in TRANSIENTS: 
+            # allowed parameter ranges for given transient
+            param_ranges = dict_transients_param_ranges[transient]
             
-        subscores = subscores.exclude(
-            key__in = list(val_not_score_keys.keys()) + TARGETEXTRA_KEYS
-        ) # this removes those rows from the queryset
-        
-        # now we can compute the score just using multiplication
-        subscore_list = list(
-            subscores.values_list("value_float", flat=True)
-        )
-        subscore_list.append(phot_score)
-
-        # now get all the scores stored in TargetExtra objects and append those
-        te = TargetExtra.objects.filter(target_id = ec.target.id)
-        ps_score_qs = te.filter(key="ps_score")
-        if ps_score_qs.exists():
-            ps_score = float(ps_score_qs.first().value)
-            subscore_list.append(ps_score)
-
-        mpc_match_name = te.filter(key="mpc_match_name")
-        if mpc_match_name.exists():
-            mpc_score = int(mpc_match_name.first().value == str(None))
-            subscore_list.append(mpc_score)
-        
-        # save the score to a temporary field in the EventCandidate object
-        ec.score = math.prod(subscore_list) # multiply the subscores
+            phot_score = 1 # reset to 1.0 for each transient
+            
+            # get all 'subscores' (sometimes actually calculated values)
+            # for object; need to re-do this per transient because of step 
+            # below where we exclude certain scores from the queryset
+            subscores = ScoreFactor.objects.filter(
+                event_candidate = ec,
+                key__in = subscore_names
+            ).annotate(
+                value_float = Cast("value", FloatField())
+            )
+            
+            # iterate though subscores/values which will determine subscores
+            subscore_keys = subscores.values_list("key", flat=True)
+            for subscore_key, param_range_key in val_not_score_keys.items():
+                if subscore_key in subscore_names and subscore_key in subscore_keys:
+                    val = subscores.get(
+                        key = subscore_key
+                    ).value_float
+                    # check if within limits
+                    val_max = max(param_ranges[param_range_key])
+                    val_min = min(param_ranges[param_range_key])
+                    if isinstance(val_min, Quantity):
+                        val_min = val_min.value
+                    if isinstance(val_max, Quantity):
+                        val_max = val_max.value
+                    
+                    if val < val_min or val > val_max:
+                        # multiply photometry score by PHOT_SCORE_MIN
+                        phot_score *= PHOT_SCORE_MIN 
+                
+            subscores = subscores.exclude(
+                key__in = list(val_not_score_keys.keys()) + TARGETEXTRA_KEYS
+            ) # this removes those rows from the queryset
+            
+            # now we can compute the score just using multiplication
+            subscore_list = list(
+                subscores.values_list("value_float", flat=True)
+            )
+            subscore_list.append(phot_score)
+            
+            # now get all the scores stored in TargetExtra objects and append those
+            te = TargetExtra.objects.filter(target_id = ec.target.id)
+            ps_score_qs = te.filter(key="ps_score")
+            if ps_score_qs.exists():
+                ps_score = float(ps_score_qs.first().value)
+                subscore_list.append(ps_score)
+                
+            mpc_match_name = te.filter(key="mpc_match_name")
+            if mpc_match_name.exists():
+                mpc_score = int(mpc_match_name.first().value == str(None))
+                subscore_list.append(mpc_score)
+                
+            # save the score to a temporary field (dictionary) in the 
+            # EventCandidate object
+            ec.score[transient] = math.prod(subscore_list) # multiply the subscores
         ecs_out.append(ec)
-        
-    return sorted(ecs_out, reverse=True, key = lambda x : x.score)    
+    
+    # sort by kilonova score, for now
+    return sorted(ecs_out, reverse=True, key = lambda x : x.score["KN"])
+  
 
 #@register.inclusion_tag('tom_targets/partials/target_data.html', takes_context=True)
 @register.simple_tag
@@ -152,8 +188,10 @@ def display_score_details(target_id):
     res = {}
     keymap = dict(
         skymap_score = ("2D Localization Score", _float_format),
-        ps_score = ("Point Source Score (1 or 0)", _bool_format),
         host_distance_score = ("3D Association Score", _float_format),
+        ps_score = ("Point Source Score (1 or 0)", _bool_format),
+        mpc_score = ("Minor Planet Center Score (1 or 0)", _bool_format),
+        agn_score = ("AGN Score (1 or 0)", _bool_format),
         phot_peak_lum = ("Maximum Luminosity", partial(_sci_format, unit="erg/s")),
         phot_peak_time = ("Time of Maximum Light Curve", partial(_float_format, unit="days")),
         phot_decay_rate = ("Light Curve Slope (positive is brightening)", partial(_float_format, unit="mag/day")),
