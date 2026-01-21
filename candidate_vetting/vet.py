@@ -60,6 +60,22 @@ from candidate_vetting.public_catalogs.static_catalogs import (
     DesiDr1
 )
 
+HOST_DF_COLMAP = {
+    "name":"ID",
+    "pcc":"PCC",
+    "offset":"Offset",
+    "ra":"RA",
+    "dec": "Dec",
+    "lumdist":"Dist",
+    "lumdist_err":"DistErr",
+    "z":"z",
+    "z_err":"zErr",
+    "z_type":"z_type",
+    "default_mag":"Mags",
+    "catalog":"Source"
+}
+HOST_DF_COLMAP_INVERSE = {v:k for k,v in HOST_DF_COLMAP.items()}
+
 # After we order the dataframe by the Pcc score, remove any host matches with a greater
 # Pcc score than this
 PCC_THRESHOLD = 0.15 # this is the value used in Rastinejad+2022
@@ -190,26 +206,34 @@ def delete_score_factor(event_candidate, key):
     if matches.count():
         matches.delete()
 
+def save_score_to_targetextra(target, key, score):
+    """
+    Saves the scores that don't change to a TargetExtra object rather than a ScoreFactor
+    This is for:
+    1. point source score
+    2. MPC score
+    Since they are independent of the NLE that we are vetting the target against
+    """
+
+    # first delete the host galaxy key for this target if it already exists
+    te = TargetExtra.objects.filter(target_id=target.id, key=key)
+    if te.exists():
+        te.delete()
+
+    # then save the new score
+    TargetExtra.objects.update_or_create(
+        target=target,
+        key=key,
+        value=score
+    )
+
+        
 def _save_host_galaxy_df(df, target):
 
     # first delete the host galaxy key for this target if it already exists
     if TargetExtra.objects.filter(target_id=target.id, key="Host Galaxies").exists():
         TargetExtra.objects.filter(target_id=target.id, key="Host Galaxies").delete()
     
-    col_map = {
-        "name":"ID",
-        "pcc":"PCC",
-        "offset":"Offset",
-        "ra":"RA",
-        "dec": "Dec",
-        "lumdist":"Dist",
-        "lumdist_err":"DistErr",
-        "z":"z",
-        "z_err":"zErr",
-        "z_type":"z_type",
-        "default_mag":"Mags",
-        "catalog":"Source"
-    }
     newdf = df[
         [
             "name",
@@ -234,7 +258,7 @@ def _save_host_galaxy_df(df, target):
         else neg # errors are not assymetric
         for neg, pos in zip(df.lumdist_neg_err, df.lumdist_pos_err)
     ]
-    newdf = newdf.rename(columns=col_map)
+    newdf = newdf.rename(columns=HOST_DF_COLMAP)
     TargetExtra.objects.update_or_create(
         target=target,
         key="Host Galaxies",

@@ -11,6 +11,7 @@ from django.db.models import FloatField
 from django.db.models.functions import Cast
 from tom_nonlocalizedevents.models import EventCandidate, NonLocalizedEvent
 from trove_targets.models import Target
+from tom_targets.models import TargetExtra
 from candidate_vetting.models import ScoreFactor
 
 from candidate_vetting.vet_phot import PHOT_SCORE_MIN
@@ -43,6 +44,20 @@ SUBSCORE_NAMES = ['skymap_score',
 
 register = template.Library()
 
+# These should now be stored in a TargetExtra object so the score needs to be
+# accessed differently
+TARGETEXTRA_KEYS = [
+    "ps_score",
+    "mpc_match_name",
+    "mpc_match_sep",
+    "mpc_match_date",
+]
+MPC_KEYS = [
+    "mpc_match_name",
+    "mpc_match_sep",
+    "mpc_match_date",
+]
+
 @register.simple_tag
 def get_event_candidate_scores(event_candidates, 
                                dict_transients_param_ranges=DICT_TRANSIENTS_PARAM_RANGES,
@@ -51,20 +66,20 @@ def get_event_candidate_scores(event_candidates,
 
     event_candidates should be a django queryset of EventCandidate objects
     """ 
+    # some of the keys in ScoreFactor are really just calculated values
+    # where the score depends on the type of non-localized event. So we need to convert
+    # these to scores.
+    val_not_score_keys = {
+        "phot_peak_lum":"lum_max",
+        "phot_peak_time":"peak_time",
+        "phot_decay_rate":"decay_rate"
+    }
 
     ecs_out = []
     for ec in event_candidates:
         # set ec.score to be a dictionary mapping transient : score
         ec.score = {}
-
-        # some of the keys in ScoreFactor are really just calculated values
-        # where the score depends on the type of non-localized event. So we need to convert
-        # these to scores.
-        val_not_score_keys = {
-            "phot_peak_lum":"lum_max",
-            "phot_peak_time":"peak_time",
-            "phot_decay_rate":"decay_rate"
-        }
+        
         for transient in TRANSIENTS: 
             # allowed parameter ranges for given transient
             param_ranges = dict_transients_param_ranges[transient]
@@ -101,7 +116,7 @@ def get_event_candidate_scores(event_candidates,
                         phot_score *= PHOT_SCORE_MIN 
                 
             subscores = subscores.exclude(
-                key__in = list(val_not_score_keys.keys())
+                key__in = list(val_not_score_keys.keys()) + TARGETEXTRA_KEYS
             ) # this removes those rows from the queryset
             
             # now we can compute the score just using multiplication
@@ -109,7 +124,19 @@ def get_event_candidate_scores(event_candidates,
                 subscores.values_list("value_float", flat=True)
             )
             subscore_list.append(phot_score)
-    
+            
+            # now get all the scores stored in TargetExtra objects and append those
+            te = TargetExtra.objects.filter(target_id = ec.target.id)
+            ps_score_qs = te.filter(key="ps_score")
+            if ps_score_qs.exists():
+                ps_score = float(ps_score_qs.first().value)
+                subscore_list.append(ps_score)
+                
+            mpc_match_name = te.filter(key="mpc_match_name")
+            if mpc_match_name.exists():
+                mpc_score = int(mpc_match_name.first().value == str(None))
+                subscore_list.append(mpc_score)
+                
             # save the score to a temporary field (dictionary) in the 
             # EventCandidate object
             ec.score[transient] = math.prod(subscore_list) # multiply the subscores
@@ -117,7 +144,7 @@ def get_event_candidate_scores(event_candidates,
     
     # sort by kilonova score, for now
     return sorted(ecs_out, reverse=True, key = lambda x : x.score["KN"])
-    
+  
 
 #@register.inclusion_tag('tom_targets/partials/target_data.html', takes_context=True)
 @register.simple_tag
@@ -138,8 +165,6 @@ def get_target_score(target_id):
     
     return out
 
-
-
 @register.simple_tag
 def display_score_details(target_id):
 
@@ -147,10 +172,18 @@ def display_score_details(target_id):
         return "Target ID is None!"
 
     target = Target.objects.get(id=target_id)
-    
+
+    basic_score_details = []
+    te = TargetExtra.objects.filter(target_id=target_id)
+    for key in TARGETEXTRA_KEYS:
+        basic_score_details.append(te.filter(key=key))
+
     score_details = []
     for event_candidate in target.eventcandidate_set.all():
-        score_details.append(event_candidate.scorefactor_set.all())
+        sf_set = event_candidate.scorefactor_set.exclude(
+            key__in=TARGETEXTRA_KEYS # we want these values from TargetExtra, not ScoreFactor
+        ).all()
+        score_details.append(sf_set)
 
     res = {}
     keymap = dict(
@@ -161,8 +194,31 @@ def display_score_details(target_id):
         agn_score = ("AGN Score (1 or 0)", _bool_format),
         phot_peak_lum = ("Maximum Luminosity", partial(_sci_format, unit="erg/s")),
         phot_peak_time = ("Time of Maximum Light Curve", partial(_float_format, unit="days")),
-        phot_decay_rate = ("Light Curve Slope (positive is brightening)", partial(_float_format, unit="mag/day"))
+        phot_decay_rate = ("Light Curve Slope (positive is brightening)", partial(_float_format, unit="mag/day")),
+        mpc_match_name = ("MPC Match Name", _str_format),
+        mpc_match_date = ("MPC Match Date", _str_format),
+        mpc_match_sep = ('MPC Match Separation (")', _float_format),
     )
+
+    # first the basic score details
+    basic_score_key = "Basic Score Details"
+    for qs in basic_score_details:
+        for te in qs:
+            if basic_score_key not in res:
+                res[basic_score_key] = ""
+            if te.key in keymap:
+                label, fmter = keymap[te.key]
+            else:
+                label = te.key
+                fmter = _float_format
+            if te.value is None or isinstance(te.value, str):
+                s = te.value
+            else:
+                s = fmter(float(te.value))
+            res[basic_score_key] += f"&emsp;{label}: {s}\n" 
+            
+    
+    # then the NLE specific ones
     for queryset in score_details:
         for score_factor in queryset:
             nle = score_factor.event_candidate.nonlocalizedevent
@@ -194,3 +250,6 @@ def _sci_format(flt, unit=""):
 
 def _bool_format(flt):
     return int(flt)
+
+def _str_format(s):
+    return s

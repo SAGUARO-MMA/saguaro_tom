@@ -11,8 +11,6 @@ import numpy as np
 
 from .vet import (
     skymap_association,
-    point_source_association,
-    host_association,
     host_distance_match,
     associate_agn_2d,
     agn_distance_match,
@@ -22,6 +20,7 @@ from .vet import (
     get_eventcandidate_default_distance,
     _distance_at_healpix
 )
+from .vet_basic import vet_basic
 from .vet_phot import (
     _get_post_disc_phot,
     _score_phot,
@@ -30,7 +29,6 @@ from .vet_phot import (
     PHOT_SCORE_MIN,
     PREDETECTION_SNR_THRESHOLD
 )
-from trove_mpc import Transient
 
 from trove_targets.models import Target
 from tom_dataproducts.models import ReducedDatum
@@ -62,6 +60,7 @@ def vet_bns(target_id:int, nonlocalized_event_name:Optional[str]=None,
         nonlocalizedevent_id = nonlocalized_event.id,
         target_id = target_id
     )
+    target = Target.objects.get(id=target_id)
     
     ## check skymap association
     skymap_score = skymap_association(nonlocalized_event_name, target_id)
@@ -69,62 +68,9 @@ def vet_bns(target_id:int, nonlocalized_event_name:Optional[str]=None,
     if skymap_score < 1e-2:
         return 
 
-    ## run the point source checker
-    ps_score = point_source_association(target_id)
-    update_score_factor(event_candidate, "ps_score", ps_score)
+    # compute the basic scores
+    host_df = vet_basic(event_candidate.target.id)
     
-    ## AGN score
-    # search for an AGN associated with the target
-    agn_df = associate_agn_2d(
-        target_id, 
-        radius=2 # 2 arcseconds
-    )
-    # then, assign score based on AGN association
-    if len(agn_df) != 0:
-        agn_assoc_score = 0 # association with an AGN is bad
-    else:
-        agn_assoc_score = 1 
-    agn_score = agn_assoc_score # don't bother with 3D AGN scoring
-    update_score_factor(event_candidate, "agn_score", agn_score)
-    
-    ## if either point source or AGN score is 0, end it here
-    if ps_score == 0 or agn_score == 0:
-        return
-    
-    ## run the minor planet checker
-    target = Target.objects.filter(id=target_id)[0]
-    phot = ReducedDatum.objects.filter(
-        target_id=target_id,
-        data_type="photometry",
-        value__magnitude__isnull=False
-    )
-    if phot.exists():
-        latest_det = phot.latest()
-        date = Time(latest_det.timestamp).mjd
-        t = Transient(target.ra, target.dec)
-        mpc_match = t.minor_planet_match(date)
-    else:
-        logger.warn("This candidate has no photometry, skipping MPC!")
-        mpc_match = None
-
-    # update the score factor information
-    if mpc_match is not None:
-        update_score_factor(event_candidate, "mpc_match_name", mpc_match.match_name)
-        update_score_factor(event_candidate, "mpc_match_sep", mpc_match.distance)
-        update_score_factor(event_candidate, "mpc_match_date", latest_det.timestamp)
-        mpc_score = 0
-        update_score_factor(event_candidate, "mpc_score", mpc_score)
-        return
-    else:    
-        mpc_score = 1
-        update_score_factor(event_candidate, "mpc_score", mpc_score)
-
-    ## distance score
-    # do the Pcc analysis and find a host
-    host_df = host_association(
-        target_id,
-        radius = 5*60 # 5*60 arcseconds
-    )
     if len(host_df) != 0:
         # then run the distance comparison for each of these hosts
         host_df = host_distance_match(
