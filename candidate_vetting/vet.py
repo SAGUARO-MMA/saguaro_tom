@@ -489,20 +489,6 @@ def host_distance_match(
     if not len(host_df):        
         host_df["dist_norm_joint_prob"] = []
         return host_df # continue to return an empty dataframe here, but with the correct columns
-        
-    test_pdf = norm.pdf(lumdist_array, loc=dist, scale=dist_err)
-    return test_pdf
-
-def host_distance_match(
-        host_df:pd.DataFrame,
-        target_id:int,
-        nonlocalized_event_name:str,
-        max_time:Time=Time.now()
-):
-    
-    if not len(host_df):        
-        host_df["dist_norm_joint_prob"] = []
-        return host_df # continue to return an empty dataframe here, but with the correct columns
     
     # now crossmatch this distance to the host galaxy dataframe
     _lumdist = np.linspace(D_LIM_LOWER, D_LIM_UPPER, int(10*D_LIM_UPPER))

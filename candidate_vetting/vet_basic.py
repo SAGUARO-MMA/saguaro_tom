@@ -25,6 +25,7 @@ from tom_targets.models import TargetExtra
 from .vet import (
     point_source_association,
     host_association,
+    associate_agn_2d,
     save_score_to_targetextra,
     HOST_DF_COLMAP_INVERSE
 )
