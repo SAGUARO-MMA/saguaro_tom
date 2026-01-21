@@ -455,7 +455,7 @@ def get_distance_score(host_df, target_id, nonlocalized_event_name):
     """
     # first check if this target has a measured redshift
     targ = Target.objects.get(id=target_id)
-    if not np.isnan(targ.redshift):
+    if targ.redshift is not None and not np.isnan(targ.redshift):
         _lumdist = np.linspace(D_LIM_LOWER, D_LIM_UPPER, int(10*D_LIM_UPPER))
         nle_pdf = _get_nle_distance_pdf(_lumdist,  nonlocalized_event_name, target_id)
         targ_dist = cosmo.luminosity_distance(targ.redshift).to(u.Mpc).value
@@ -483,7 +483,7 @@ def get_eventcandidate_default_distance(target_id:int, nonlocalized_event_name:s
 
     # first check if this target has a redshift associated with it
     targ = Target.objects.get(id = target_id)
-    if not np.isnan(targ.redshift):
+    if targ.redshift is not None and not np.isnan(targ.redshift):
         targ_dist = cosmo.luminosity_distance(targ.redshift).to(u.Mpc).value
         targ_dist_err = cosmo.luminosity_distance(1e-3).to(u.Mpc).value
         return targ_dist, targ_dist_err
