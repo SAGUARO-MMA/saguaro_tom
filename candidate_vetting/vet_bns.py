@@ -10,8 +10,6 @@ import numpy as np
 
 from .vet import (
     skymap_association,
-    point_source_association,
-    host_association,
     host_distance_match,
     update_score_factor,
     delete_score_factor,
@@ -19,6 +17,7 @@ from .vet import (
     get_eventcandidate_default_distance,
     _distance_at_healpix
 )
+from .vet_basic import vet_basic
 from .vet_phot import (
     compute_peak_lum,
     estimate_max_find_decay_rate,
@@ -27,7 +26,6 @@ from .vet_phot import (
     _get_pre_disc_phot,
     get_predetection_stats
 )
-from trove_mpc import Transient
 
 from trove_targets.models import Target
 from tom_dataproducts.models import ReducedDatum
@@ -124,6 +122,7 @@ def vet_bns(target_id:int, nonlocalized_event_name:Optional[str]=None):
         nonlocalizedevent_id = nonlocalized_event.id,
         target_id = target_id
     )
+    target = Target.objects.get(id=target_id)
     
     # check skymap association
     skymap_score = skymap_association(nonlocalized_event_name, target_id)
@@ -131,42 +130,9 @@ def vet_bns(target_id:int, nonlocalized_event_name:Optional[str]=None):
     if skymap_score < 1e-2:
         return 
 
-    # run the point source checker
-    ps_score = point_source_association(target_id)
-    update_score_factor(event_candidate, "ps_score", ps_score)
-    if ps_score == 0:
-        return
+    # compute the basic scores
+    host_df = vet_basic(event_candidate.target.id)
     
-    # run the minor planet checker
-    target = Target.objects.filter(id=target_id)[0]
-    phot = ReducedDatum.objects.filter(
-        target_id=target_id,
-        data_type="photometry",
-        value__magnitude__isnull=False
-    )
-    if phot.exists():
-        latest_det = phot.latest()
-        date = Time(latest_det.timestamp).mjd
-        t = Transient(target.ra, target.dec)
-        mpc_match = t.minor_planet_match(date)
-    else:
-        logger.warn("This candidate has no photometry, skipping MPC!")
-        mpc_match = None
-
-    if mpc_match is not None:
-        # update the score factor information
-        update_score_factor(event_candidate, "mpc_match_name", mpc_match.match_name)
-        update_score_factor(event_candidate, "mpc_match_sep", mpc_match.distance)
-        update_score_factor(event_candidate, "mpc_match_date", latest_det.timestamp)
-        return
-    
-    mpc_score = 1
-    
-    # do the Pcc analysis and find a host
-    host_df = host_association(
-        target_id,
-        radius = 5*60
-    )
     if len(host_df) != 0:
         # then run the distance comparison for each of these hosts
         host_df = host_distance_match(
