@@ -62,19 +62,11 @@ def vet_basic(
         ps_score = point_source_association(target_id)
         save_score_to_targetextra(target, "ps_score", ps_score)
 
-    ## AGN score
-    # search for an AGN associated with the target
+    ## search for an AGN associated with the target
     agn_df = associate_agn_2d(
         target_id, 
         radius=2 # 2 arcseconds
     )
-    # then, assign score based on AGN association
-    if len(agn_df) != 0:
-        agn_assoc_score = 0 # association with an AGN is bad
-    else:
-        agn_assoc_score = 1 
-    agn_score = agn_assoc_score # don't bother with 3D AGN scoring, for now
-    update_score_factor(event_candidate, "agn_score", agn_score)
         
     ## run the minor planet checker
     if overwrite or not te.filter(key="mpc_match_name").exists():
@@ -113,5 +105,6 @@ def vet_basic(
         target_id,
         radius = 5*60
     )
-            
-    return host_df
+     
+    ## return both agn_df and host_df       
+    return host_df, agn_df

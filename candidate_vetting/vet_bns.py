@@ -12,13 +12,10 @@ import numpy as np
 from .vet import (
     skymap_association,
     host_distance_match,
-    associate_agn_2d,
-    agn_distance_match,
+    # agn_distance_match,
     update_score_factor,
     delete_score_factor,
-    get_distance_score,
-    get_eventcandidate_default_distance,
-    _distance_at_healpix
+    get_distance_score
 )
 from .vet_basic import vet_basic
 from .vet_phot import (
@@ -49,6 +46,7 @@ PARAM_RANGES = dict(
     t_post = np.inf
 )
 
+
 def vet_bns(target_id:int, nonlocalized_event_name:Optional[str]=None,
             param_ranges:dict=PARAM_RANGES):
 
@@ -68,9 +66,10 @@ def vet_bns(target_id:int, nonlocalized_event_name:Optional[str]=None,
     if skymap_score < 1e-2:
         return 
 
-    ## compute the basic scores, return dataframe of potential hosts
-    host_df = vet_basic(event_candidate.target.id)
+    ## compute the basic scores, return dataframes of potential hosts / AGN
+    host_df, agn_df = vet_basic(event_candidate.target.id)
     
+    ## distance scoring
     if len(host_df) != 0:
         # then run the distance comparison for each of these hosts
         host_df = host_distance_match(
@@ -91,6 +90,14 @@ def vet_bns(target_id:int, nonlocalized_event_name:Optional[str]=None,
         # and we should also clear out any existing scores for it
         delete_score_factor(event_candidate, "host_distance_score")
         
+    ## AGN scoring
+    if len(agn_df) != 0:
+        agn_assoc_score = 0 # association with an AGN is bad
+    else:
+        agn_assoc_score = 1 
+    agn_score = agn_assoc_score # don't bother with 3D AGN scoring, for now
+    update_score_factor(event_candidate, "agn_score", agn_score)
+    
     ## photometry scoring
     allphot = _get_post_disc_phot(target_id=target_id, 
                                   nonlocalized_event=nonlocalized_event,
