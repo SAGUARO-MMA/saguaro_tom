@@ -12,6 +12,8 @@ But without any direct scoring!
 This should also be called before any photometry vetting in the NLE-related
 vetting modules. That way we can reduce the code duplication between them!
 """
+
+import logging
 import io
 from astropy.time import Time
 import pandas as pd
@@ -30,13 +32,15 @@ from .vet_phot import find_public_phot
 
 from trove_mpc import Transient
 
+logger = logging.getLogger(__name__)
+
 def vet_basic(
         target_id:int,
         days_ago_max:int=200,
         overwrite:bool=False,
         queue_priority:int=0
 ):
-    print("Running basic vetting")
+    logger.info("Running basic vetting")
     # get the Target object associated with this target_id
     target = Target.objects.get(id=target_id)
 
@@ -51,7 +55,7 @@ def vet_basic(
     te = TargetExtra.objects.filter(target_id=target.id)
     # run the point source checker
     if overwrite or not te.filter(key="ps_score").exists():
-        print("Running Point Source Matching...")
+        logger.info("Running Point Source Matching...")
         ps_score = point_source_association(target_id)
         save_score_to_targetextra(target, "ps_score", ps_score)
         
