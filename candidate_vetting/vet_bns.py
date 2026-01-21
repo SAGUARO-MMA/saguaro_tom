@@ -68,7 +68,7 @@ def vet_bns(target_id:int, nonlocalized_event_name:Optional[str]=None,
     if skymap_score < 1e-2:
         return 
 
-    # compute the basic scores
+    ## compute the basic scores, return dataframe of potential hosts
     host_df = vet_basic(event_candidate.target.id)
     
     if len(host_df) != 0:

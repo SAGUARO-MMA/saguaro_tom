@@ -41,6 +41,7 @@ def vet_basic(
         queue_priority:int=0
 ):
     logger.info("Running basic vetting")
+    
     # get the Target object associated with this target_id
     target = Target.objects.get(id=target_id)
 
@@ -52,14 +53,30 @@ def vet_basic(
         queue_priority=queue_priority
     )
 
+    # get the TargetExtra object associated with this target_id 
     te = TargetExtra.objects.filter(target_id=target.id)
-    # run the point source checker
+    
+    ## run the point source checker
     if overwrite or not te.filter(key="ps_score").exists():
         logger.info("Running Point Source Matching...")
         ps_score = point_source_association(target_id)
         save_score_to_targetextra(target, "ps_score", ps_score)
+
+    ## AGN score
+    # search for an AGN associated with the target
+    agn_df = associate_agn_2d(
+        target_id, 
+        radius=2 # 2 arcseconds
+    )
+    # then, assign score based on AGN association
+    if len(agn_df) != 0:
+        agn_assoc_score = 0 # association with an AGN is bad
+    else:
+        agn_assoc_score = 1 
+    agn_score = agn_assoc_score # don't bother with 3D AGN scoring, for now
+    update_score_factor(event_candidate, "agn_score", agn_score)
         
-    # run the minor planet checker
+    ## run the minor planet checker
     if overwrite or not te.filter(key="mpc_match_name").exists():
         phot = ReducedDatum.objects.filter(
             target_id=target_id,
@@ -91,7 +108,7 @@ def vet_basic(
                 target, "mpc_match_name", None
             )
             
-    # do the Pcc analysis and find a host
+    ## do the Pcc analysis and find a host
     host_df = host_association(
         target_id,
         radius = 5*60
