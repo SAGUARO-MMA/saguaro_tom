@@ -36,3 +36,10 @@ SLACK_TOKEN_EP = ''  # Slack API token for Einstein Probe alerts
 SLACK_TOKEN_TNS = ''  # Slack API token for TNS transient alerts
 TNS_API_KEY = ''        # API key for the Transient Name Server
 TREASUREMAP_API_KEY = '' # API key for the Gravitational Wave Treasure Map
+ZTF_INFO = { # Login info for sending requests to the ZTF forced photometry server
+    "email_server":"imap.gmail.com",
+    "email_password":"",
+    "email_address":"",
+    "user_address":"",
+    "user_password":""
+}

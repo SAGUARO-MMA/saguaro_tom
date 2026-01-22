@@ -18,6 +18,7 @@ from candidate_vetting.vet_kn_in_sn import vet_kn_in_sn
 from candidate_vetting.vet_super_kn import vet_super_kn
 from candidate_vetting.vet_basic import vet_basic
 from candidate_vetting.vet_phot import find_public_phot
+from candidate_vetting.public_catalogs.phot_catalogs import ZTF_Forced_Phot
 
 import requests
 
@@ -73,7 +74,7 @@ class TargetVettingView(LoginRequiredMixin, RedirectView):
 
         # get the nonlocalized event name from the referer
         nonlocalized_event_name = request.GET.get("nonlocalizedevent")
-        
+
         # then run the vetting
         vetting_func = FORM_CHOICE_FUNC_MAP[vetting_mode]
         if vetting_mode == "basic" or nonlocalized_event_name is None:
@@ -87,3 +88,41 @@ class TargetVettingView(LoginRequiredMixin, RedirectView):
                 kwargs=dict(pk=target_pk)
             )
         ) # this redirects back to the original target page
+        
+class TargetFPView(LoginRequiredMixin, RedirectView):
+    """
+    Class to run forced photometry for a target 
+    """
+
+    def get(self, request, *args, **kwargs):
+
+        messages.info(request, "Checking for new public forced photometry. This can take ~minutes for ATLAS and ~hours-days for ZTF. We suggest you check back later.")
+        
+        target = Target.objects.get(id=kwargs['pk'])
+
+        # check TNS and ATLAS
+        find_public_phot(
+            target=target,
+            days_ago_max=365,
+            queue_priority=0
+        )
+
+        # then also run ZTF forced photometry
+        # this will only actually be ingested after the ZTF forced photometry runs
+        ztf = ZTF_Forced_Phot()
+        ztf.query(
+            target=target,
+            days_ago=365
+        )
+        
+        return HttpResponseRedirect(self.get_redirect_url())
+
+    def get_redirect_url(self):
+        """
+        Returns redirect URL as specified in the HTTP_REFERER field of the request.
+
+        :returns: referer
+        :rtype: str
+        """
+        referer = self.request.META.get('HTTP_REFERER', '/')
+        return referer
