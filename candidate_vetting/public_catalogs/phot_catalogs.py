@@ -559,7 +559,7 @@ class ZTF_Forced_Phot(PhotCatalog):
             target:Target,
             radius:float=RADIUS_ARCSEC,
             days_ago: float = 200,
-            wait_for_results = True,
+            wait_for_results = False,
             max_wait_time = 24*60*60, # default to a day long max wait time (in seconds)
             dt_wait_time = 5*60, # wait 5 minutes between every email query
     ):

@@ -11,6 +11,7 @@ from django.http import HttpResponseRedirect
 from trove_targets.models import Target
 from candidate_vetting.vet_bns import vet_bns
 from candidate_vetting.vet_phot import find_public_phot
+from candidate_vetting.public_catalogs.phot_catalogs import ZTF_Forced_Phot
 
 import requests
 
@@ -42,6 +43,44 @@ class TargetVettingView(LoginRequiredMixin, RedirectView):
 
         # then run the vetting
         vet_bns(target.id, nonlocalized_event_name)
+        
+        return HttpResponseRedirect(self.get_redirect_url())
+
+    def get_redirect_url(self):
+        """
+        Returns redirect URL as specified in the HTTP_REFERER field of the request.
+
+        :returns: referer
+        :rtype: str
+        """
+        referer = self.request.META.get('HTTP_REFERER', '/')
+        return referer
+
+class TargetFPView(LoginRequiredMixin, RedirectView):
+    """
+    Class to run forced photometry for a target 
+    """
+
+    def get(self, request, *args, **kwargs):
+
+        messages.info(request, "Checking for new public forced photometry. This can take ~minutes for ATLAS and ~hours-days for ZTF. We suggest you check back later.")
+        
+        target = Target.objects.get(id=kwargs['pk'])
+
+        # check TNS and ATLAS
+        find_public_phot(
+            target=target,
+            days_ago_max=365,
+            queue_priority=0
+        )
+
+        # then also run ZTF forced photometry
+        # this will only actually be ingested after the ZTF forced photometry runs
+        ztf = ZTF_Forced_Phot()
+        ztf.query(
+            target=target,
+            days_ago=365
+        )
         
         return HttpResponseRedirect(self.get_redirect_url())
 
