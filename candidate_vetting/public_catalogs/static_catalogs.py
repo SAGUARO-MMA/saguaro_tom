@@ -65,10 +65,10 @@ class DesiDr1(StaticCatalog):
             "target_dec":"dec",
             "default_mag":"default_mag"
         }
-        
+    
         # then, of course, init the super class
         super().__init__()
-        
+
     def to_standardized_catalog(self, df):
         df = self._standardize_df(df)
         df["lumdist"] = cosmo.luminosity_distance(df.z).to(u.Mpc).value 
@@ -102,7 +102,7 @@ class NedLvs(StaticCatalog):
             return "photo-z"
         
         df["z_type"] = df.apply(_get_ztype, axis=1)
-        
+                
         df = self._standardize_df(df)
 
         # some rows don't have uncertainty on redshift
@@ -121,7 +121,7 @@ class NedLvs(StaticCatalog):
         df.lumdist_err = df.lumdist_err.fillna(lumdist_err)
         df["lumdist_neg_err"] = df.lumdist_err
         df["lumdist_pos_err"] = df.lumdist_err
-        
+
         return df
     
 class ZtfVarStar(StaticCatalog):
@@ -247,6 +247,11 @@ class Hecate(StaticCatalog):
             axis=1
         )
         
+        df["z_type"] = df.apply(
+            lambda row : "z ind." if row.dmethod == "N" else "spec-z",
+            axis=1
+        )
+        
         df = self._standardize_df(df)
         
         return df
@@ -272,7 +277,7 @@ class LsDr10(StaticCatalog):
             "z_phot_std":"z_err",
         }
 
-    	# then, of course, init the super class
+        # then, of course, init the super class
         super().__init__()
 
     def to_standardized_catalog(self, df):
@@ -343,10 +348,21 @@ class Milliquas(StaticCatalog):
             "z_err":"z_err",
             "rmag":"default_mag" # mag col to use for pcc
         }
-
+        
         # then, of course, init the super class
         super().__init__()
 
+    def to_standardized_catalog(self, df):
+        df = self._standardize_df(df)
+        df["z_neg_err"] = df.z_err
+        df["z_pos_err"] = df.z_err
+        df["lumdist"] = cosmo.luminosity_distance(df.z).to(u.Mpc).value
+        df["lumdist_err"] = cosmo.luminosity_distance(df.z_err).to(u.Mpc).value
+        df["lumdist_neg_err"] = df.lumdist_err
+        df["lumdist_pos_err"] = df.lumdist_err
+        df["z_type"] = "spec-z"
+        return df
+        
 class Ps1(StaticCatalog):
     catalog_model = Ps1Q3C
     colmap = {

@@ -60,6 +60,22 @@ from candidate_vetting.public_catalogs.static_catalogs import (
     DesiDr1
 )
 
+HOST_DF_COLMAP = {
+    "name":"ID",
+    "pcc":"PCC",
+    "offset":"Offset",
+    "ra":"RA",
+    "dec": "Dec",
+    "lumdist":"Dist",
+    "lumdist_err":"DistErr",
+    "z":"z",
+    "z_err":"zErr",
+    "z_type":"z_type",
+    "default_mag":"Mags",
+    "catalog":"Source"
+}
+HOST_DF_COLMAP_INVERSE = {v:k for k,v in HOST_DF_COLMAP.items()}
+
 # After we order the dataframe by the Pcc score, remove any host matches with a greater
 # Pcc score than this
 PCC_THRESHOLD = 0.15 # this is the value used in Rastinejad+2022
@@ -189,27 +205,35 @@ def delete_score_factor(event_candidate, key):
 
     if matches.count():
         matches.delete()
-    
+
+def save_score_to_targetextra(target, key, score):
+    """
+    Saves the scores that don't change to a TargetExtra object rather than a ScoreFactor
+    This is for:
+    1. point source score
+    2. MPC score
+    Since they are independent of the NLE that we are vetting the target against
+    """
+
+    # first delete the host galaxy key for this target if it already exists
+    te = TargetExtra.objects.filter(target_id=target.id, key=key)
+    if te.exists():
+        te.delete()
+
+    # then save the new score
+    TargetExtra.objects.update_or_create(
+        target=target,
+        key=key,
+        value=score
+    )
+
+        
 def _save_host_galaxy_df(df, target):
 
     # first delete the host galaxy key for this target if it already exists
     if TargetExtra.objects.filter(target_id=target.id, key="Host Galaxies").exists():
         TargetExtra.objects.filter(target_id=target.id, key="Host Galaxies").delete()
     
-    col_map = {
-        "name":"ID",
-        "pcc":"PCC",
-        "offset":"Offset",
-        "ra":"RA",
-        "dec": "Dec",
-        "lumdist":"Dist",
-        "lumdist_err":"DistErr",
-        "z":"z",
-        "z_err":"zErr",
-        "z_type":"z_type",
-        "default_mag":"Mags",
-        "catalog":"Source"
-    }
     newdf = df[
         [
             "name",
@@ -234,13 +258,62 @@ def _save_host_galaxy_df(df, target):
         else neg # errors are not assymetric
         for neg, pos in zip(df.lumdist_neg_err, df.lumdist_pos_err)
     ]
-    newdf = newdf.rename(columns=col_map)
+    newdf = newdf.rename(columns=HOST_DF_COLMAP)
     TargetExtra.objects.update_or_create(
         target=target,
         key="Host Galaxies",
         value=newdf.to_json(orient="records")
     )
+
+def _save_associated_agn_df(df, target):
+
+    # first delete the associated AGN key for this target if it already exists
+    if TargetExtra.objects.filter(target_id=target.id, key="Associated AGN").exists():
+        TargetExtra.objects.filter(target_id=target.id, key="Associated AGN").delete()
     
+    col_map = {
+        "name":"ID",
+        # "pcc":"PCC",
+        # "offset":"Offset",
+        "ra":"RA",
+        "dec": "Dec",
+        "lumdist":"Dist",
+        "lumdist_err":"DistErr",
+        "z":"z",
+        "z_err":"zErr",
+        # "default_mag":"Mags",
+        "catalog":"Source"
+    }
+    newdf = df[
+        [
+            "name",
+            # "pcc",
+            # "offset",
+            "ra",
+            "dec",
+            "lumdist",
+            "z",
+            # "default_mag",
+            "catalog"
+        ]
+    ]
+    newdf["z_err"] = [
+        [neg, pos] if neg != pos # errors are asymmetric
+        else neg # errors are not assymetric
+        for neg, pos in zip(df.z_neg_err, df.z_pos_err)
+    ]
+    newdf["lumdist_err"] = [
+        [neg, pos] if neg != pos # errors are asymmetric
+        else neg # errors are not assymetric
+        for neg, pos in zip(df.lumdist_neg_err, df.lumdist_pos_err)
+    ]
+    newdf = newdf.rename(columns=col_map)
+    TargetExtra.objects.update_or_create(
+        target=target,
+        key="Associated AGN",
+        value=newdf.to_json(orient="records")
+    )
+
 def skymap_association(
         nonlocalized_event_name:str,
         target_id:int,
@@ -307,7 +380,7 @@ def host_association(target_id:int, radius=50, pcc_threshold=PCC_THRESHOLD):
     """
     Find all of the potential hosts associated with this target
     """
-    
+
     target = Target.objects.filter(id=target_id)[0]
     ra, dec = target.ra, target.dec
     coord = SkyCoord(ra, dec, unit="deg")
@@ -363,19 +436,22 @@ def host_association(target_id:int, radius=50, pcc_threshold=PCC_THRESHOLD):
     print(f"Queries finished in {end-start}s")
 
     # save the host galaxy dataframe to the TargetExtra "Host Galaxies" keyword
+    if not len(ret_df):
+        # then we don't need to actually save any host information
+        return ret_df
     _save_host_galaxy_df(ret_df, target)
     return ret_df
 
 def _get_nle_distance_pdf(lumdist_array:np.ndarray, nonlocalized_event_name:str, target_id, max_time=Time.now()):
     # find the distance at the healpix
     dist, dist_err = _distance_at_healpix(nonlocalized_event_name, target_id, max_time=max_time)
-    
+
     # let user know about hard-coded bounds on luminosity distance array
     warnings.warn(f"Using hard-coded D_LIM_LOWER = {D_LIM_LOWER} and "+
                   f"D_LIM_UPPER = {D_LIM_UPPER} to construct log-spaced "+
                   "distance array for calculating distance probability "+
                   "distribution functions")
-        
+
     test_pdf = norm.pdf(lumdist_array, loc=dist, scale=dist_err)
     return test_pdf
 
@@ -385,14 +461,38 @@ def host_distance_match(
         nonlocalized_event_name:str,
         max_time:Time=Time.now()
 ):
-    
+    """
+    Compute integrated joint probability (Bhattacharyya coefficient) of 
+    putative host galaxies' distance distributions and nonlocalized event 
+    distance distribution.
+
+    Parameters
+    ----------
+    host_df : pd.DataFrame
+        Dataframe containing information on host galaxies
+    target_id : int
+        ID for target
+    nonlocalized_event_name : str
+        Name for nonlocalized event
+    max_time : Time, optional
+        Time at which to extract nonlocalized event localization; 
+        default is Time.now()
+
+    Returns
+    -------
+    host_df : pd.DataFrame
+        Dataframe containing information on host galaxy, with added integrated 
+        joint probability
+
+    """
+        
     if not len(host_df):        
         host_df["dist_norm_joint_prob"] = []
         return host_df # continue to return an empty dataframe here, but with the correct columns
     
     # now crossmatch this distance to the host galaxy dataframe
     _lumdist = np.linspace(D_LIM_LOWER, D_LIM_UPPER, int(10*D_LIM_UPPER))
-    
+
     test_pdf = _get_nle_distance_pdf(
         _lumdist,
         nonlocalized_event_name,
@@ -441,12 +541,12 @@ def get_distance_score(host_df, target_id, nonlocalized_event_name):
             np.sqrt(targ_pdf*nle_pdf),
             x=_lumdist
         )
-    
+
     # then use the redshift independent measurements of distances
     ind_distance_hosts = host_df[host_df.z_type == "z ind."]
     if len(ind_distance_hosts):
         return ind_distance_hosts.dist_norm_joint_prob.max()
-        
+
     # then use the specz hosts
     specz_hosts = host_df[host_df.z_type.str.contains("spec-z")]
     if len(specz_hosts):
@@ -463,7 +563,7 @@ def get_eventcandidate_default_distance(target_id:int, nonlocalized_event_name:s
         targ_dist = cosmo.luminosity_distance(targ.redshift).to(u.Mpc).value
         targ_dist_err = cosmo.luminosity_distance(1e-3).to(u.Mpc).value
         return targ_dist, targ_dist_err
-        
+
     # then try to get out the host galaxy json file from target extra
     hosts = TargetExtra.objects.filter(target_id = target_id, key='Host Galaxies')
     if not len(hosts):
@@ -540,6 +640,8 @@ def associate_agn_2d(target_id:int, radius:float=2):
     ] # there is currently only one, but this should help to "future proof" the code
 
     agn_matches = None
+    res = []
+    start = time.time()
     for catalog in agn_catalogs:
         cat = catalog()
         query_set = cat.query(ra, dec, radius)
@@ -551,5 +653,102 @@ def associate_agn_2d(target_id:int, radius:float=2):
             agn_matches = query_set
         else:
             agn_matches |= query_set # this will perform a SQL UNION on the query sets
+        
+        # convert to a dataframe and standardize the column names
+        df = pd.DataFrame(
+            list(
+                agn_matches.values()
+            )
+        ) 
+        df = cat.to_standardized_catalog(df)
 
-    return agn_matches
+        # some extra cleaning before continuing
+        df = df.dropna(
+            subset=["default_mag", "ra", "dec", "lumdist"]
+        ) # drop rows without the information we need
+                
+        # now save the cleaned dataset
+        df["catalog"] = cat.__class__.__name__
+        res.append(df)
+    
+    if len(res) > 0: # when no matches, nothing to concatenate
+        df = pd.concat(res).reset_index(drop=True)
+    else: # return an empty dataframe
+        return pd.DataFrame({})
+
+    # put any more cleaning up / filtering here; none for now
+    ret_df = df.copy()
+    
+    end = time.time()
+    print(ret_df)
+    print(f"Queries finished in {end-start}s")
+
+    # save the host galaxy dataframe to the TargetExtra "Associated AGN" keyword
+    _save_associated_agn_df(ret_df, target)
+    
+    return ret_df
+
+def agn_distance_match(
+        agn_df:pd.DataFrame,
+        target_id:int,
+        nonlocalized_event_name:str,
+        max_time:Time=Time.now()
+):
+    """
+    Compute integrated joint probability (Bhattacharyya coefficient) of 
+    AGN distance distributions and nonlocalized event distance distribution.
+
+    Parameters
+    ----------
+    agn_df : pd.DataFrame
+        Dataframe containing information on potential associated AGN(s)
+    target_id : int
+        ID for target
+    nonlocalized_event_name : str
+        Name for nonlocalized event
+    max_time : Time, optional
+        Time at which to extract nonlocalized event localization; 
+        default is Time.now()
+
+    Returns
+    -------
+    agn_df : pd.DataFrame
+        Dataframe containing information on AGN(s), with added integrated 
+        joint probability
+
+    """
+    if not len(agn_df):        
+        agn_df["dist_norm_joint_prob"] = []
+        return agn_df # continue to return an empty dataframe here, but with the correct columns
+        
+    # now crossmatch this distance to the to the AGNs dataframe
+    _lumdist = np.linspace(D_LIM_LOWER, D_LIM_UPPER, int(10*D_LIM_UPPER))
+
+    test_pdf = _get_nle_distance_pdf(
+        _lumdist,
+        nonlocalized_event_name,
+        target_id,
+        max_time=max_time
+    )
+    agn_pdfs = np.array([ 
+        AsymmetricGaussian().pdf(
+            _lumdist,
+            mean=row.lumdist,
+            unc_minus = row.lumdist_neg_err,
+            unc_plus = row.lumdist_pos_err,
+            integ_a=1e-9,
+            integ_b=_lumdist[-1]
+        ) for _,row in agn_df.iterrows() 
+    ])
+    joint_prob = agn_pdfs*test_pdf
+    
+    # finally, compute the Bhattacharyya coefficient for the overlap of these
+    # two distributions. https://en.wikipedia.org/wiki/Bhattacharyya_distance
+    # This coefficient is non-parametric which is good for our Asymmetric Gaussian
+    # Original paper: http://www.jstor.org/stable/25047806
+    agn_df["dist_norm_joint_prob"] = trapezoid(
+        np.sqrt(joint_prob), 
+        x=_lumdist,
+        axis=1
+    )
+    return agn_df
