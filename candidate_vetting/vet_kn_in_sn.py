@@ -42,7 +42,7 @@ PARAM_RANGES = dict(
     peak_time = [0, 35],
     decay_rate = [-0.1, 2.0],
     max_predets = 3,
-    t_pre = -0.1,
+    t_pre = -1.0,
     t_post = np.inf
 )
 
