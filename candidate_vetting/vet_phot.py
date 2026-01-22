@@ -501,7 +501,8 @@ def _score_phot(allphot, target, nonlocalized_event,
             _model,_best_fit_params,max_time,decay_rate = estimate_max_find_decay_rate(
                 phot.dt,
                 phot.mag,
-                phot.magerr
+                phot.magerr,
+                max_decay_fit_time=param_ranges["max_decay_fit_time"]
             )
         except RuntimeError:
             logger.warning("Could not fit a power law or broken power law --> not setting peak_time or decay_rate")

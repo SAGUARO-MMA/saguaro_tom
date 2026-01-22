@@ -43,7 +43,8 @@ PARAM_RANGES = dict(
     decay_rate = [-np.inf, np.inf],
     max_predets = 3,
     t_pre = -1.0,
-    t_post = np.inf
+    t_post = np.inf,
+    max_decay_fit_time=100.0
 )
 
 
