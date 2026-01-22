@@ -502,7 +502,8 @@ def _score_phot(allphot, target, nonlocalized_event,
 
     # then we can only do the next stuff if there is more than one photometry point
     # at this filter
-    if len(phot) > 1: # has to be at least 2 points to fit the powerlaw        
+    # has to be at least 2 points before max_decay_fit_time, to fit the powerlaw
+    if len(phot[phot.dt < param_ranges["max_decay_fit_time"]]) > 1:         
         # find the maximum and decay rate
         try:
             _model,_best_fit_params,max_time,decay_rate = estimate_max_find_decay_rate(
