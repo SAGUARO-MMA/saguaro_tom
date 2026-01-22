@@ -201,10 +201,15 @@ def estimate_max_find_decay_rate(
     pl_nparams = 2 # the degrees of freedom in a powerlaw model (m, y0, x0)
     bpl_nparams = 4 # the degrees of freedom in a broken powerlaw model (y0, x0, s, m1, m2)
     
+    # only fit data before `max_decay_fit_time`
+    dt_days_tofit = dt_days[dt_days <= max_decay_fit_time]
+    mag_tofit = mag[dt_days <= max_decay_fit_time]
+    magerr_tofit = magerr[dt_days <= max_decay_fit_time]
+    
     curve_fit_kwargs = dict(
-        xdata = dt_days[dt_days <= max_decay_fit_time],
-        ydata = mag[dt_days <= max_decay_fit_time],
-        #sigma = magerr[dt_days <= max_decay_fit_time],
+        xdata = dt_days_tofit,
+        ydata = mag_tofit,
+        #sigma = magerr_tofit,
         absolute_sigma = True,
         maxfev = 5_000,
         ftol = 1e-8
@@ -226,12 +231,12 @@ def estimate_max_find_decay_rate(
     #             n_samples - n_params - 1.0
     #         )
     # so if len(mag) = n_samples+1 the denominator is 0 and the AIC blows up
-    if len(mag) > bpl_nparams+2: 
+    if len(mag_tofit) > bpl_nparams+2: 
         bpl_bounds = [
             (-np.inf, 0), # a1 bound, can be anything
             (0, np.inf), # a2 bound, can be anything
-            (0, 2*mag.max()), # y0 bound, really shouldn't be outside this range
-            (0, dt_days.max()) # x0 bound, really shouldn't be greater than max(dt)
+            (0, 2*mag_tofit.max()), # y0 bound, really shouldn't be outside this range
+            (0, dt_days_tofit.max()) # x0 bound, really shouldn't be greater than max(dt)
         ]
         try:
             bpl_popt, bpl_pcov = curve_fit(
@@ -255,20 +260,20 @@ def estimate_max_find_decay_rate(
     # then calculate the reduced chi2 for each of these outputs
     # but we only need to do this if both models succeeded in fitting the data
     if not pl_failed and not bpl_failed:
-        pl_model_y = _powerlaw(dt_days, *pl_popt)
-        pl_ssr = _ssr(pl_model_y, mag)
-        pl_info_crit = info_crit(pl_ssr, pl_nparams, len(mag))
+        pl_model_y = _powerlaw(dt_days_tofit, *pl_popt)
+        pl_ssr = _ssr(pl_model_y, mag_tofit)
+        pl_info_crit = info_crit(pl_ssr, pl_nparams, len(mag_tofit))
 
         bpl_model_y = _broken_powerlaw(dt_days, *bpl_popt)
-        bpl_ssr = _ssr(bpl_model_y, mag)
-        bpl_info_crit = info_crit(bpl_ssr, bpl_nparams, len(mag))
+        bpl_ssr = _ssr(bpl_model_y, mag_tofit)
+        bpl_info_crit = info_crit(bpl_ssr, bpl_nparams, len(mag_tofit))
     else:
         pl_info_crit = np.inf
         bpl_info_crit = np.inf
         
     # now we can prefer the model with the lower AIC score
     if (not pl_failed and bpl_failed) or (pl_info_crit < bpl_info_crit and not pl_failed):
-        logger.info(f"Powerlaw fits better")
+        logger.info("Powerlaw fits better")
         model = _powerlaw
         best_fit_params = pl_popt
         decay_rate = pl_popt[0] # this is the slope
@@ -283,8 +288,8 @@ def estimate_max_find_decay_rate(
     # finally, compute the maximum time using a finely spaced array
     # from min -> max of the dt_days array
     xtest = np.linspace(
-        np.min(dt_days),
-        np.max(dt_days),
+        np.min(dt_days_tofit),
+        np.max(dt_days_tofit),
         100*max_decay_fit_time
     )
     ytest = model(xtest, *best_fit_params)
