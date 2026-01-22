@@ -264,7 +264,7 @@ def estimate_max_find_decay_rate(
         pl_ssr = _ssr(pl_model_y, mag_tofit)
         pl_info_crit = info_crit(pl_ssr, pl_nparams, len(mag_tofit))
 
-        bpl_model_y = _broken_powerlaw(dt_days, *bpl_popt)
+        bpl_model_y = _broken_powerlaw(dt_days_tofit, *bpl_popt)
         bpl_ssr = _ssr(bpl_model_y, mag_tofit)
         bpl_info_crit = info_crit(bpl_ssr, bpl_nparams, len(mag_tofit))
     else:
@@ -272,7 +272,7 @@ def estimate_max_find_decay_rate(
         bpl_info_crit = np.inf
         
     # now we can prefer the model with the lower AIC score
-    if (not pl_failed and bpl_failed) or (pl_info_crit < bpl_info_crit and not pl_failed):
+    if (not pl_failed and bpl_failed) or (not pl_failed and pl_info_crit < bpl_info_crit):
         logger.info("Powerlaw fits better")
         model = _powerlaw
         best_fit_params = pl_popt
