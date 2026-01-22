@@ -3,6 +3,7 @@ Code to query dynamically updating photometry catalogs
 """
 # packages built into python
 import os
+import glob
 import requests
 import time
 import json
@@ -15,6 +16,7 @@ import string
 import imaplib
 import subprocess
 import time
+import email
 from datetime import datetime
 from operator import itemgetter
 from collections import OrderedDict
@@ -27,6 +29,8 @@ from astropy import units
 from astropy.coordinates import SkyCoord
 from fundamentals.stats import rolling_window_sigma_clip
 from django.conf import settings
+from django.db.models import F, FloatField, ExpressionWrapper
+from django.db.models.functions import Sqrt
 
 from .catalog import PhotCatalog
 from .util import _QUERY_METHOD_DOCSTRING, RADIUS_ARCSEC, create_phot
@@ -587,7 +591,114 @@ class ZTF_Forced_Phot(PhotCatalog):
 
             if total_time_waited > max_wait_time:
                 break
+
+    def check_for_new_data(self):
+        """Check the TROVE gmail for new ZTF forced photometry, parse it, and upload it"""
+
+        # get a list of all input log files
+        logfiles = glob.glob(os.path.join(settings.ZTFTMPDIR,"*.txt"))
+
+        # search for emails matching those logfiles, download the data, and save it
+        targets_finished = []
+        for logfile in logfiles:
+            result = self._query_ztf_email(logfile)
+            if result is None:
+                continue
+
+            # unpack the files
+            fplc, fplog = result
+
+            ra, dec = self._read_fp_log(fplog)
+            logger.info(f"Finding TROVE Target at ra={ra} dec={dec} to add this photometry to")
+
+            # this coordinate should be within 0.1" of the actual target coordinates
+            # because we've rounded the ra/dec in degrees to 6 decimal places
+            # since that's what ZTF accepts
+            targ = Target.objects.annotate(
+                onskydist = ExpressionWrapper(
+                    Sqrt(
+                        (F('ra') - ra)**2 + (F('dec') - dec)**2
+                    ),
+                    output_field = FloatField()
+                )
+            ).filter(
+                onskydist__lt = 0.1/3600 
+            ).order_by("onskydist").first()
+            logger.info(f"Found {targ.name} at ra={ra} dec={dec}")
             
+            # now we can also parse the photometry
+            phot = pd.read_csv(fplc, sep="\s+", comment="#")
+            phot.columns = phot.columns.str.replace(",","") # bc the column names have commas but not the data
+            
+            # save this photometry to the database
+            phot = self._filter_bad_phot(phot)
+            self._save_phot(targ, phot)
+            
+            # cleanup
+            os.remove(fplc) # rm the light curve file
+            os.remove(fplog) # rm the light curve log
+            os.remove(logfile) # rm the log file associated with the original request so we don't keep checking for it
+
+            logger.info(f"Finished ingesting ZTF forced photometry for {targ.name}")
+            targets_finished.append(targ.name)
+            
+        return targets_finished
+
+    def _filter_bad_phot(self, phot):
+        """This is based on the recommendations in sec.6 of the ZTF FP docs"""
+        
+        # 1. Remove epochs with infobitssci >= 33554432
+        # 2. Remove epochs with scisigpix > 25 
+        # 3. Remove epochs with sciinpseeing > 4"
+        phot = phot[
+            (phot.infobitssci < 33554432) *
+            (phot.scisigpix <= 25) *
+            (phot.sciinpseeing <= 4)
+        ]
+
+        # then we also need to check the flux uncertainty estimates
+        # according to sec. 6.3 in the docs
+        # essentially, chisq should be roughly 1, and if it isn't then we should
+        # correct the flux uncertainty
+        mask = (phot.forcediffimchisq > 0.9) * (phot.forcediffimchisq < 1.1)
+        phot.loc[mask, "forcediffimfluxunc"] = phot.loc[mask, "forcediffimfluxunc"] * np.sqrt(phot.loc[mask, "forcediffimchisq"])
+
+        return phot
+        
+    def _save_phot(self, targ, phot, snr_thresh=3, snr_limit=5):
+        """save the photometry to targ
+
+        snr_thresh and snr_limit are directly from sec 6.3 of the ZTF FP docs
+        """
+
+        for _,row in phot.iterrows():
+            time = Time(row.jd, format="jd", scale="utc")
+
+            value = {
+                'filter':row["filter"].replace("ZTF_",""),
+                'telescope':"ZTF"
+            }
+
+            flux = float(row.forcediffimflux)
+            flux_err = float(row.forcediffimfluxunc)
+            flux_zp = float(row.zpdiff)
+            snr = flux / flux_err
+            
+            if snr > snr_thresh:
+                # this should be considered a detection
+                value["magnitude"] = flux_zp - 2.5*np.log10(flux)
+                value["error"] = 2.5/np.log(10)/snr
+            else:
+                # this should be considered a limit
+                value["limit"] = flux_zp - 2.5*np.log10(snr_limit*flux_err)
+
+            created = create_phot(
+                target = targ,
+                time = time.to_datetime(timezone=TimezoneInfo()),
+                fluxdict = value,
+                source = "ZTF FP"
+            )
+        
     def _query_ztf_email(self, log_file_name, source_name=None):
         """This checks the trove email address for new emails from ZTF withd dataproducts"""
 
@@ -671,9 +782,9 @@ class ZTF_Forced_Phot(PhotCatalog):
             imap.close()
             imap.logout()
 
-
         # Connection could be broken
         except Exception as e:
+            logger.exception(e)
             pass
 
         if downloaded_file_names is not None:
@@ -724,7 +835,6 @@ class ZTF_Forced_Phot(PhotCatalog):
         os.chmod(log_file_name,0o0777)
         return log_file_name
 
-
     def _random_log_file_name(self, log_file_dir='/tmp'):
 
         log_file_name = None
@@ -766,7 +876,7 @@ class ZTF_Forced_Phot(PhotCatalog):
             if re.search("reqid", line):
 
                 inputs = line.split('(')[-1]
-
+                
                 # Two ways
                 # Processing has completed for reqid=XXXX ()
                 test_ra = inputs.split('ra=')[-1].split(',')[0]
@@ -788,8 +898,6 @@ class ZTF_Forced_Phot(PhotCatalog):
 
         return match
 
-
-
     def _read_job_log(self, file_name):
 
         job_info = pd.read_html(file_name)[0]
@@ -803,3 +911,13 @@ class ZTF_Forced_Phot(PhotCatalog):
         job_info['cdatetime'] = datetime.fromtimestamp(os.path.getctime(file_name))
 
         return job_info
+
+    def _read_fp_log(self, filename):
+
+        with open(filename, "r") as f:
+            loglines = f.readlines()
+
+        ra = float(loglines[6].replace("fph_ra = ", "").replace("degrees", "").strip())
+        dec = float(loglines[7].replace("fph_dec = ", "").replace("degrees", "").strip())
+
+        return ra, dec
