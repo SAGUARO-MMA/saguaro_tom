@@ -202,9 +202,9 @@ def estimate_max_find_decay_rate(
     bpl_nparams = 4 # the degrees of freedom in a broken powerlaw model (y0, x0, s, m1, m2)
     
     curve_fit_kwargs = dict(
-        xdata = dt_days,
-        ydata = mag,
-        #sigma = magerr,
+        xdata = dt_days[dt_days <= max_decay_fit_time],
+        ydata = mag[dt_days <= max_decay_fit_time],
+        #sigma = magerr[dt_days <= max_decay_fit_time],
         absolute_sigma = True,
         maxfev = 5_000,
         ftol = 1e-8
@@ -455,6 +455,8 @@ def find_public_phot(
 def _score_phot(allphot, target, nonlocalized_event, 
                 param_ranges,
                 filt=None):
+    # allphot will have already been filtered not to extend beyond 
+    # param_ranges['t_post']
     if allphot is None: # this is if there is no photometry
         return 1, None, None, None, None, None
     
