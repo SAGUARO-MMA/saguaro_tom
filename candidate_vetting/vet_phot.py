@@ -201,10 +201,15 @@ def estimate_max_find_decay_rate(
     pl_nparams = 2 # the degrees of freedom in a powerlaw model (m, y0, x0)
     bpl_nparams = 4 # the degrees of freedom in a broken powerlaw model (y0, x0, s, m1, m2)
     
+    # only fit data before `max_decay_fit_time`
+    dt_days_tofit = dt_days[dt_days <= max_decay_fit_time]
+    mag_tofit = mag[dt_days <= max_decay_fit_time]
+    magerr_tofit = magerr[dt_days <= max_decay_fit_time]
+    
     curve_fit_kwargs = dict(
-        xdata = dt_days,
-        ydata = mag,
-        #sigma = magerr,
+        xdata = dt_days_tofit,
+        ydata = mag_tofit,
+        #sigma = magerr_tofit,
         absolute_sigma = True,
         maxfev = 5_000,
         ftol = 1e-8
@@ -226,12 +231,12 @@ def estimate_max_find_decay_rate(
     #             n_samples - n_params - 1.0
     #         )
     # so if len(mag) = n_samples+1 the denominator is 0 and the AIC blows up
-    if len(mag) > bpl_nparams+2: 
+    if len(mag_tofit) > bpl_nparams+2: 
         bpl_bounds = [
             (-np.inf, 0), # a1 bound, can be anything
             (0, np.inf), # a2 bound, can be anything
-            (0, 2*mag.max()), # y0 bound, really shouldn't be outside this range
-            (0, dt_days.max()) # x0 bound, really shouldn't be greater than max(dt)
+            (0, 2*mag_tofit.max()), # y0 bound, really shouldn't be outside this range
+            (0, dt_days_tofit.max()) # x0 bound, really shouldn't be greater than max(dt)
         ]
         try:
             bpl_popt, bpl_pcov = curve_fit(
@@ -255,20 +260,20 @@ def estimate_max_find_decay_rate(
     # then calculate the reduced chi2 for each of these outputs
     # but we only need to do this if both models succeeded in fitting the data
     if not pl_failed and not bpl_failed:
-        pl_model_y = _powerlaw(dt_days, *pl_popt)
-        pl_ssr = _ssr(pl_model_y, mag)
-        pl_info_crit = info_crit(pl_ssr, pl_nparams, len(mag))
+        pl_model_y = _powerlaw(dt_days_tofit, *pl_popt)
+        pl_ssr = _ssr(pl_model_y, mag_tofit)
+        pl_info_crit = info_crit(pl_ssr, pl_nparams, len(mag_tofit))
 
-        bpl_model_y = _broken_powerlaw(dt_days, *bpl_popt)
-        bpl_ssr = _ssr(bpl_model_y, mag)
-        bpl_info_crit = info_crit(bpl_ssr, bpl_nparams, len(mag))
+        bpl_model_y = _broken_powerlaw(dt_days_tofit, *bpl_popt)
+        bpl_ssr = _ssr(bpl_model_y, mag_tofit)
+        bpl_info_crit = info_crit(bpl_ssr, bpl_nparams, len(mag_tofit))
     else:
         pl_info_crit = np.inf
         bpl_info_crit = np.inf
         
     # now we can prefer the model with the lower AIC score
-    if (not pl_failed and bpl_failed) or (pl_info_crit < bpl_info_crit and not pl_failed):
-        logger.info(f"Powerlaw fits better")
+    if (not pl_failed and bpl_failed) or (not pl_failed and pl_info_crit < bpl_info_crit):
+        logger.info("Powerlaw fits better")
         model = _powerlaw
         best_fit_params = pl_popt
         decay_rate = pl_popt[0] # this is the slope
@@ -283,8 +288,8 @@ def estimate_max_find_decay_rate(
     # finally, compute the maximum time using a finely spaced array
     # from min -> max of the dt_days array
     xtest = np.linspace(
-        np.min(dt_days),
-        np.max(dt_days),
+        np.min(dt_days_tofit),
+        np.max(dt_days_tofit),
         100*max_decay_fit_time
     )
     ytest = model(xtest, *best_fit_params)
@@ -455,6 +460,8 @@ def find_public_phot(
 def _score_phot(allphot, target, nonlocalized_event, 
                 param_ranges,
                 filt=None):
+    # allphot will have already been filtered not to extend beyond 
+    # param_ranges['t_post']
     if allphot is None: # this is if there is no photometry
         return 1, None, None, None, None, None
     
@@ -495,13 +502,15 @@ def _score_phot(allphot, target, nonlocalized_event,
 
     # then we can only do the next stuff if there is more than one photometry point
     # at this filter
-    if len(phot) > 1: # has to be at least 2 points to fit the powerlaw        
+    # has to be at least 2 points before max_decay_fit_time, to fit the powerlaw
+    if len(phot[phot.dt < param_ranges["max_decay_fit_time"]]) > 1:         
         # find the maximum and decay rate
         try:
             _model,_best_fit_params,max_time,decay_rate = estimate_max_find_decay_rate(
                 phot.dt,
                 phot.mag,
-                phot.magerr
+                phot.magerr,
+                max_decay_fit_time=param_ranges["max_decay_fit_time"]
             )
         except RuntimeError:
             logger.warning("Could not fit a power law or broken power law --> not setting peak_time or decay_rate")
