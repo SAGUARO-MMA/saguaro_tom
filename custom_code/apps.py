@@ -6,9 +6,8 @@ class CustomCodeConfig(AppConfig):
     name = 'custom_code'
 
     def target_detail_buttons(self):
-        return {
-            'namespace': 'custom_code:vet',
-            'title': 'Run kilonova candidate vetting',
-            'class': "btn btn-pink",
-            'text': 'Vet'
-        }
+        return [
+            {'partial': 'custom_code/partials/tns_button.html'},
+            {'partial': 'custom_code/partials/mpc_button.html'},
+            {'partial': 'custom_code/partials/vet_button.html'},
+        ]
