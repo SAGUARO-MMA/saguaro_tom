@@ -7,7 +7,7 @@ from custom_code.alertstream_handlers import pick_slack_channel, send_slack, vet
 from custom_code.templatetags.skymap_extras import get_preferred_localization
 from datetime import datetime, timedelta, timezone
 from custom_code.templatetags.target_extras import split_name
-from slack_sdk import WebClient
+#from slack_sdk import WebClient
 import numpy as np
 import json
 import logging
@@ -20,9 +20,9 @@ new_format = logging.Formatter('[%(asctime)s] %(levelname)s : s%(message)s')
 for handler in logger.handlers:
     handler.setFormatter(new_format)
 
-slack_tns = WebClient(settings.SLACK_TOKEN_TNS)
-slack_tns50 = WebClient(settings.SLACK_TOKEN_TNS50)
-slack_ep = WebClient(settings.SLACK_TOKEN_EP)
+#slack_tns = WebClient(settings.SLACK_TOKEN_TNS)
+#slack_tns50 = WebClient(settings.SLACK_TOKEN_TNS50)
+#slack_ep = WebClient(settings.SLACK_TOKEN_EP)
         
 class Command(BaseCommand):
 
@@ -245,8 +245,8 @@ class Command(BaseCommand):
             # then vet this target
             vet_or_post_error(
                 trove_target,
-                slack_tns,
-                channel='alerts-tns',
+                #slack_tns,
+                #channel='alerts-tns',
                 lookback_days_nle=lookback_days_nle,
                 lookback_days_obs=lookback_days_obs
             )
