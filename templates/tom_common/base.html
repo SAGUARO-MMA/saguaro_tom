@@ -9,14 +9,22 @@
     <!-- Bootstrap CSS -->
     {% bootstrap_css %}
     <link rel="stylesheet" href="{% static 'font-awesome-4.7.0/css/font-awesome.min.css' %}">
-    <link rel="stylesheet" href="{% static 'tom_common/css/custom.css' %}">
     <link rel="stylesheet" href="{% static 'tom_common/css/main.css' %}">
+    {% get_theme as theme %}
+    {% if theme %}
+      <link rel="stylesheet" href="{% static theme %}">
+    {% endif %}
+    <link rel="stylesheet" href="{% static 'tom_common/css/custom.css' %}">
     {% block additional_css %}
     {% endblock %}
     <link rel="icon" type="image/x-icon" href="{% static 'img/favicon.gif' %}" sizes="32x32" />
     <link rel="icon" type="image/x-icon" href="{% static 'img/favicon.gif' %}" sizes="16x16" />
 
     {% bootstrap_javascript jquery='True' %}
+    <!-- htmx.min.js was downloaded manually and added to the project. see https://htmx.org/docs/#download-a-copy -->
+    <script src="{% static 'tom_common/js/htmx.min.js' %}" defer></script>
+    <!-- Loading AlpineJS from a CDN For now, todo solution for 3rd party static assets. -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
     <title>{% tom_name %} | {% block title %}{% endblock %}</title>
   </head>
@@ -50,7 +58,7 @@
           <input type="search" name="name" placeholder="Search by name">
         </form>
         <ul class="navbar-nav ml-auto" id="login-buttons">
-        {% navbar_login %}
+        {% include 'tom_common/partials/navbar_login.html' %}
         </ul>
       </div>
     </nav>
