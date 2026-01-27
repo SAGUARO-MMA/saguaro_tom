@@ -16,6 +16,7 @@ matplotlib
 numpy
 tomtoolkit==2.30.1
 tom-alertstreams
+tom-antares
 tom-mmt @ git+https://github.com/griffin-h/tom_mmt
 tom-nonlocalizedevents @ git+https://github.com/TOMToolkit/tom_nonlocalizedevents.git
 tom-registration

@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     'django_gravatar',
     'tom_targets',
     'tom_alerts',
+    'tom_antares',
     'tom_catalogs',
     'tom_observations',
     'tom_dataproducts',
@@ -288,7 +289,7 @@ TOM_FACILITY_CLASSES = [
 
 TOM_ALERT_CLASSES = [
     'tom_alerts.brokers.alerce.ALeRCEBroker',
-    'tom_alerts.brokers.antares.ANTARESBroker',
+    'tom_antares.antares.ANTARESBroker',
     'tom_alerts.brokers.gaia.GaiaBroker',
     'tom_alerts.brokers.hermes.HermesBroker',
     'tom_alerts.brokers.lasair.LasairBroker',
