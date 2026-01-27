@@ -566,10 +566,14 @@ def get_eventcandidate_default_distance(target_id:int, nonlocalized_event_name:s
 
     # then try to get out the host galaxy json file from target extra
     hosts = TargetExtra.objects.filter(target_id = target_id, key='Host Galaxies')
-    if not len(hosts):
+    if not hosts.count():
         return _distance_at_healpix(nonlocalized_event_name, target_id)
 
-    host_df = pd.read_json(hosts[0].value) # since we store the host info as a json str in the db
+    host_df = pd.read_json(
+        io.StringIO(
+            hosts[0].value
+        )
+    ) # since we store the host info as a json str in the db
     if not len(host_df):
         return _distance_at_healpix(nonlocalized_event_name, target_id)
 
