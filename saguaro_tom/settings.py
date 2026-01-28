@@ -211,6 +211,7 @@ CACHES = {
 
 # TOM Specific configuration
 TARGET_TYPE = 'SIDEREAL'
+TARGET_DEFAULT_PERMISSION = 'PUBLIC'
 
 FACILITIES = {
     'LCO': {
