@@ -26,7 +26,7 @@ class SurveyObservationRecordFilter(django_filters.FilterSet):
                                             help_text='RA, Dec, Search Radius (degrees)')
     survey_field = django_filters.ModelChoiceFilter(queryset=SurveyField.objects, label='Field')
     user = django_filters.ModelChoiceFilter(queryset=User.objects, label='Requested by')
-    facility = django_filters.ChoiceFilter(choices=[('CSS', 'CSS')])
+    facility = django_filters.ChoiceFilter(choices=[('CSS', 'CSS'),('DECam','DECam')])
     observation_id = django_filters.CharFilter('observation_id', label='Filename')
     status = django_filters.ChoiceFilter(choices=[('PENDING', 'PENDING'), ('COMPLETED', 'COMPLETED')])
     scheduled_start_range = django_filters.DateTimeFromToRangeFilter('scheduled_start', label='Time')
