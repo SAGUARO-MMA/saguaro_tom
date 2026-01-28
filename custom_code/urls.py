@@ -8,7 +8,7 @@ from .views import CSSFieldExportView, CSSFieldSubmitView, EventCandidateCreateV
 from tom_nonlocalizedevents.views import SupereventIdView
 
 # NEW: Import DECam thumbnail view
-from .decam_views import DecamThumbnailView
+from .decam_views import DecamCandidateView
 
 from tom_common.api_router import SharedAPIRootRouter
 
@@ -41,5 +41,5 @@ urlpatterns = [
     
     # NEW: DECam thumbnail routes
     path('decam/thumbnail/<int:candidate_id>/<str:thumb_type>/', 
-         DecamThumbnailView.as_view(), name='decam_thumbnail'),
+         DecamCandidateView.as_view(), name='decam_thumbnail'),
 ]

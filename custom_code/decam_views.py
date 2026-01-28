@@ -9,10 +9,10 @@ and need to be served via these views.
 from django.http import HttpResponse, Http404
 from django.views import View
 
-from .models import Candidate, DecamThumbnail
+from .models import Candidate, DecamCandidate
 
 
-class DecamThumbnailView(View):
+class DecamCandidateView(View):
     """
     Serve DECam thumbnail images from the database.
     
@@ -62,7 +62,7 @@ class DecamThumbnailView(View):
         
         if mjd:
             try:
-                thumbnail = DecamThumbnail.objects.filter(
+                thumbnail = DecamCandidate.objects.filter(
                     candidate=candidate,
                     mjd_obs=float(mjd)
                 ).first()
@@ -70,7 +70,7 @@ class DecamThumbnailView(View):
                 raise Http404("Invalid MJD value")
         else:
             # Get the most recent thumbnail
-            thumbnail = DecamThumbnail.objects.filter(
+            thumbnail = DecamCandidate.objects.filter(
                 candidate=candidate
             ).order_by('-mjd_obs').first()
         

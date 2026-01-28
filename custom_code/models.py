@@ -127,33 +127,68 @@ class Candidate(models.Model):
     mlscore_real = models.FloatField(null=True)
     mlscore_bogus = models.FloatField(null=True)
     observation_record = models.ForeignKey(SurveyObservationRecord, null=True, on_delete=models.DO_NOTHING)
-    # NEW: Field to distinguish CSS vs DECam candidates
-    facility = models.CharField(max_length=16, default='CSS')
 
     class Meta:
         db_table = 'candidates'
 
-
-class DecamThumbnail(models.Model):
+class DecamCandidate(models.Model):
     """
-    Store DECam thumbnail images in the database.
-    CSS thumbnails are served from URLs, but DECam thumbnails are stored
-    as binary PNG data since they're generated on webtrove.
+    DECam candidates with all metadata and thumbnail images.
+    This is a standalone table separate from the CSS candidates table,
+    containing all information needed to vet and display DECam transients.
     """
-    candidate = models.ForeignKey(Candidate, on_delete=models.CASCADE, related_name='thumbnails')
-    observation_record = models.ForeignKey(SurveyObservationRecord, null=True, on_delete=models.SET_NULL)
+    # Foreign Keys - matching the pattern from Candidate model
+    target = models.ForeignKey(
+        Target, 
+        null=True, 
+        on_delete=models.SET_NULL, 
+        related_name='decam_candidates',
+    )
+    observation_record = models.ForeignKey(
+        SurveyObservationRecord, 
+        null=True, 
+        on_delete=models.SET_NULL,
+        related_name='decam_candidates'
+    )
     
-    # Observation metadata
+    # Candidate identification and position (from Candidate model)
+    candidatenumber = models.IntegerField(null=True)
+    ra = models.FloatField(null=True)
+    dec = models.FloatField(null=True)
+    
+    # Source morphology (from Candidate model)
+    elongation = models.FloatField(null=True)
+    fwhm = models.FloatField(null=True)
+    
+    # Basic photometry from detection (from Candidate model)
+    snr = models.FloatField(null=True)
+    mag = models.FloatField(null=True)
+    magerr = models.FloatField(null=True)
+    
+    # Cartesian coordinates for cone searches (from Candidate model)
+    cx = models.FloatField(null=True)
+    cy = models.FloatField(null=True)
+    cz = models.FloatField(null=True)
+    
+    # Classification (from Candidate model)
+    classification = models.IntegerField(null=True)
+    
+    # Machine learning scores (from Candidate model)
+    mlscore = models.FloatField(null=True)
+    mlscore_real = models.FloatField(null=True)
+    mlscore_bogus = models.FloatField(null=True)
+    
+    # Observation metadata (from DecamThumbnail)
     mjd_obs = models.FloatField(null=True)
     filter_name = models.CharField(max_length=8, null=True)
     science_name = models.CharField(max_length=128, null=True)
     
-    # Thumbnail images as binary PNG
+    # Thumbnail images as binary PNG (from DecamThumbnail)
     thumb_template = models.BinaryField(null=True)
     thumb_science = models.BinaryField(null=True)
     thumb_difference = models.BinaryField(null=True)
     
-    # Photometry metadata
+    # DECam forced photometry (from DecamThumbnail)
     cnnscore = models.FloatField(null=True)
     snr_fphot = models.FloatField(null=True)
     mag_fphot = models.FloatField(null=True)
@@ -161,16 +196,30 @@ class DecamThumbnail(models.Model):
     lim_mag5 = models.FloatField(null=True)
     status_fphot = models.CharField(max_length=1, null=True)
     
-    # Classification flags
+    # Classification flags (from DecamThumbnail)
     in_gaia = models.CharField(max_length=32, null=True)
     desi_bgs = models.CharField(max_length=32, null=True)
     desi_bgs_agn = models.CharField(max_length=32, null=True)
     
+    # Metadata (from DecamThumbnail)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'decam_thumbnails'
-        ordering = ['mjd_obs']
+        db_table = 'decam_candidates'
+        ordering = ['-mjd_obs']
+
+    def __str__(self):
+        target_name = self.target.name if self.target else "Unknown"
+        return f"DECam {target_name} @ MJD {self.mjd_obs:.2f}" if self.mjd_obs else f"DECam {target_name}"
+    
+    @property
+    def observation_date(self):
+        """Return observation date in YYYY-MM-DD format from MJD"""
+        if self.mjd_obs:
+            from astropy.time import Time
+            t = Time(self.mjd_obs, format='mjd')
+            return t.datetime.strftime('%Y-%m-%d')
+        return None
 
 
 class SurveyFieldCredibleRegion(models.Model):
