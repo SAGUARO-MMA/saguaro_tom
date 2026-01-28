@@ -300,12 +300,20 @@ TOM_ALERT_CLASSES = [
 ]
 
 BROKERS = {
+    'ANTARES': {
+        'api_key': ANTARES_API_KEY,
+        'api_secret': ANTARES_API_SECRET,
+        'group': ANTARES_GROUP_ID,
+        'topics': ["extragalactic_staging", "nuclear_transient_staging"],
+    },
     'TNS': {
         'api_key': TNS_API_KEY,
         'bot_id': '60911',
         'bot_name': 'SAGUARO_Bot1',
     }
 }
+
+CONE_SEARCH_RADIUS = 2.
 
 TOM_HARVESTER_CLASSES = [
     'tom_catalogs.harvesters.simbad.SimbadHarvester',
