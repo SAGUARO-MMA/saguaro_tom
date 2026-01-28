@@ -39,7 +39,7 @@ class Migration(migrations.Migration):
                 ('ncombine', models.IntegerField(null=True)),
                 ('gladeid', models.IntegerField(null=True)),
                 ('exclude', models.IntegerField(null=True)),
-                ('target', models.ForeignKey(db_column='targetid', null=True, on_delete=django.db.models.deletion.SET_NULL, to='tom_targets.basetarget')),
+                ('target', models.ForeignKey(db_column='targetid', null=True, on_delete=django.db.models.deletion.SET_NULL, to='tom_targets.target')),
             ],
             options={
                 'db_table': 'candidates',
