@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     'tom_catalogs',
     'tom_observations',
     'tom_dataproducts',
+    'tom_dataservices',
     'tom_alertstreams',
     'tom_nonlocalizedevents',
     'tom_registration',
