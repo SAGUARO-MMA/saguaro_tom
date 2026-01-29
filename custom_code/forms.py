@@ -36,8 +36,51 @@ TNS_FILTER_CHOICES = [
 ]
 
 TNS_INSTRUMENT_CHOICES = [
-    (0, "Other"),
+    (3, "Keck1 - LRIS"),
+    (4, "Keck2 - DEIMOS"),
+    (6, "Gemini-N - GMOS"),
+    (9, "Gemini-S - GMOS-S"),
+    (10, "Lick-3m - KAST"),
+    (43, "HET - HET-LRS"),
+    (44, "FLWO-1.5m - FAST"),
+    (58, "MMT - MMT-Blue"),
+    (68, "Bok - BC-Bok"),
+    (70, "APO-3.5m - DIS"),
+    (75, "Magellan-Baade - IMACS"),
+    (78, "Magellan-Clay - LDSS-3"),
+    (82, "Keck1 - HIRES"),
+    (83, "Magellan-Clay - MIKE"),
+    (96, "MMT - Hectospec"),
+    (100, "Keck2 - ESI"),
+    (107, "Lijiang-2.4m - YFOSC"),
+    (108, "FTN - FLOYDS-N"),
+    (115, "ANU-2.3m - WiFeS"),
+    (116, "Magellan-Baade - FIRE"),
+    (117, "SALT - RSS"),
+    (118, "SALT - HRS-SALT"),
+    (120, "LBT - MODS1"),
+    (121, "LBT - MODS2"),
+    (122, "IRTF - SpeX"),
+    (123, "HET - HET-HRS"),
+    (124, "HET - HET-MRS"),
+    (125, "FTS - FLOYDS-S"),
+    (127, "SOAR - Goodman"),
+    (130, "Keck1 - MOSFIRE"),
+    (137, "Magellan-Baade - MagE"),
+    (141, "APO-3.5m - APO-TSPEC"),
+    (166, "Gemini-N - GNIRS"),
+    (180, "MMT - MMIRS"),
+    (197, "Gemini-S - Flamingos-2"),
+    (172, "CTIO-4m - DECAM"),
+    (208, "LCO1m - Sinistro"),
+    (221, "MMT - BINOSPEC"),
+    (252, "Keck2 - NIRES"),
+    (259, "Keck2 - KCWI"),
+    (260, "SOAR - TripleSpec"),
+    (287, "Rubin - LSSTCam"),
 ]
+TNS_INSTRUMENT_CHOICES.sort(key=lambda x: x[1])
+TNS_INSTRUMENT_CHOICES.insert(0, (0, "Other"))
 
 TNS_CLASSIFICATION_CHOICES = [
     (0, "Other"),
@@ -104,17 +147,26 @@ TNS_CLASSIFICATION_CHOICES = [
     (210, "M dwarf"),
 ]
 
+TNS_GROUP_CHOICES = [
+    (30, "DLT40"),
+    (38, "Global SN Project"),
+    (52, "AZTEC"),
+    (66, "SAGUARO"),
+    (176, "TROVE"),
+    (177, "PASSTA"),
+    (178, "Shadow"),
+]
+TNS_GROUP_CHOICES.sort(key=lambda x: x[1])
+
 
 class TargetReportForm(forms.Form):
     ra = forms.FloatField(label='R.A.')
     dec = forms.FloatField(label='Dec.')
-    reporting_group = forms.ChoiceField(choices=[
-        (66, "SAGUARO"),
-    ], initial=(66, "SAGUARO"))
-    discovery_data_source = forms.ChoiceField(choices=[
-        (66, "SAGUARO"),
-    ], initial=(66, "SAGUARO"))
-    reporter = forms.CharField(widget=forms.Textarea(attrs={'rows': 1}))
+    reporting_group = forms.ChoiceField(choices=TNS_GROUP_CHOICES, initial=(66, "SAGUARO"))
+    discovery_data_source = forms.ChoiceField(choices=TNS_GROUP_CHOICES, initial=(66, "SAGUARO"))
+    reporter = forms.CharField(widget=forms.Textarea(attrs={'rows': 1}),
+                               help_text="First1 Last1 (Affil1), First2 Last2 (Affil2), &hellip;, "
+                                         "on behalf of Survey (optional)")
     discovery_date = forms.DateTimeField(initial=datetime.utcnow())
     at_type = forms.ChoiceField(choices=[
         (0, "Other"),
@@ -245,12 +297,12 @@ class TargetReportForm(forms.Form):
 
 class TargetClassifyForm(forms.Form):
     name = forms.CharField()
-    classifier = forms.CharField(widget=forms.Textarea(attrs={'rows': 1}))
+    classifier = forms.CharField(widget=forms.Textarea(attrs={'rows': 1}),
+                                 help_text="FirstName1 LastName1 (Affil1), FirstName2 LastName2 (Affil2), &hellip;, "
+                                           "on behalf of SurveyName (optional)")
     classification = forms.ChoiceField(choices=TNS_CLASSIFICATION_CHOICES, initial=(1, "SN"))
     redshift = forms.FloatField(required=False)
-    group = forms.ChoiceField(choices=[
-        (66, "SAGUARO"),
-    ], initial=(66, "SAGUARO"))
+    group = forms.ChoiceField(choices=TNS_GROUP_CHOICES, initial=(66, "SAGUARO"))
     classification_remarks = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 1}))
     observation_date = forms.DateTimeField()
     instrument = forms.ChoiceField(choices=TNS_INSTRUMENT_CHOICES, initial=(0, "Other"))

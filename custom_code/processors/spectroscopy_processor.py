@@ -5,7 +5,7 @@ from tom_dataproducts.exceptions import InvalidFileFormatException
 from lightcurve_fitting.speccal import readspec
 import numpy as np
 
-TELESCOPE_ALIASES = {'2m0-01': 'FTN', '2m0-02': 'FTS'}
+TELESCOPE_ALIASES = {'2m0-01': 'FTN', '2m0-02': 'FTS', 'mmt_f5_adc': 'MMT'}
 
 
 class SpectroscopyProcessor(OldSpectroscopyProcessor):

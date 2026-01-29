@@ -44,7 +44,6 @@ def get_marker_for_photometry_point(label, marker_map, others):
         for marker in others:
             if marker not in marker_map.values():
                 marker_map[base_label] = marker
-                print(marker_map)
                 return marker
 
 
