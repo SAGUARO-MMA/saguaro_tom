@@ -92,6 +92,9 @@
       </div>
       <div class="tab-pane" id='candidates'>
         <h4>Candidates</h4>
+        <!-- DECam Candidates -->
+        {% load decam_extras %}
+        {% decam_candidates_table object %}
         {% candidates_table object %}
       </div>
       <div class="tab-pane" id='host-galaxy'>
