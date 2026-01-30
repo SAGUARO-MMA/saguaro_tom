@@ -19,7 +19,6 @@ from candidate_vetting.vet_bns import PARAM_RANGES as KN_PARAM_RANGES
 from candidate_vetting.vet_kn_in_sn import PARAM_RANGES as KN_IN_SN_PARAM_RANGES
 from candidate_vetting.vet_super_kn import PARAM_RANGES as SUPER_KN_PARAM_RANGES
 
-
 from astropy.units import Quantity
 
 # map imported parameter ranges to transients
@@ -42,9 +41,16 @@ SUBSCORE_NAMES = ['skymap_score',
                   'phot_peak_time',
                   'phot_decay_rate']
 
-register = template.Library()
+# some of the keys in ScoreFactor are really just calculated values
+# where the score depends on the type of non-localized event, so we need to 
+# convert these to scores
+VAL_NOT_SCORE_KEYS = {
+    "phot_peak_lum":"lum_max",
+    "phot_peak_time":"peak_time",
+    "phot_decay_rate":"decay_rate"
+}
 
-# These should now be stored in a TargetExtra object so the score needs to be
+# these should now be stored in a TargetExtra object so the score needs to be
 # accessed differently
 TARGETEXTRA_KEYS = [
     "ps_score",
@@ -58,6 +64,9 @@ MPC_KEYS = [
     "mpc_match_date",
 ]
 
+
+register = template.Library()
+
 @register.simple_tag
 def get_event_candidate_scores(event_candidates, 
                                dict_transients_param_ranges=DICT_TRANSIENTS_PARAM_RANGES,
@@ -66,14 +75,8 @@ def get_event_candidate_scores(event_candidates,
 
     event_candidates should be a django queryset of EventCandidate objects
     """ 
-    # some of the keys in ScoreFactor are really just calculated values
-    # where the score depends on the type of non-localized event. So we need to convert
-    # these to scores.
-    val_not_score_keys = {
-        "phot_peak_lum":"lum_max",
-        "phot_peak_time":"peak_time",
-        "phot_decay_rate":"decay_rate"
-    }
+
+    val_not_score_keys = VAL_NOT_SCORE_KEYS
 
     ecs_out = []
     for ec in event_candidates:
