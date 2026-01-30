@@ -73,7 +73,7 @@ class AntaresSlackFilter(SlackNotifier):
                 
         # photometry info
         # TODO: Put some text in the slack message about the rise rate, etc.
-
+        target.tns_objname = split_name(target.name)['tns_objname']
         base_str += ' ' + ALERT_LINKS.format(target=target)
         return base_str
                 
