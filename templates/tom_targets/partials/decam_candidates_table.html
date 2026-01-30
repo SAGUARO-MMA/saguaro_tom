@@ -1,0 +1,83 @@
+{% load decam_extras %}
+
+<h5>DECam Observations</h5>
+<table class="table table-hover table-sm">
+  <thead>
+    <tr>
+      <th>Obs. Date</th>
+      <th>Filter</th>
+      <th>Mag.</th>
+      <th>Err</th>
+      <th>CNN</th>
+      <th>S/N</th>
+      <th>Gaia</th>
+      <th>DESI</th>
+      <th>Template</th>
+      <th>Science</th>
+      <th>Difference</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for candidate in decam_candidates %}
+    <tr>
+      <td>{{ candidate.observation_date|default:"—" }}</td>
+      <td>{{ candidate.filter_name|default:"—" }}</td>
+      <td>{{ candidate.mag_fphot|floatformat:"2"|default:"—" }}</td>
+      <td>{{ candidate.magerr_fphot|floatformat:"2"|default:"—" }}</td>
+      <td>
+        {% if candidate.cnnscore %}
+          {% if candidate.cnnscore >= 0.85 %}
+            <span class="badge badge-success">{{ candidate.cnnscore|floatformat:2 }}</span>
+          {% elif candidate.cnnscore >= 0.7 %}
+            <span class="badge badge-warning">{{ candidate.cnnscore|floatformat:2 }}</span>
+          {% else %}
+            <span class="badge badge-danger">{{ candidate.cnnscore|floatformat:2 }}</span>
+          {% endif %}
+        {% else %}
+          —
+        {% endif %}
+      </td>
+      <td>{{ candidate.snr_fphot|floatformat:"1"|default:"—" }}</td>
+      <td class="text-center">
+        {% if candidate.in_gaia %}
+          <span class="badge badge-warning" title="In Gaia DR3">G</span>
+        {% else %}
+          <span class="text-muted">—</span>
+        {% endif %}
+      </td>
+      <td class="text-center">
+        {% if candidate.desi_bgs %}
+          <span class="badge badge-info" title="DESI BGS Host Galaxy">D</span>
+        {% else %}
+          <span class="text-muted">—</span>
+        {% endif %}
+      </td>
+      <td>
+        {% if candidate.thumb_template %}
+          <img alt="template" src="{{ candidate|decam_thumbnail_url:'template' }}" height="80">
+        {% else %}
+          —
+        {% endif %}
+      </td>
+      <td>
+        {% if candidate.thumb_science %}
+          <img alt="science" src="{{ candidate|decam_thumbnail_url:'science' }}" height="80">
+        {% else %}
+          —
+        {% endif %}
+      </td>
+      <td>
+        {% if candidate.thumb_difference %}
+          <img alt="difference" src="{{ candidate|decam_thumbnail_url:'difference' }}" height="80">
+        {% else %}
+          —
+        {% endif %}
+      </td>
+    </tr>
+    {% empty %}
+    <tr>
+      <td colspan="11" class="text-center text-muted">No DECam observations yet.</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>

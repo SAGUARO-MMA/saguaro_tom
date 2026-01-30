@@ -1,0 +1,237 @@
+{% extends 'tom_common/base.html' %}
+{% load bootstrap4 decam_extras %}
+{% block title %}DECam Candidates{% endblock %}
+
+{% block content %}
+<h1>DECam Candidates</h1>
+
+<!-- Filter Panel -->
+<div class="card mb-3">
+  <div class="card-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 10px 20px;">
+    <strong>Filters</strong> - Total: {{ total_candidates }} candidates
+  </div>
+  <div class="card-body" style="background: #f8f9fa; padding: 15px 20px;">
+    <form method="get" id="filter-form">
+      <div class="row align-items-end">
+        
+        <!-- First Row: Dropdowns -->
+        <div class="col-md-2 mb-2">
+          <label for="date-select" style="font-size: 0.85em; margin-bottom: 2px; display: block;">Date</label>
+          <select name="date" id="date-select" class="form-control form-control-sm" onchange="this.form.submit()">
+            <option value="">All Dates</option>
+            {% for date, count in observation_dates %}
+              <option value="{{ date }}" {% if date == selected_date %}selected{% endif %}>
+                {{ date }} ({{ count }})
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        
+        <div class="col-md-2 mb-2">
+          <label for="field-select" style="font-size: 0.85em; margin-bottom: 2px; display: block;">Field</label>
+          <select name="field" id="field-select" class="form-control form-control-sm" onchange="this.form.submit()">
+            <option value="all">All Fields</option>
+            {% for field in fields %}
+              <option value="{{ field }}" {% if field == selected_field %}selected{% endif %}>
+                {{ field }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        
+        <div class="col-md-2 mb-2">
+          <label for="filter-select" style="font-size: 0.85em; margin-bottom: 2px; display: block;">Filter Band</label>
+          <select name="filter_band" id="filter-select" class="form-control form-control-sm" onchange="this.form.submit()">
+            <option value="all">All</option>
+            <option value="g" {% if selected_filter_band == 'g' %}selected{% endif %}>g</option>
+            <option value="r" {% if selected_filter_band == 'r' %}selected{% endif %}>r</option>
+            <option value="i" {% if selected_filter_band == 'i' %}selected{% endif %}>i</option>
+            <option value="z" {% if selected_filter_band == 'z' %}selected{% endif %}>z</option>
+            <option value="Y" {% if selected_filter_band == 'Y' %}selected{% endif %}>Y</option>
+          </select>
+        </div>
+        
+        <div class="col-md-1 mb-2">
+          <label for="cnn-min" style="font-size: 0.85em; margin-bottom: 2px; display: block;">CNN ≥</label>
+          <input type="number" name="cnn_min" id="cnn-min" class="form-control form-control-sm" 
+                 placeholder="0.8" step="0.1" min="0" max="1" value="{% if cnn_min %}{{ cnn_min }}{% endif %}">
+        </div>
+        
+        <div class="col-md-1 mb-2">
+          <label for="snr-min" style="font-size: 0.85em; margin-bottom: 2px; display: block;">SNR ≥</label>
+          <input type="number" name="snr_min" id="snr-min" class="form-control form-control-sm" 
+                 placeholder="5" step="1" min="0" value="{% if cnn_min %}{{ cnn_min }}{% endif %}">
+        </div>
+        
+        <div class="col-md-1 mb-2">
+          <label style="font-size: 0.85em; margin-bottom: 2px; display: block;">&nbsp;</label>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="not_in_gaia" value="true" 
+                   id="not-in-gaia" {% if not_in_gaia == 'true' %}checked{% endif %}>
+            <label class="form-check-label" for="not-in-gaia" style="font-size: 0.85em;">
+              Not in Gaia
+            </label>
+          </div>
+        </div>
+        
+        <div class="col-md-1 mb-2">
+          <label style="font-size: 0.85em; margin-bottom: 2px; display: block;">&nbsp;</label>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="has_host" value="true" 
+                   id="has-host" {% if has_host == 'true' %}checked{% endif %}>
+            <label class="form-check-label" for="has-host" style="font-size: 0.85em;">
+              Has Host
+            </label>
+          </div>
+        </div>
+        
+        <div class="col-md-2 mb-2 text-right">
+          <label style="font-size: 0.85em; margin-bottom: 2px; display: block;">&nbsp;</label>
+          <button type="submit" class="btn btn-primary btn-sm mr-1">Apply</button>
+          <a href="{% url 'custom_code:decam-candidates' %}" class="btn btn-secondary btn-sm">Clear</a>
+        </div>
+        
+      </div>
+      
+      <!-- Summary Row -->
+      <div class="row mt-2">
+        <div class="col-md-12">
+          <small class="text-muted">
+            {% if selected_date or selected_field != 'all' or selected_filter_band != 'all' or not_in_gaia == 'true' or has_host == 'true' %}
+              Showing {{ filtered_count }} of {{ total_candidates }} candidates
+            {% else %}
+              Showing all {{ total_candidates }} candidates
+            {% endif %}
+          </small>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Table -->
+<div class="row">
+  <div class="col-md-12">
+    {% bootstrap_pagination page_obj extra=request.GET.urlencode %}
+    
+    <table class="table table-sm table-hover">
+      <thead style="background: #f8f9fa;">
+        <tr>
+          <th>Target</th>
+          <th>Field</th>
+          <th>Obs. Date</th>
+          <th>Filter</th>
+          <th>Mag.</th>
+          <th>Err</th>
+          <th>CNN</th>
+          <th>S/N</th>
+          <th>Gaia</th>
+          <th>DESI</th>
+          <th>Template</th>
+          <th>Science</th>
+          <th>Difference</th>
+        </tr>
+      </thead>
+	<tbody>
+        {% regroup decam_candidates by target.id as target_groups %}
+        {% for target_group in target_groups %}
+          {% for candidate in target_group.list %}
+          <tr>
+	    <td {% if forloop.first %}rowspan="{{ target_group.list|length }}" style="vertical-align: middle;"{% else %}style="display: none;"{% endif %}>
+              {% if candidate.target %}
+                <a href="{% url 'tom_targets:detail' candidate.target.id %}" target="_blank">
+                  {{ candidate.target.name }}
+                </a>
+              {% else %}
+                None
+              {% endif %}
+            </td>
+            <td>
+              {% if candidate.observation_record and candidate.observation_record.survey_field %}
+                {{ candidate.observation_record.survey_field.name }}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td>{{ candidate.observation_date|default:"—" }}</td>
+            <td>{{ candidate.filter_name|default:"—" }}</td>
+            <td>{{ candidate.mag_fphot|floatformat:"2"|default:"—" }}</td>
+            <td>{{ candidate.magerr_fphot|floatformat:"2"|default:"—" }}</td>
+            <td>
+              {% if candidate.cnnscore %}
+                {% if candidate.cnnscore >= 0.85 %}
+                  <span class="badge badge-success">{{ candidate.cnnscore|floatformat:2 }}</span>
+                {% elif candidate.cnnscore >= 0.7 %}
+                  <span class="badge badge-warning">{{ candidate.cnnscore|floatformat:2 }}</span>
+                {% else %}
+                  <span class="badge badge-danger">{{ candidate.cnnscore|floatformat:2 }}</span>
+                {% endif %}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td>{{ candidate.snr_fphot|floatformat:"1"|default:"—" }}</td>
+            <td class="text-center">
+              {% if candidate.in_gaia %}
+                <span class="badge badge-warning" title="In Gaia DR3">G</span>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td class="text-center">
+              {% if candidate.desi_bgs %}
+                <span class="badge badge-info" title="DESI BGS Host Galaxy">D</span>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if candidate.thumb_template %}
+                <img src="{{ candidate|decam_thumbnail_url:'template' }}" height="60" title="Template">
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if candidate.thumb_science %}
+                <img src="{{ candidate|decam_thumbnail_url:'science' }}" height="60" title="Science">
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if candidate.thumb_difference %}
+                <img src="{{ candidate|decam_thumbnail_url:'difference' }}" height="60" title="Difference">
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        {% empty %}
+        <tr>
+          <td colspan="13" class="text-center">
+            No DECam candidates match the current filters.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    
+    {% bootstrap_pagination page_obj extra=request.GET.urlencode %}
+  </div>
+</div>
+
+<!-- Legend -->
+<div class="card mt-3">
+  <div class="card-body" style="background: #f8f9fa; font-size: 0.9em;">
+    <strong>Legend:</strong>
+    <span class="ml-2"><span class="badge badge-success">0.85+</span> High CNN</span>
+    <span class="ml-2"><span class="badge badge-warning">0.7-0.85</span> Medium CNN</span>
+    <span class="ml-2"><span class="badge badge-danger">&lt;0.7</span> Low CNN</span>
+    <span class="ml-2"><span class="badge badge-warning">G</span> In Gaia DR3</span>
+    <span class="ml-2"><span class="badge badge-info">D</span> DESI Host Galaxy</span>
+  </div>
+</div
+>
+{% endblock %}
