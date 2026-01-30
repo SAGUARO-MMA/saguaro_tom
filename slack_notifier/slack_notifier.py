@@ -3,8 +3,11 @@ A subclass of the slack_sdk WebClient with extra cusomtization
 """
 from tom_targets.models import BaseTarget
 from slack_sdk import WebClient
+from slack_sdk.errors import SlackApiError
 from django.conf import settings
 import logging
+
+from custom_code.templatetags.target_extras import split_name
 
 from astropy import units as u
 from astropy.time import Time
@@ -17,8 +20,12 @@ class SlackNotifier(WebClient):
 
     def __init__(self, slack_channel:str, token:str):
 
-        self.slack_channel = slack_channel
+        self.slack_channels = slack_channel if isinstance(slack_channel, list) else [slack_channel]
 
+        self.channel_name_to_id = {
+            "alerts":"C0ACQ9HKMPS"
+        }
+        
         super().__init__(token=token)
         
     def filter_alert_stream(self, text):
@@ -28,18 +35,19 @@ class SlackNotifier(WebClient):
         return text
         
     def send_slack_message_from_text(self, msg, thread_id=None):
-        if thread_id is not None:
-            self.chat_postMessage(
-                channel = self.slack_channel,
-                text = msg,
-                thread_ts = thread_id,
-                reply_broadcast = True
-            )
-        else:
-            self.chat_postMessage(
-                channel = self.slack_channel,
-                text = msg,
-            )
+        for channel in self.slack_channels:
+            if thread_id is not None:
+                self.chat_postMessage(
+                    channel = channel,
+                    text = msg,
+                    thread_ts = thread_id,
+                    reply_broadcast = True
+                )
+            else:
+                self.chat_postMessage(
+                    channel = channel,
+                    text = msg,
+                )
     
     def send_slack_message(self, *args, **kwargs):
         test = "test" in kwargs and kwargs["test"]
@@ -57,24 +65,40 @@ class SlackNotifier(WebClient):
             return
 
         thread_id = None
-        import pdb; pdb.set_trace()
         if "target" in kwargs or any(isinstance(arg, BaseTarget) for arg in args):
-            target = kwargs["target"]
+            if "target" in kwargs:
+                target = kwargs["target"]
+            else:
+                for arg in args:
+                    if isinstance(arg, BaseTarget):
+                        target = arg
+                        break
+            
             logger.info(
                 f"Searching for messages in the past {SLACK_THREADING_DELTA_T}days that mentioned {target.name}"
             )
-            thread_id = self._find_relevant_thread(target=target)
-
+            for channel in self.slack_channels:
+                try:
+                    thread_id = self._find_relevant_thread(target=target, chan=channel)
+                except SlackApiError as apierr:
+                    logger.warning("This token does not have the permissions to read the history of {channel}! Skipping!")
+                    logger.exception(apierr)
+                    
         self.send_slack_message_from_text(msg, thread_id=thread_id)
 
-    def _find_relevant_thread(self, target):
+    def _find_relevant_thread(self, target, chan):
+        if chan not in self.channel_name_to_id:
+            return
+        
         result = self.conversations_history(
-            channel = self.slack_channel,
+            channel = self.channel_name_to_id.get(chan),
             inclusive = True,
             oldest = (Time.now() - SLACK_THREADING_DELTA_T*u.day).unix
         )
 
+        partial_name = split_name(target.name)['tns_objname']
+
         for msg in result["messages"]:
-            if msg["text"].contains(target.name):
+            if partial_name in msg["text"]:
                 # this message contained this target name, so send it in thread here
                 return msg["ts"]

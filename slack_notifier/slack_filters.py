@@ -11,7 +11,7 @@ from django.conf import settings
 
 ALERT_LINKS = ' '.join([f'<{link}|{service}>' for link, service in settings.TARGET_LINKS])
 
-class LSST_DDF_SlackFilter(SlackNotifier):
+class AntaresSlackFilter(SlackNotifier):
 
     def __init__(self, token=settings.SLACK_TOKEN_TNS):
         super().__init__(
@@ -19,18 +19,73 @@ class LSST_DDF_SlackFilter(SlackNotifier):
             token = token
         )
 
-    def filter_alert_stream(self, target):
-        pass
+    def filter_alert_stream(self, target, created, aliases_added, telescope_stream = "ZTF"):
+        target_extra = target.targetextra_set.filter(key='Host Galaxies').first()
+        vs_matches = target.targetextra_set.filter(key__in=[
+            "Gaia Match", "PS1 Match", "ASASSN Match"
+        ])
+        agn_match = target.targetextra_set.filter(key="QSO Match").first()
 
+        has_vs_match = any(m.value != 'None' for m in vs_matches)
+        has_agn_match = agn_match.value != 'None'
+
+        if (has_vs_match or has_agn_match) and telescope_stream == "ZTF":
+            # don't send this message!
+            return
+        
+        if created:
+            base_str = f"{target.name} created from the Antares alert stream."
+        elif not created and len(aliases_added):
+            base_str = f"{target.name} has been updated from the Antares alert stream with the following aliases: {', '.join(aliases_added)}"
+        else:
+            base_str = f"{target.name} has been updated from the Antares alert stream."
+
+        # host info
+        if target_extra.value != 'None':
+            n = 0
+            host_str = "\nThe three most likely host galaxies are:\n"
+            for galaxy in json.loads(target_extra.value):
+                host_str += f"\t{n+1}. {galaxy['Offset']:.3f}\" from {galaxy['ID']} at {galaxy['Dist']:.1f} Mpc\n"
+                n += 1
+                if n > 2:
+                    break
+            base_str += host_str
+        else:
+            base_str += f"\nNo host galaxies are found in SAGUARO for {target.name}\n"
+
+        base_str += "\n"
+            
+        # variable star and AGN matches
+        if has_agn_match:
+            base_str += f"\nAGN Match: {agn_match.value}"
+
+        if has_vs_match:
+            base_str += "Variable Star Matches:\n"
+            for vs_match in vs_matches:
+                if vs_match.value == 'None': continue
+                base_str += f"\t* {vs_match.value} offset by "
+                if vs_match.key == "Gaia Match":
+                    vs_offset = target.targetextra_set.filter(key='Gaia VS Offset').first()
+                    base_str += f"{float(vs_offset.value):.3f}\"\n"
+                else:
+                    base_str += f"<2\"\n"
+                    
+                
+        # photometry info
+        # TODO: Put some text in the slack message about the rise rate, etc.
+
+        base_str += ' ' + ALERT_LINKS.format(target=target)
+        return base_str
+                
 class DistanceLimitedSlackFilter(SlackNotifier):
 
     def __init__(self, max_dist, token=settings.SLACK_TOKEN_TNS):
         self.max_dist = max_dist
         super().__init__(
-            slack_channel = "alerts",
+            slack_channel = ["alerts", "alerts-tns"],
             token = token,
         )
-
+        
     def filter_alert_stream(self, target):
         target_extra = target.targetextra_set.filter(key='Host Galaxies').first()
         if target_extra is None:

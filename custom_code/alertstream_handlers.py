@@ -15,7 +15,9 @@ from .templatetags.nonlocalizedevent_extras import format_inverse_far, format_di
 from .healpix_utils import update_all_credible_region_percents_for_survey_fields, create_elliptical_localization
 from .cssfield_selection import calculate_footprint_probabilities, rank_css_fields
 from .models import CredibleRegionContour
-from ..slack_notifier.slack_notifier import SlackNotifier
+from slack_notifier.slack_notifier import SlackNotifier
+from slack_notifier.slack_filters import AntaresSlackFilter
+from slack_notifier.util import send_slack_gw, pick_slack_channel
 from astropy.table import Table
 from astropy.time import Time
 from io import BytesIO
@@ -24,7 +26,8 @@ import numpy as np
 import traceback
 from tom_targets.models import Target
 import time
-
+from tom_antares.alertstream_handlers import handle_alert as default_antares_handler
+from tom_antares.antares import ANTARESBroker
 logger = logging.getLogger(__name__)
 
 # for einstein probe
@@ -88,6 +91,7 @@ ALERT_TEXT = [  # index = number of localizations available
 ]
 
 slack_ep = SlackNotifier(slack_channel="alerts-ep", token=settings.SLACK_TOKEN_EP)
+slack_lsstddf = AntaresSlackFilter(token=settings.SLACK_TOKEN_TNS50)
 
 def vet_or_post_error(target, slack_client):
     try:
@@ -96,7 +100,7 @@ def vet_or_post_error(target, slack_client):
         _, tns_query_status = target_post_save(target, created=True, tns_time_limit=np.inf)
         if tns_query_status is not None:
             logger.warning(tns_query_status)
-            slack_client.chat_postMessage(channel=channel, text=tns_query_status)
+            slack_client.send_slack_message_from_text(text=tns_query_status)
         detections = target.reduceddatum_set.filter(data_type="photometry", value__magnitude__isnull=False)
         if detections.exists():
             target_run_mpc.enqueue(detections.latest().id)
@@ -208,7 +212,7 @@ def prepare_and_send_alerts(nle, seq):
         at = 'here' if nle.state == 'RETRACTED' else 'channel'
     else:
         at = None
-    send_slack(alert_text, format_kwargs,
+    send_slack_gw(alert_text, format_kwargs,
                is_test_alert=is_test_alert, is_significant=is_significant, is_burst=is_burst, has_ns=has_ns, at=at)
     return localizations
 
@@ -313,6 +317,20 @@ def handle_einstein_probe_alert(message, metadata):
     alert_text = ALERT_TEXT_EP.format(survey_obs_link=survey_obs_link, target_link=settings.TARGET_LINKS[0][0]
                                      ).format(target=t_ep)
     logger.info(f'Sending EP alert: {alert_text}')
-    slack_ep.chat_postMessage(channel='alerts-ep', text=alert_text)
+    slack_ep.send_slack_message_from_text(text=alert_text)
 
     logger.info(f'Finished processing alert for {nonlocalizedevent.event_id}')
+
+def handle_antares_stream(alert):
+    
+    # first run the default handler
+    res = default_antares_handler(alert)
+    
+    # we need to vet this target to get host galaxies
+    target = res[0]
+    vet_or_post_error(target, slack_lsstddf)
+    
+    # then parse the returned values to send relevant messages
+    telescope_id = alert.alerts[-1].properties['ant_survey']
+    telescope = ANTARESBroker.surveys.get(telescope_id, "ZTF")
+    slack_lsstddf.send_slack_message(*res, telescope_stream=telescope)

@@ -390,7 +390,7 @@ REST_FRAMEWORK = {
 
 ALERT_STREAMS = [
     {
-        'ACTIVE': True,
+        'ACTIVE': False,
         'NAME': 'tom_alertstreams.alertstreams.hopskotch.HopskotchAlertStream',
         'OPTIONS': {
             'URL': 'kafka://kafka.scimma.org/',
@@ -413,7 +413,7 @@ ALERT_STREAMS = [
             'API_SECRET': ANTARES_API_SECRET,
             'GROUP': ANTARES_GROUP_ID,
             'TOPIC_HANDLERS': {
-                'extragalactic_staging': 'tom_antares.alertstream_handlers.handle_alert',
+                'extragalactic_staging': 'custom_code.alertstream_handlers.handle_antares_stream',
             }
         },
     }
