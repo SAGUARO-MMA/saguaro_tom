@@ -301,12 +301,6 @@ TOM_ALERT_CLASSES = [
 ]
 
 BROKERS = {
-    'ANTARES': {
-        'api_key': ANTARES_API_KEY,
-        'api_secret': ANTARES_API_SECRET,
-        'group': ANTARES_GROUP_ID,
-        'topics': ["extragalactic_staging", "nuclear_transient_staging"],
-    },
     'TNS': {
         'api_key': TNS_API_KEY,
         'bot_id': '60911',
@@ -411,6 +405,18 @@ ALERT_STREAMS = [
             },
         },
     },
+    {
+        'ACTIVE': True,
+        'NAME': 'tom_alertstreams.alertstreams.antares.AntaresAlertStream',
+        'OPTIONS': {
+            'API_KEY': ANTARES_API_KEY,
+            'API_SECRET': ANTARES_API_SECRET,
+            'GROUP': ANTARES_GROUP_ID,
+            'TOPIC_HANDLERS': {
+                'extragalactic_staging': 'tom_antares.alertstream_handlers.handle_alert',
+            }
+        },
+    }
 ]
 
 VUE_FRONTEND_DIR_TOM_NONLOCAL = os.path.join(STATIC_ROOT, 'tom_nonlocalizedevents/vue')
