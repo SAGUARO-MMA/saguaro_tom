@@ -5,6 +5,9 @@ Other slack functionality, for backwards compatibility
 from django.conf import settings
 from slack_sdk import WebClient
 
+import logging
+logger = logging.getLogger(__name__)
+
 def send_slack_gw(body, format_kwargs, is_test_alert=False, is_significant=True, is_burst=False, has_ns=True,
                all_workspaces=True, at=None):
 
