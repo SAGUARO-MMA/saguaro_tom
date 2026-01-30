@@ -215,6 +215,10 @@ FACILITIES = {
         'portal_url': 'https://observe.lco.global',
         'api_key': LCO_API_KEY,
     },
+    'SOAR': {
+        'portal_url': 'https://observe.lco.global',
+        'api_key': LCO_API_KEY,
+    },
     'GEM': {
         'portal_url': {
             'GS': 'https://139.229.34.15:8443',
