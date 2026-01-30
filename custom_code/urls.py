@@ -7,6 +7,8 @@ from .views import CSSFieldListView, GWListView, GRBListView, NeutrinoListView, 
 from .views import CSSFieldExportView, CSSFieldSubmitView, EventCandidateCreateView
 from tom_nonlocalizedevents.views import SupereventIdView
 
+# NEW: Import DECam thumbnail view
+from .decam_views import DecamCandidateView, DecamCandidateListView
 from tom_common.api_router import SharedAPIRootRouter
 
 router = SharedAPIRootRouter()
@@ -35,4 +37,10 @@ urlpatterns = [
     path('nonlocalizedevents/<int:localization_id>/cssfields/export/', CSSFieldExportView.as_view(), name='css-fields-export'),
     path('nonlocalizedevents/<int:localization_id>/cssfields/submit/', CSSFieldSubmitView.as_view(), name='css-fields-submit'),
     path('nonlocalizedevents/<str:event_id>/createcandidate/<int:target_id>/', EventCandidateCreateView.as_view(), name='create-candidate'),
+   
+    # DECam Candidates List
+    path('decam/candidates/', DecamCandidateListView.as_view(), name='decam-candidates'), 
+    # NEW: DECam thumbnail routes
+    path('decam/thumbnail/<int:candidate_id>/<str:thumb_type>/', 
+         DecamCandidateView.as_view(), name='decam_thumbnail'),
 ]
