@@ -3,71 +3,30 @@ from django.conf import settings
 from django.db import connection
 from tom_targets.models import Target
 from custom_code.healpix_utils import create_candidates_from_targets
-from custom_code.alertstream_handlers import pick_slack_channel, send_slack, vet_or_post_error
+from custom_code.alertstream_handlers import vet_or_post_error
 from custom_code.templatetags.skymap_extras import get_preferred_localization
 from custom_code.templatetags.target_extras import split_name
 from tom_treasuremap.management.commands.report_pointings import get_active_nonlocalizedevents
 from datetime import datetime, timedelta
-from slack_sdk import WebClient
 import numpy as np
 import json
 import logging
+
+from slack_notifier.slack_notifier import SlackNotifier
+from slack_notifier.slack_filters import DistanceLimitedSlackFilter
+from slack_notifier.util import send_slack_gw, pick_slack_channel
 
 logger = logging.getLogger(__name__)
 new_format = logging.Formatter('[%(asctime)s] %(levelname)s : s%(message)s')
 for handler in logger.handlers:
     handler.setFormatter(new_format)
 
-slack_tns = WebClient(settings.SLACK_TOKEN_TNS)
-slack_tns50 = WebClient(settings.SLACK_TOKEN_TNS50)
-slack_ep = WebClient(settings.SLACK_TOKEN_EP)
+slack_tns = DistanceLimitedSlackFilter(max_dist=40, token=settings.SLACK_TOKEN_TNS)
+slack_tns50 = DistanceLimitedSlackFilter(max_dist=50, token=settings.SLACK_TOKEN_TNS50)
+slack_ep = SlackNotifier(slack_channel="alerts-ep", token=settings.SLACK_TOKEN_EP)
 
-ALERT_LINKS = ' '.join([f'<{link}|{service}>' for link, service in settings.TARGET_LINKS])
 ALERT_CANDIDATE = ('<{target_link}|{{target.name}}> falls in the {{credible_region:d}}% '
                    'localization region of <{nle_link}|{{nle.event_id}}>')
-
-
-def send_alert_if_nearby(target, max_dist, slack_client=None):
-    """check if any of the possible host galaxies are within some distance threshold"""
-    target_extra = target.targetextra_set.filter(key='Host Galaxies').first()
-    if target_extra is None:
-        return
-    for galaxy in json.loads(target_extra.value):
-        if galaxy['Source'] in ['GLADE', 'GWGC', 'HECATE'] and galaxy['Dist'] <= max_dist:  # catalogs that have dist
-            slack_alert = (f'{target.name} is {galaxy["Offset"]:.1f}" from '
-                           f'galaxy {galaxy["ID"]} at {galaxy["Dist"]:.1f} Mpc.')
-            break
-    else:
-        return
-
-    # if there was nearby host galaxy found, calculate the absolute magnitude at discovery
-    photometry = target.reduceddatum_set.filter(data_type='photometry')
-    first_det = photometry.filter(value__magnitude__isnull=False).order_by('timestamp').first()
-    if first_det:
-        time_fdet = (datetime.now(tz=first_det.timestamp.tzinfo) - first_det.timestamp).total_seconds() / 3600. / 24.
-        absmag = first_det.value['magnitude'] - 5. * (np.log10(galaxy["Dist"]) + 5.)
-        slack_alert += (f' If this is the host, the transient was detected {time_fdet:.1f} days ago at '
-                        f'an absolute magnitude of {absmag:.1f} mag in {first_det.value["filter"]}.')
-
-        # if there was a nondetection, calculate the rise rate
-        last_nondet = photometry.filter(value__magnitude__isnull=True,
-                                        timestamp__lt=first_det.timestamp).order_by('timestamp').last()
-        if last_nondet:
-            time_lnondet = (first_det.timestamp - last_nondet.timestamp).total_seconds() / 3600. / 24.
-            dmag_lnondet = (last_nondet.value['limit'] - first_det.value['magnitude']) / time_lnondet
-            slack_alert += f' The last nondetection was {time_lnondet:.1f} days before detection,'
-            if dmag_lnondet > 0:
-                slack_alert += f' during which time it rose &gt;{dmag_lnondet:.1f} mag/day.'
-            else:
-                slack_alert += ' but it does not constrain the rise rate.'
-        else:
-            slack_alert += ' No nondetection was reported.'
-    target.tns_objname = split_name(target.name)['tns_objname']
-    slack_alert += ' ' + ALERT_LINKS.format(target=target)
-    logger.info(f'Sending TNS alert: {slack_alert}')
-    if slack_client is not None:  # otherwise just print the alert to the log for testing
-        slack_client.chat_postMessage(channel='alerts-tns', text=slack_alert)
-
 
 class Command(BaseCommand):
 
@@ -225,13 +184,13 @@ class Command(BaseCommand):
 
         for targets in [new_targets, updated_targets]:
             for target in targets:
-                vet_or_post_error(target, slack_tns, channel='alerts-tns')
-                send_alert_if_nearby(target, 40., slack_tns)
+                vet_or_post_error(target, slack_tns)
+                slack_tns.send_slack_message(target=target)
                 if target.dec < 40.:  # only southern and equatorial targets
-                    send_alert_if_nearby(target, 50., slack_tns50)
+                    slack_tns50.send_slack_message(target=target)
 
         for target in updated_targets_coords:
-            vet_or_post_error(target, slack_tns, channel='alerts-tns')
+            vet_or_post_error(target, slack_tns)
 
         # automatically associate with nonlocalized events
         for nle in get_active_nonlocalizedevents(lookback_days=lookback_days_nle):
@@ -251,8 +210,8 @@ class Command(BaseCommand):
                 candidate.target.tns_objname = split_name(candidate.target.name)['tns_objname']
                 format_kwargs = {'nle': nle, 'target': candidate.target, 'credible_region': credible_region}
                 if nle.event_type == nle.NonLocalizedEventType.GRAVITATIONAL_WAVE:
-                    send_slack(ALERT_CANDIDATE, format_kwargs, *pick_slack_channel(seq))
+                    send_slack_gw(ALERT_CANDIDATE, format_kwargs, *pick_slack_channel(seq))
                 elif nle.event_type == nle.NonLocalizedEventType.UNKNOWN:
                     body = ALERT_CANDIDATE.format(nle_link=settings.NLE_LINKS[0][0],
                                                   target_link=settings.TARGET_LINKS[0][0])
-                    slack_ep.chat_postMessage(channel='alerts-ep', text=body.format(**format_kwargs))
+                    slack_ep.send_slack_message(text=body.format(**format_kwargs))

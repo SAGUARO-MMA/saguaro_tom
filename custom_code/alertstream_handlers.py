@@ -6,7 +6,6 @@ from django.conf import settings
 from django.urls import reverse
 import urllib
 from email.mime.text import MIMEText
-from slack_sdk import WebClient
 import smtplib
 import logging
 from tom_dataproducts.tasks import atlas_query
@@ -16,6 +15,7 @@ from .templatetags.nonlocalizedevent_extras import format_inverse_far, format_di
 from .healpix_utils import update_all_credible_region_percents_for_survey_fields, create_elliptical_localization
 from .cssfield_selection import calculate_footprint_probabilities, rank_css_fields
 from .models import CredibleRegionContour
+from ..slack_notifier.slack_notifier import SlackNotifier
 from astropy.table import Table
 from astropy.time import Time
 from io import BytesIO
@@ -87,11 +87,9 @@ ALERT_TEXT = [  # index = number of localizations available
     ALERT_LINKS,
 ]
 
-slack_ep = WebClient(settings.SLACK_TOKEN_EP)
-slack_gw = [WebClient(token) for token in settings.SLACK_TOKENS_GW]
+slack_ep = SlackNotifier(slack_channel="alerts-ep", token=settings.SLACK_TOKEN_EP)
 
-
-def vet_or_post_error(target, slack_client, channel):
+def vet_or_post_error(target, slack_client):
     try:
         # set the tns query time limit to infinity because we don't care if we
         # need to wait for this script to run
@@ -107,31 +105,7 @@ def vet_or_post_error(target, slack_client, channel):
 
     except Exception as e:
         logger.error(''.join(traceback.format_exception(e)))
-        slack_client.chat_postMessage(channel=channel, text=f'Error vetting target {target.name}:\n{e}')
-
-
-def send_slack(body, format_kwargs, is_test_alert=False, is_significant=True, is_burst=False, has_ns=True,
-               all_workspaces=True, at=None):
-    if is_test_alert:
-        channel = None
-    elif not is_significant:
-        channel = 'alerts-subthreshold'
-    elif is_burst:
-        channel = 'alerts-burst'
-    elif not has_ns:
-        channel = 'alerts-bbh'
-    else:
-        channel = 'alerts-ns'
-    if at is not None:
-        body = f'<!{at}>\n' + body
-    for slack_client, (nle_link, service), (target_link, _) in zip(slack_gw, settings.NLE_LINKS, settings.TARGET_LINKS):
-        body_slack = body.format(nle_link=nle_link, service=service, target_link=target_link).format(**format_kwargs)
-        logger.info(f'Sending GW alert: {body_slack}')
-        if channel is None:
-            break  # just print out test alerts for debugging
-        slack_client.chat_postMessage(channel=channel, text=body_slack)
-        if not all_workspaces:
-            break
+        slack_client.send_slack_message_from_text(f'Error vetting target {target.name}:\n{e}')
 
 
 def send_email(subject, body, is_test_alert=False):
@@ -179,17 +153,6 @@ def calculate_credible_region(skymap, localization, probability=0.9):
     CredibleRegionContour(localization=localization, probability=probability, pixels=credible_region_90).save()
     dt = time.time() - t0
     logger.info(f'Calculated skymap contours in {dt:.0f} s')
-
-
-def pick_slack_channel(seq):
-    is_test_alert = seq.nonlocalizedevent.event_id.startswith('M')
-    is_significant = seq.details['significant']
-    is_burst = seq.details['group'] == 'Burst'
-    has_ns = seq.details['properties'].get('HasNS', 0.) >= 0.01 \
-             or seq.details['classification'].get('BNS', 0.) >= 0.01 \
-             or seq.details['classification'].get('NSBH', 0.) >= 0.01
-    return is_test_alert, is_significant, is_burst, has_ns
-
 
 def prepare_and_send_alerts(nle, seq):
     localizations = []
@@ -344,7 +307,7 @@ def handle_einstein_probe_alert(message, metadata):
     ep_name = alert['id'][0]
     t_ep = Target.objects.create(name=ep_name, type='SIDEREAL', ra=ep_ra, dec=ep_dec, permissions='PUBLIC')
     EventCandidate.objects.create(target=t_ep, nonlocalizedevent=nonlocalizedevent)
-    vet_or_post_error(t_ep, slack_ep, channel='alerts-ep')
+    vet_or_post_error(t_ep, slack_ep)
     query = {'localization_event': nonlocalizedevent.event_id, 'localization_prob': 95, 'localization_dt': 3}
     survey_obs_link = f"https://{Site.objects.get_current().domain}{reverse('surveys:observations')}?{urllib.parse.urlencode(query)}"
     alert_text = ALERT_TEXT_EP.format(survey_obs_link=survey_obs_link, target_link=settings.TARGET_LINKS[0][0]
