@@ -390,7 +390,7 @@ REST_FRAMEWORK = {
 
 ALERT_STREAMS = [
     {
-        'ACTIVE': False,
+        'ACTIVE': True,
         'NAME': 'tom_alertstreams.alertstreams.hopskotch.HopskotchAlertStream',
         'OPTIONS': {
             'URL': 'kafka://kafka.scimma.org/',
