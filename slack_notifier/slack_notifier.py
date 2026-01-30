@@ -34,8 +34,11 @@ class SlackNotifier(WebClient):
         """
         return text
         
-    def send_slack_message_from_text(self, msg, thread_id=None):
-        for channel in self.slack_channels:
+    def send_slack_message_from_text(self, msg, thread_ids=None):
+        if thread_ids is None:
+            thread_ids = [None]*self.slack_channels
+            
+        for channel, thread_id in zip(self.slack_channels, thread_ids):
             if thread_id is not None:
                 self.chat_postMessage(
                     channel = channel,
@@ -64,7 +67,7 @@ class SlackNotifier(WebClient):
         if test:
             return
 
-        thread_id = None
+        thread_id = [None]*len(self.slack_channels)
         if "target" in kwargs or any(isinstance(arg, BaseTarget) for arg in args):
             if "target" in kwargs:
                 target = kwargs["target"]
@@ -77,14 +80,15 @@ class SlackNotifier(WebClient):
             logger.info(
                 f"Searching for messages in the past {SLACK_THREADING_DELTA_T}days that mentioned {target.name}"
             )
-            for channel in self.slack_channels:
+
+            for ii, channel in enumerate(self.slack_channels):
                 try:
-                    thread_id = self._find_relevant_thread(target=target, chan=channel)
-                except SlackApiError as apierr:
-                    logger.warning("This token does not have the permissions to read the history of {channel}! Skipping!")
+                    thread_id[ii] = self._find_relevant_thread(target=target, chan=channel)
+                except Exception as apierr:
+                    logger.warning("This token may not have the permissions to read the history of {channel}! Skipping!")
                     logger.exception(apierr)
-                    
-        self.send_slack_message_from_text(msg, thread_id=thread_id)
+
+        self.send_slack_message_from_text(msg, thread_ids=thread_id)
 
     def _find_relevant_thread(self, target, chan):
         if chan not in self.channel_name_to_id:
