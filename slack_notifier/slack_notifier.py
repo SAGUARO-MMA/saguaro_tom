@@ -39,18 +39,21 @@ class SlackNotifier(WebClient):
             thread_ids = [None]*self.slack_channels
             
         for channel, thread_id in zip(self.slack_channels, thread_ids):
-            if thread_id is not None:
-                self.chat_postMessage(
-                    channel = channel,
-                    text = msg,
-                    thread_ts = thread_id,
-                    reply_broadcast = True
-                )
-            else:
-                self.chat_postMessage(
-                    channel = channel,
-                    text = msg,
-                )
+            try:
+                if thread_id is not None:
+                    self.chat_postMessage(
+                        channel = channel,
+                        text = msg,
+                        thread_ts = thread_id,
+                        reply_broadcast = True
+                    )
+                else:
+                    self.chat_postMessage(
+                        channel = channel,
+                        text = msg,
+                    )
+            except Exception as exc:
+                logger.warning(f"Sending the slack message crashed with {exc}")
     
     def send_slack_message(self, *args, **kwargs):
         test = "test" in kwargs and kwargs["test"]
