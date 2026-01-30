@@ -100,7 +100,7 @@ class SlackNotifier(WebClient):
             oldest = (Time.now() - SLACK_THREADING_DELTA_T*u.day).unix
         )
 
-        partial_name = split_name(target.name)['tns_objname']
+        partial_name = split_name(target.name)['basename']
 
         for msg in result["messages"]:
             if partial_name in msg["text"]:
