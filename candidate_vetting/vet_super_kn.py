@@ -44,7 +44,8 @@ PARAM_RANGES = dict(
     max_predets = 3,
     t_pre = -1.0,
     t_post = np.inf,
-    max_decay_fit_time=100
+    max_decay_fit_time=100,
+    phot_score_snr_min=5
 )
 
 

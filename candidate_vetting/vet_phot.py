@@ -126,7 +126,7 @@ def _get_phot(target_id:int, nonlocalized_event:NonLocalizedEvent) -> pd.DataFra
     photdf["dt"] = photdf.mjd - gw_disc_date
     
     # add a SNR column to the dataframe
-    photdf["SNR"] = error_to_snr(photdf.magerr)
+    photdf["snr"] = error_to_snr(photdf.magerr)
 
     return photdf
 
@@ -465,12 +465,14 @@ def find_public_phot(
 def _score_phot(allphot, target, nonlocalized_event, 
                 param_ranges,
                 filt=None):
-    # allphot will have already been filtered not to extend beyond 
-    # param_ranges['t_post']
+    
     if allphot is None: # this is if there is no photometry
         return 1, None, None, None, None, None
     
+    # allphot will have already been filtered not to extend beyond param_ranges['t_post']
+    # we still need to toss out (1) upper limits (2) detections below a SNR threshold
     phot = allphot[~allphot.upperlimit]
+    phot = phot[phot.snr >= param_ranges["phot_score_snr_min"]]
     if not len(phot):
         # then there is no photometry for this object and we're done!
         return 1, None, None, None, None, None
