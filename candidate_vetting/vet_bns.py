@@ -105,10 +105,10 @@ def vet_bns(target_id:int, nonlocalized_event_name:Optional[str]=None,
                                   t_post=param_ranges["t_post"])
     phot_score, lum, max_time, decay_rate, _, _ = _score_phot(
         allphot=allphot,
-        target = target,
-        nonlocalized_event = nonlocalized_event,
+        target=target,
+        nonlocalized_event=nonlocalized_event,
         param_ranges=param_ranges,
-        filt = ["g", "r", "i", "o", "c"] # use the common optical filters
+        filt=["g", "r", "i", "o", "c"] # use the common optical filters
     )
     if lum is not None:
         update_score_factor(event_candidate, "phot_peak_lum", lum.value)

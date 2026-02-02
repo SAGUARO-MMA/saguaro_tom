@@ -23,6 +23,8 @@ from candidate_vetting.tasks import async_atlas_query
 from .vet import (get_eventcandidate_default_distance, 
                   _distance_at_healpix)
 
+from custom_code.templatetags.photometry_extras import error_to_snr
+
 logger = logging.getLogger(__name__)
 
 FILTER_PRIORITY_ORDER = ["r", "g", "V", "R", "G"]
@@ -120,8 +122,11 @@ def _get_phot(target_id:int, nonlocalized_event:NonLocalizedEvent) -> pd.DataFra
         ).last().details["time"]
     ).mjd
     
-    # add a column to the dataframe
+    # add a dt column to the dataframe
     photdf["dt"] = photdf.mjd - gw_disc_date
+    
+    # add a SNR column to the dataframe
+    photdf["SNR"] = error_to_snr(photdf.magerr)
 
     return photdf
 
