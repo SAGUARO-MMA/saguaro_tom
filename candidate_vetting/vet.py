@@ -632,7 +632,7 @@ def point_source_association(target_id:int, radius:float=2):
 
     return 1
 
-def associate_agn_2d(target_id:int, radius:float=2):
+def agn_association_2d(target_id:int, radius:float=2):
     """
     This searches the AGN catalogs for a match for this target
     """

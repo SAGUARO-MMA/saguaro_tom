@@ -25,7 +25,7 @@ from tom_targets.models import TargetExtra
 from .vet import (
     point_source_association,
     host_association,
-    associate_agn_2d,
+    agn_association_2d,
     save_score_to_targetextra,
     HOST_DF_COLMAP_INVERSE
 )
@@ -64,7 +64,7 @@ def vet_basic(
         save_score_to_targetextra(target, "ps_score", ps_score)
 
     ## search for an AGN associated with the target
-    agn_df = associate_agn_2d(
+    agn_df = agn_association_2d(
         target_id, 
         radius=2 # 2 arcseconds
     )
