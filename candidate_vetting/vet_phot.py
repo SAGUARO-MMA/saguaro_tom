@@ -185,7 +185,7 @@ def estimate_max_find_decay_rate(
         A list/array of the magnitude errors since the GW discovery
     max_decay_fit_time: int
         The maximum time after the GW discovery in days that we should fit the decay to.
-        The default is 25 days based on discussion from Rastinejad+2024.
+        The default is 25 days based on discussion from Rastinejad+2022.
 
     RETURNS
     -------
