@@ -44,7 +44,8 @@ PARAM_RANGES = dict(
     max_predets = 3,
     t_pre = -1.0,
     t_post = np.inf,
-    max_decay_fit_time=100
+    max_decay_fit_time=100,
+    phot_score_snr_min=5
 )
 
 
@@ -105,10 +106,10 @@ def vet_super_kn(target_id:int, nonlocalized_event_name:Optional[str]=None,
                                   t_post=param_ranges["t_post"])
     phot_score, lum, max_time, decay_rate, _, _ = _score_phot(
         allphot=allphot,
-        target = target,
-        nonlocalized_event = nonlocalized_event,
+        target=target,
+        nonlocalized_event=nonlocalized_event,
         param_ranges=param_ranges,
-        filt = ["g", "r", "i", "o", "c"] # use the common optical filters
+        filt=["g", "r", "i", "o", "c"] # use the common optical filters
     )
     if lum is not None:
         update_score_factor(event_candidate, "phot_peak_lum", lum.value)

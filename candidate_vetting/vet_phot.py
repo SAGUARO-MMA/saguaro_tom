@@ -23,6 +23,8 @@ from candidate_vetting.tasks import async_atlas_query
 from .vet import (get_eventcandidate_default_distance, 
                   _distance_at_healpix)
 
+from custom_code.templatetags.photometry_extras import error_to_snr
+
 logger = logging.getLogger(__name__)
 
 FILTER_PRIORITY_ORDER = ["r", "g", "V", "R", "G"]
@@ -120,8 +122,11 @@ def _get_phot(target_id:int, nonlocalized_event:NonLocalizedEvent) -> pd.DataFra
         ).last().details["time"]
     ).mjd
     
-    # add a column to the dataframe
+    # add a dt column to the dataframe
     photdf["dt"] = photdf.mjd - gw_disc_date
+    
+    # add a SNR column to the dataframe
+    photdf["snr"] = error_to_snr(photdf.magerr)
 
     return photdf
 
@@ -185,7 +190,7 @@ def estimate_max_find_decay_rate(
         A list/array of the magnitude errors since the GW discovery
     max_decay_fit_time: int
         The maximum time after the GW discovery in days that we should fit the decay to.
-        The default is 25 days based on discussion from Rastinejad+2024.
+        The default is 25 days based on discussion from Rastinejad+2022.
 
     RETURNS
     -------
@@ -460,12 +465,14 @@ def find_public_phot(
 def _score_phot(allphot, target, nonlocalized_event, 
                 param_ranges,
                 filt=None):
-    # allphot will have already been filtered not to extend beyond 
-    # param_ranges['t_post']
+    
     if allphot is None: # this is if there is no photometry
         return 1, None, None, None, None, None
     
+    # allphot will have already been filtered not to extend beyond param_ranges['t_post']
+    # we still need to toss out (1) upper limits (2) detections below a SNR threshold
     phot = allphot[~allphot.upperlimit]
+    phot = phot[phot.snr >= param_ranges["phot_score_snr_min"]]
     if not len(phot):
         # then there is no photometry for this object and we're done!
         return 1, None, None, None, None, None
