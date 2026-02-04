@@ -322,15 +322,28 @@ def handle_einstein_probe_alert(message, metadata):
     logger.info(f'Finished processing alert for {nonlocalizedevent.event_id}')
 
 def handle_antares_stream(alert):
-    
-    # first run the default handler
-    res = default_antares_handler(alert)
-    
-    # we need to vet this target to get host galaxies
-    target = res[0]
-    vet_or_post_error(target, slack_lsstddf)
-    
-    # then parse the returned values to send relevant messages
-    telescope_id = alert.alerts[-1].properties['ant_survey']
-    telescope = ANTARESBroker.surveys.get(telescope_id, "ZTF")
-    slack_lsstddf.send_slack_message(*res, telescope_stream=telescope)
+
+    try:
+        # first run the default handler
+        res = default_antares_handler(alert)
+        
+        # we need to vet this target to get host galaxies
+        target = res[0]
+        vet_or_post_error(target, slack_lsstddf)
+        
+        # then parse the returned values to send relevant messages
+        telescope_id = alert.alerts[-1].properties['ant_survey']
+        telescope = ANTARESBroker.surveys.get(telescope_id, "ZTF")
+        slack_lsstddf.send_slack_message(*res, telescope_stream=telescope)
+    except Exception as exc:
+        # we don't want this *ever* to crash, just log the error, send it as a slack
+        # message, and dump the alert to a json file
+        dump_dir = "antares-alert-errors"
+        if not os.path.exists(dump_dir):
+            os.makedirs(dump_dir)
+        dump_path = f"{dump_dir}/{uuid.uuid4()}.json"
+        with open(dump_path, "w") as f:
+            json.dumps(alert.__dict__, f, indent=4)
+        msg = f"ANTARES stream ingestion failed with {exc}! Failing alert dumped to saguaro@sand:~/{dump_path}"
+        logger.warning(msg)
+        slack_lsstddf.send_slack_message_from_text(msg)
