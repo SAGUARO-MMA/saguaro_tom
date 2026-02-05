@@ -107,7 +107,7 @@ WSGI_APPLICATION = 'saguaro_tom.wsgi.application'
 TASKS = {
     "default": {
         "BACKEND": "django_tasks.backends.database.DatabaseBackend",
-        "QUEUES": ["default", "mpc"]
+        "QUEUES": ["default", "mpc", "alerts"]
     }
 }
 
@@ -398,8 +398,8 @@ ALERT_STREAMS = [
             'USERNAME': os.getenv('SCIMMA_AUTH_USERNAME', SCIMMA_AUTH_USERNAME),
             'PASSWORD': os.getenv('SCIMMA_AUTH_PASSWORD', SCIMMA_AUTH_PASSWORD),
             'TOPIC_HANDLERS': {
-                'gcn.notices.einstein_probe.wxt.alert': 'custom_code.alertstream_handlers.handle_einstein_probe_alert',
-                'igwn.gwalert': 'custom_code.alertstream_handlers.handle_message_and_send_alerts',
+                'gcn.notices.einstein_probe.wxt.alert': 'custom_code.alertstream_handlers.handle_einstein_probe_alert_async',
+                'igwn.gwalert': 'custom_code.alertstream_handlers.handle_message_and_send_alerts_async',
                 'icecube.HE-tracks': 'tom_alertstreams.alertstreams.hopskotch.alert_logger',
             },
         },
