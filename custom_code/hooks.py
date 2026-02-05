@@ -45,7 +45,7 @@ def process_reduced_ztf_data(target, candidates):
         rd, created = ReducedDatum.objects.get_or_create(
             timestamp=jd.to_datetime(timezone=TimezoneInfo()),
             value=value,
-            source_name='ZTF',
+            source_name='ZTF (SASSy)',
             data_type='photometry',
             target=target)
         if created:  # do this afterward, in case there are duplicate candidates with distinct ZIDs
