@@ -1,3 +1,6 @@
+import os
+import uuid
+import json
 from tom_nonlocalizedevents.models import NonLocalizedEvent, EventSequence, EventCandidate
 from tom_nonlocalizedevents.alertstream_handlers.igwn_event_handler import handle_igwn_message
 from django.contrib.auth.models import Group
@@ -329,7 +332,9 @@ def handle_antares_stream(alert):
         
         # we need to vet this target to get host galaxies
         target = res[0]
-        vet_or_post_error(target, slack_lsstddf)
+        if not target.targetextra_set.filter(key='Host Galaxies').exists():
+            # only take the time to run the vetting if we need to
+            vet_or_post_error(target, slack_lsstddf)
         
         # then parse the returned values to send relevant messages
         telescope_id = alert.alerts[-1].properties['ant_survey']
@@ -343,7 +348,7 @@ def handle_antares_stream(alert):
             os.makedirs(dump_dir)
         dump_path = f"{dump_dir}/{uuid.uuid4()}.json"
         with open(dump_path, "w") as f:
-            json.dumps(alert.__dict__, f, indent=4)
+            json.dump(alert.__dict__, f, indent=4)
         msg = f"ANTARES stream ingestion failed with {exc}! Failing alert dumped to saguaro@sand:~/{dump_path}"
         logger.warning(msg)
         slack_lsstddf.send_slack_message_from_text(msg)
