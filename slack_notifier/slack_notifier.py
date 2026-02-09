@@ -36,7 +36,7 @@ class SlackNotifier(WebClient):
         
     def send_slack_message_from_text(self, msg, thread_ids=None):
         if thread_ids is None:
-            thread_ids = [None]*self.slack_channels
+            thread_ids = [None]*len(self.slack_channels)
             
         for channel, thread_id in zip(self.slack_channels, thread_ids):
             try:
