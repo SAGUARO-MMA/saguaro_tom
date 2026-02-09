@@ -105,9 +105,15 @@ class Command(BaseCommand):
         with connection.cursor() as cursor:
             cursor.execute(
                 """
+                --STEP 2.5: save the old target name as an alias, unless it is a temporary "J" name
+                INSERT INTO tom_targets_targetname (name, created, target_id, modified)
+                SELECT tm.name, NOW(), tm.id, NOW()
+                FROM top_tns_matches AS tm
+                WHERE tm.name != tm.tns_name AND LEFT(tm.name, 1) != 'J';
+
                 --STEP 3: merge any other matches into the new target
                 CREATE TEMPORARY TABLE targets_to_merge AS
-                SELECT tm.id AS old_id, ttm.id  AS new_id, tm.name AS old_name, ttm.name AS new_name
+                SELECT tm.id AS old_id, ttm.id AS new_id, tm.name AS old_name, ttm.name AS new_name
                 FROM tns_matches as tm
                 JOIN top_tns_matches AS ttm ON ttm.name=tm.tns_name;
                 
@@ -169,6 +175,16 @@ class Command(BaseCommand):
             RETURNING *;
             """
         )
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                --STEP 3.5: save the old target name as an alias, unless it is a temporary "J" name
+                INSERT INTO tom_targets_targetname (name, created, target_id, modified)
+                SELECT old_name, NOW(), new_id, NOW()
+                FROM targets_to_merge AS tm
+                WHERE LEFT(old_name, 1) != 'J';
+                """
+            )
         logger.info(f"Merged {len(deleted_targets):d} targets into TNS targets.")
         for target in deleted_targets:
             logger.info(f" - deleted target {target.name} during merge")
