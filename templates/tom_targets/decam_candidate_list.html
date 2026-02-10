@@ -13,7 +13,7 @@
   </div>
   <div class="card-body" style="background: #f8f9fa; padding: 15px 20px;">
     <form method="get" id="filter-form">
-      <div class="row align-items-end">
+      <div class="row">
         
         <!-- First Row: Dropdowns -->
         <div class="col-md-2 mb-2">
@@ -90,18 +90,11 @@
             </label>
           </div>
         </div>
-        
-        <div class="col-md-2 mb-2 text-right">
-          <label style="font-size: 0.85em; margin-bottom: 2px; display: block;">&nbsp;</label>
-          <button type="submit" class="btn btn-primary btn-sm mr-1">Apply</button>
-          <a href="{% url 'custom_code:decam-candidates' %}" class="btn btn-secondary btn-sm">Clear</a>
-        </div>
-        
       </div>
       
       <!-- Summary Row -->
-      <div class="row mt-2">
-        <div class="col-md-12">
+      <div class="row mt-2 align-items-end">
+        <div class="col-md-8">
           <small class="text-muted">
             {% if selected_date or selected_field != 'all' or selected_filter_band != 'all' or not_in_gaia == 'true' or has_host == 'true' %}
               Showing {{ filtered_count }} of {{ total_candidates }} candidates
@@ -109,6 +102,11 @@
               Showing all {{ total_candidates }} candidates
             {% endif %}
           </small>
+        </div>
+        <div class="col-md-4 mb-2 text-right">
+          <label style="font-size: 0.85em; margin-bottom: 2px; display: block;">&nbsp;</label>
+          <button type="submit" class="btn btn-primary btn-sm mr-1">Apply</button>
+          <a href="{% url 'custom_code:decam-candidates' %}" class="btn btn-secondary btn-sm">Clear</a>
         </div>
       </div>
     </form>
@@ -124,7 +122,7 @@
       <thead style="background: #f8f9fa;">
         <tr>
           <th style="min-width: 120px;">Target</th>
- 	  <th>RA</th>
+          <th>RA</th>
           <th>Dec</th>
           <th>Field</th>
           <th style="min-width: 120px;">Obs. Date</th>
@@ -145,7 +143,7 @@
         {% for target_group in target_groups %}
           {% for candidate in target_group.list %}
           <tr>
-	    <td {% if forloop.first %}rowspan="{{ target_group.list|length }}" style="vertical-align: top;"{% else %}style="display: none;"{% endif %}>
+            <td {% if forloop.first %}rowspan="{{ target_group.list|length }}" style="vertical-align: top;"{% else %}style="display: none;"{% endif %}>
               {% if candidate.target %}
                 <a href="{% url 'tom_targets:detail' candidate.target.id %}" target="_blank">
                   {{ candidate.target.name }}
@@ -160,8 +158,7 @@
             <td {% if forloop.first %}rowspan="{{ target_group.list|length }}" style="vertical-align: top;"{% else %}style="display: none;"{% endif %}>
               {{ candidate.dec|floatformat:5 }}
             </td>
-
-	    <td>
+            <td>
               {% if candidate.observation_record and candidate.observation_record.survey_field %}
                 {{ candidate.observation_record.survey_field.name }}
               {% else %}
@@ -247,6 +244,5 @@
     <span class="ml-2"><span class="badge badge-warning">G</span> In Gaia DR3</span>
     <span class="ml-2"><span class="badge badge-info">D</span> DESI Host Galaxy</span>
   </div>
-</div>
 </div>
 {% endblock %}
