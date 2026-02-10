@@ -99,7 +99,7 @@ class DecamCandidateListView(ListView):
         
         # Date filter - default to LATEST date if none selected
         obs_date = self.request.GET.get('date')
-        if not obs_date:
+        if obs_date == 'latest':
             # Get the most recent observation date
             latest = DecamCandidate.objects.filter(mjd_obs__isnull=False).order_by('-mjd_obs').first()
             if latest:
@@ -187,7 +187,7 @@ class DecamCandidateListView(ListView):
         
         # Current filter values - if no date selected, use latest
         selected_date = self.request.GET.get('date', '')
-        if not selected_date:
+        if selected_date == 'latest':
             latest = DecamCandidate.objects.filter(mjd_obs__isnull=False).order_by('-mjd_obs').first()
             if latest:
                 try:
