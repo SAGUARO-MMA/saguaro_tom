@@ -3,6 +3,7 @@
 {% block title %}DECam Candidates{% endblock %}
 
 {% block content %}
+<div class="container-fluid style="margin-left: -150px; margin-right: -15px; padding: 0;">
 <h1>DECam Candidates</h1>
 
 <!-- Filter Panel -->
@@ -12,7 +13,7 @@
   </div>
   <div class="card-body" style="background: #f8f9fa; padding: 15px 20px;">
     <form method="get" id="filter-form">
-      <div class="row align-items-end">
+      <div class="row">
         
         <!-- First Row: Dropdowns -->
         <div class="col-md-2 mb-2">
@@ -26,7 +27,12 @@
             {% endfor %}
           </select>
         </div>
-        
+        <div class="col-md-2 mb-2">
+          <label for="name-search" style="font-size: 0.85em; margin-bottom: 2px; display: block;">Name Starts With</label>
+          <input type="text" name="name_filter" id="name-search" class="form-control form-control-sm" 
+                 placeholder='e.g., "SN,AT"' value="{{ name_filter }}">
+          <small class="form-text text-muted" style="font-size: 0.75em;">Comma-separated prefixes</small>
+        </div>        
         <div class="col-md-2 mb-2">
           <label for="field-select" style="font-size: 0.85em; margin-bottom: 2px; display: block;">Field</label>
           <select name="field" id="field-select" class="form-control form-control-sm" onchange="this.form.submit()">
@@ -60,7 +66,7 @@
         <div class="col-md-1 mb-2">
           <label for="snr-min" style="font-size: 0.85em; margin-bottom: 2px; display: block;">SNR ≥</label>
           <input type="number" name="snr_min" id="snr-min" class="form-control form-control-sm" 
-                 placeholder="5" step="1" min="0" value="{% if cnn_min %}{{ cnn_min }}{% endif %}">
+                 placeholder="5" step="1" min="0" value="{% if snr_min %}{{ snr_min }}{% endif %}">
         </div>
         
         <div class="col-md-1 mb-2">
@@ -84,18 +90,11 @@
             </label>
           </div>
         </div>
-        
-        <div class="col-md-2 mb-2 text-right">
-          <label style="font-size: 0.85em; margin-bottom: 2px; display: block;">&nbsp;</label>
-          <button type="submit" class="btn btn-primary btn-sm mr-1">Apply</button>
-          <a href="{% url 'custom_code:decam-candidates' %}" class="btn btn-secondary btn-sm">Clear</a>
-        </div>
-        
       </div>
       
       <!-- Summary Row -->
-      <div class="row mt-2">
-        <div class="col-md-12">
+      <div class="row mt-2 align-items-end">
+        <div class="col-md-8">
           <small class="text-muted">
             {% if selected_date or selected_field != 'all' or selected_filter_band != 'all' or not_in_gaia == 'true' or has_host == 'true' %}
               Showing {{ filtered_count }} of {{ total_candidates }} candidates
@@ -103,6 +102,11 @@
               Showing all {{ total_candidates }} candidates
             {% endif %}
           </small>
+        </div>
+        <div class="col-md-4 mb-2 text-right">
+          <label style="font-size: 0.85em; margin-bottom: 2px; display: block;">&nbsp;</label>
+          <button type="submit" class="btn btn-primary btn-sm mr-1">Apply</button>
+          <a href="{% url 'custom_code:decam-candidates' %}" class="btn btn-secondary btn-sm">Clear</a>
         </div>
       </div>
     </form>
@@ -117,9 +121,11 @@
     <table class="table table-sm table-hover">
       <thead style="background: #f8f9fa;">
         <tr>
-          <th>Target</th>
+          <th style="min-width: 120px;">Target</th>
+          <th>RA</th>
+          <th>Dec</th>
           <th>Field</th>
-          <th>Obs. Date</th>
+          <th style="min-width: 120px;">Obs. Date</th>
           <th>Filter</th>
           <th>Mag.</th>
           <th>Err</th>
@@ -127,8 +133,8 @@
           <th>S/N</th>
           <th>Gaia</th>
           <th>DESI</th>
-          <th>Template</th>
           <th>Science</th>
+          <th>Template</th>
           <th>Difference</th>
         </tr>
       </thead>
@@ -137,7 +143,7 @@
         {% for target_group in target_groups %}
           {% for candidate in target_group.list %}
           <tr>
-	    <td {% if forloop.first %}rowspan="{{ target_group.list|length }}" style="vertical-align: middle;"{% else %}style="display: none;"{% endif %}>
+            <td {% if forloop.first %}rowspan="{{ target_group.list|length }}" style="vertical-align: top;"{% else %}style="display: none;"{% endif %}>
               {% if candidate.target %}
                 <a href="{% url 'tom_targets:detail' candidate.target.id %}" target="_blank">
                   {{ candidate.target.name }}
@@ -145,6 +151,12 @@
               {% else %}
                 None
               {% endif %}
+            </td>
+            <td {% if forloop.first %}rowspan="{{ target_group.list|length }}" style="vertical-align: top;"{% else %}style="display: none;"{% endif %}>
+              {{ candidate.ra|floatformat:5 }}
+            </td>
+            <td {% if forloop.first %}rowspan="{{ target_group.list|length }}" style="vertical-align: top;"{% else %}style="display: none;"{% endif %}>
+              {{ candidate.dec|floatformat:5 }}
             </td>
             <td>
               {% if candidate.observation_record and candidate.observation_record.survey_field %}
@@ -187,21 +199,21 @@
             </td>
             <td>
               {% if candidate.thumb_template %}
-                <img src="{{ candidate|decam_thumbnail_url:'template' }}" height="60" title="Template">
+                <img src="{{ candidate|decam_thumbnail_url:'science' }}" height="150" title="Science">
               {% else %}
                 <span class="text-muted">—</span>
               {% endif %}
             </td>
             <td>
               {% if candidate.thumb_science %}
-                <img src="{{ candidate|decam_thumbnail_url:'science' }}" height="60" title="Science">
+                <img src="{{ candidate|decam_thumbnail_url:'template' }}" height="150" title="Template">
               {% else %}
                 <span class="text-muted">—</span>
               {% endif %}
             </td>
             <td>
               {% if candidate.thumb_difference %}
-                <img src="{{ candidate|decam_thumbnail_url:'difference' }}" height="60" title="Difference">
+                <img src="{{ candidate|decam_thumbnail_url:'difference' }}" height="150" title="Difference">
               {% else %}
                 <span class="text-muted">—</span>
               {% endif %}
@@ -210,7 +222,7 @@
           {% endfor %}
         {% empty %}
         <tr>
-          <td colspan="13" class="text-center">
+          <td colspan="15" class="text-center">
             No DECam candidates match the current filters.
           </td>
         </tr>
@@ -232,6 +244,5 @@
     <span class="ml-2"><span class="badge badge-warning">G</span> In Gaia DR3</span>
     <span class="ml-2"><span class="badge badge-info">D</span> DESI Host Galaxy</span>
   </div>
-</div
->
+</div>
 {% endblock %}

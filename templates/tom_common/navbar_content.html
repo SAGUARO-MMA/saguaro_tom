@@ -38,7 +38,7 @@ For customization instructions, see tom_common/base.html
         </li>
         </li>
         <li class="nav-item">
-            <a class="nav-link" href="{% url 'custom_code:decam-candidates' %}" style="color:black">DECam Candidates</a>
+            <a class="nav-link" href="{% url 'custom_code:decam-candidates' %}?date=latest" style="color:black">DECam Candidates</a>
         </li>
         <li class="nav-item">
             <a class="nav-link" href="{% url 'custom_code:candidates' %}?target__name__startswith=AT,SN,TDE&order=-observation_record__scheduled_start" style="color:black">TNS Transients</a>
