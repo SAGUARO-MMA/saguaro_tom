@@ -10,7 +10,10 @@ from django.http import HttpResponse, Http404
 from django.views import View
 from django.views.generic import ListView 
 from astropy.time import Time
-from .models import Candidate, DecamCandidate
+from django.db.models import Count
+from django.db.models.functions import Floor
+from .filters import CandidateFilter
+from .models import DecamCandidate
 
 
 class DecamCandidateView(View):
@@ -118,16 +121,8 @@ class DecamCandidateListView(ListView):
         # Name filter - filter by target name prefix (comma-separated)
         name_filter = self.request.GET.get('name_filter')
         if name_filter:
-            from django.db.models import Q
-            # Split by comma, strip whitespace
-            prefixes = [p.strip() for p in name_filter.split(',') if p.strip()]
-            if prefixes:
-                # Build OR query for each prefix
-                name_query = Q()
-                for prefix in prefixes:
-                    name_query |= Q(target__name__istartswith=prefix)
-                queryset = queryset.filter(name_query)
-        
+            queryset = CandidateFilter.multifilter(queryset, 'target__name__startswith', name_filter)
+
         # Field filter
         field = self.request.GET.get('field')
         if field and field != 'all':
@@ -174,23 +169,14 @@ class DecamCandidateListView(ListView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        
+
         # Get all candidates for dropdown options
         all_candidates = DecamCandidate.objects.all()
         
         # Build date list
-        dates_dict = {}
-        for candidate in all_candidates.filter(mjd_obs__isnull=False):
-            if candidate.mjd_obs:
-                try:
-                    t = Time(candidate.mjd_obs, format='mjd')
-                    obs_date = t.datetime.strftime('%Y-%m-%d')
-                    dates_dict[obs_date] = dates_dict.get(obs_date, 0) + 1
-                except:
-                    continue
-        
-        context['observation_dates'] = sorted(dates_dict.items(), key=lambda x: x[0], reverse=True)
-        
+        dates = all_candidates.annotate(date=Floor('mjd_obs')).values('date').order_by('-date').annotate(count=Count('id'))
+        context['observation_dates'] = [(Time(date['date'], format='mjd').strftime('%Y-%m-%d'), date['count']) for date in dates]
+
         # Get unique fields
         fields = DecamCandidate.objects.filter(
             observation_record__survey_field__isnull=False
@@ -224,4 +210,3 @@ class DecamCandidateListView(ListView):
         context['filtered_count'] = self.get_queryset().count()
         
         return context
-
