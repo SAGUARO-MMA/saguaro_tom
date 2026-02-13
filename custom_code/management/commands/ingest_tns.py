@@ -205,7 +205,10 @@ class Command(BaseCommand):
                   FROM tns_q3c AS tns
                   INNER JOIN tom_targets_basetarget AS bt
                   ON tns.name = REGEXP_REPLACE(bt.name, '^[^0-9]*', '')
-                  WHERE bt.id = tt.basetarget_ptr_id
+                  WHERE bt.id = tt.basetarget_ptr_id AND (
+                      tt.redshift IS NULL OR
+                      tt.redshift = 'nan'
+                  )
                 RETURNING tt.basetarget_ptr_id;
                 """
             )
