@@ -27,7 +27,7 @@ class AntaresSlackFilter(SlackNotifier):
         agn_match = target.targetextra_set.filter(key="QSO Match").first()
 
         has_vs_match = any(m.value != 'None' for m in vs_matches)
-        has_agn_match = agn_match.value != 'None'
+        has_agn_match = agn_match is not None and agn_match.value != 'None'
 
         if (has_vs_match or has_agn_match) and telescope_stream == "ZTF":
             # don't send this message!

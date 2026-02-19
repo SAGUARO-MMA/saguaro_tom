@@ -109,11 +109,12 @@ def vet_or_post_error(target, slack_client):
             target_run_mpc.enqueue(detections.latest().id)
         mjd_now = Time.now().mjd
         atlas_query.enqueue(mjd_now - 20., mjd_now, target.id, 'atlas_photometry')
-
+        return True
+    
     except Exception as e:
         logger.error(''.join(traceback.format_exception(e)))
         slack_client.send_slack_message_from_text(f'Error vetting target {target.name}:\n{e}')
-
+        return False
 
 def send_email(subject, body, is_test_alert=False):
     """This doesn't currently work"""
@@ -334,12 +335,16 @@ def handle_antares_stream(alert):
         target = res[0]
         if not target.targetextra_set.filter(key='Host Galaxies').exists():
             # only take the time to run the vetting if we need to
-            vet_or_post_error(target, slack_lsstddf)
-        
+            succeeded = vet_or_post_error(target, slack_lsstddf)
+
+        if not succeeded:
+            return # the error message was already sent in slack
+            
         # then parse the returned values to send relevant messages
         telescope_id = alert.alerts[-1].properties['ant_survey']
         telescope = ANTARESBroker.surveys.get(telescope_id, "ZTF")
         slack_lsstddf.send_slack_message(*res, telescope_stream=telescope)
+
     except Exception as exc:
         # we don't want this *ever* to crash, just log the error, send it as a slack
         # message, and dump the alert to a json file
