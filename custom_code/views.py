@@ -25,6 +25,7 @@ from .filters import CandidateFilter, CSSFieldCredibleRegionFilter, NonLocalized
 from .forms import TargetListExtraFormset, TargetReportForm, TargetClassifyForm
 from .forms import NonLocalizedEventFormHelper, CandidateFormHelper
 from .forms import TNS_FILTER_CHOICES, TNS_INSTRUMENT_CHOICES, TNS_CLASSIFICATION_CHOICES
+from .forms import TNS_GROUP_CHOICES, TNS_DATA_SOURCE_GROUP_CHOICES
 from .hooks import target_post_save, update_or_create_target_extra
 from .tasks import target_run_mpc
 from .templatetags.skymap_extras import get_preferred_localization
@@ -37,6 +38,7 @@ from io import StringIO
 
 import paramiko
 import os
+import re
 
 from tom_catalogs.harvesters.tns import TNS_URL
 TNS = settings.BROKERS['TNS']  # includes the API credentials
@@ -44,8 +46,60 @@ TNS_MARKER = 'tns_marker' + json.dumps({'tns_id': TNS['bot_id'], 'type': 'bot', 
 TNS_FILTER_IDS = {name: fid for fid, name in TNS_FILTER_CHOICES}
 TNS_INSTRUMENT_IDS = {name: iid for iid, name in TNS_INSTRUMENT_CHOICES}
 TNS_CLASSIFICATION_IDS = {name: cid for cid, name in TNS_CLASSIFICATION_CHOICES}
+TNS_GROUP_IDS = {name: gid for gid, name in TNS_GROUP_CHOICES}
+TNS_DATA_SOURCE_GROUP_IDS = {name: gid for gid, name in TNS_DATA_SOURCE_GROUP_CHOICES}
+
+# Stop-gap solution for translating TOM source names to TNS instrument and group names. TODO: improve this
+TNS_INSTRUMENT_IDS['DECam'] = 172
+TNS_INSTRUMENT_IDS['ZTF'] = 196
+TNS_GROUP_IDS['FTN'] = 38
+TNS_GROUP_IDS['FTS'] = 38
+TNS_GROUP_IDS['MMT'] = 52
+TNS_GROUP_IDS['mmt'] = 52
+TNS_GROUP_IDS['Bok'] = 52
+TNS_GROUP_IDS['SOAR'] = 177
+TNS_GROUP_IDS['DECam'] = 178
+TNS_DATA_SOURCE_GROUP_IDS['DECam'] = 178
 
 logger = logging.getLogger(__name__)
+
+def guess_tns_filter_id(reduceddatum):
+    """
+    Stop-gap solution for translating TOM filter names to TNS filter names. TODO: improve this
+    """
+    filter_name = reduceddatum.value.get('filter')
+    if filter_name in TNS_FILTER_IDS:
+        return TNS_FILTER_IDS[filter_name]
+
+    source = re.sub(' \(.*\)', '', re.sub('[-_ ].*', '', reduceddatum.source_name))
+    if filter_name == 'o':
+        full_filter_name = 'orange'
+    elif filter_name == 'c':
+        full_filter_name = 'cyan'
+    elif filter_name == 'w' and source == 'ATLAS':
+        full_filter_name = 'wide'
+    else:
+        full_filter_name = filter_name
+    specific_filter_name = f'{full_filter_name}-{source}'
+    if specific_filter_name in TNS_FILTER_IDS:
+        return TNS_FILTER_IDS[specific_filter_name]
+
+    if filter_name in ['U', 'B', 'V']:
+        generic_filter_name = filter_name + '-Johnson'
+    elif filter_name in ['R', 'I']:
+        generic_filter_name = filter_name + '-Cousins'
+    elif filter_name in ['J', 'H', 'K']:
+        generic_filter_name = filter_name + '-Bessell'
+    elif filter_name in ['u', 'g', 'r', 'i', 'z']:
+        generic_filter_name = filter_name + '-Sloan'
+    elif filter_name in ['y', 'w']:
+        generic_filter_name = filter_name + '-PS1'
+    else:
+        generic_filter_name = filter_name
+    if generic_filter_name in TNS_FILTER_IDS:
+        return TNS_FILTER_IDS[generic_filter_name]
+
+    return 0  # Other
 
 
 class TargetGroupingCreateView(LoginRequiredMixin, CreateView):
@@ -121,33 +175,35 @@ class CandidateListView(FilterView):
         ).annotate(detections=Count('target__candidate'))
 
 
-def upload_files_to_tns(files):
+def upload_files_to_tns(files, sandbox=False):
     """
     Upload files to the Transient Name Server according to this manual:
     https://sandbox.wis-tns.org/sites/default/files/api/TNS_bulk_reports_manual.pdf
     """
     json_data = {'api_key': TNS['api_key']}
-    response = requests.post(TNS_URL + '/api/set/file-upload', headers={'User-Agent': TNS_MARKER}, data=json_data, files=files)
+    tns_url = TNS_URL.replace('www.', 'sandbox.') if sandbox else TNS_URL
+    response = requests.post(tns_url + '/api/set/file-upload', headers={'User-Agent': TNS_MARKER}, data=json_data, files=files)
     response.raise_for_status()
     new_filenames = response.json()['data']
     logger.info(f"Uploaded {', '.join(new_filenames)} to the TNS")
     return new_filenames
 
 
-def send_tns_report(data):
+def send_tns_report(data, sandbox=False):
     """
     Send a JSON bulk report to the Transient Name Server according to this manual:
     https://sandbox.wis-tns.org/sites/default/files/api/TNS_bulk_reports_manual.pdf
     """
     json_data = {'api_key': TNS['api_key'], 'data': data}
-    response = requests.post(TNS_URL + '/api/set/bulk-report', headers={'User-Agent': TNS_MARKER}, data=json_data)
+    tns_url = TNS_URL.replace('www.', 'sandbox.') if sandbox else TNS_URL
+    response = requests.post(tns_url + '/api/set/bulk-report', headers={'User-Agent': TNS_MARKER}, data=json_data)
     response.raise_for_status()
     report_id = response.json()['data']['report_id']
     logger.info(f'Sent TNS report ID {report_id:d}')
     return report_id
 
 
-def get_tns_report_reply(report_id, request):
+def get_tns_report_reply(report_id, request, sandbox=False):
     """
     Get feedback from the Transient Name Server in response to a bulk report according to this manual:
     https://sandbox.wis-tns.org/sites/default/files/api/TNS_bulk_reports_manual.pdf
@@ -155,9 +211,10 @@ def get_tns_report_reply(report_id, request):
     Posts an informational message in a banner on the page using ``request``
     """
     json_data = {'api_key': TNS['api_key'], 'report_id': report_id}
+    tns_url = TNS_URL.replace('www.', 'sandbox.') if sandbox else TNS_URL
     for _ in range(6):
         time.sleep(5)
-        response = requests.post(TNS_URL + '/api/get/bulk-report-reply', headers={'User-Agent': TNS_MARKER}, data=json_data)
+        response = requests.post(tns_url + '/api/get/bulk-report-reply', headers={'User-Agent': TNS_MARKER}, data=json_data)
         if response.ok:
             break
     response.raise_for_status()
@@ -186,6 +243,9 @@ def get_tns_report_reply(report_id, request):
             logger.info(log_message)
             messages.success(request, log_message)
             break
+        elif '103' in feedback:  # submitted (no name change)
+            iau_name = None
+            break
     else:  # this should never happen
         iau_name = None
         log_message = 'Problem getting response from TNS'
@@ -213,30 +273,51 @@ class TargetReportView(PermissionListMixin, TemplateResponseMixin, FormMixin, Pr
             'dec': target.dec,
             'reporter': f'{self.request.user.get_full_name()}',
         }
+        alias = target.aliases.first()
+        if alias:
+            initial['internal_name'] = alias.name
         photometry = target.reduceddatum_set.filter(data_type='photometry')
-        if photometry.exists():
-            reduced_datum = photometry.latest()
-            initial['observation_date'] = reduced_datum.timestamp
-            initial['flux'] = reduced_datum.value.get('magnitude')
-            initial['flux_error'] = reduced_datum.value.get('error')
-            filter_name = reduced_datum.value.get('filter')
-            if filter_name in TNS_FILTER_IDS:
-                initial['filter'] = (TNS_FILTER_IDS[filter_name], filter_name)
-            instrument_name = reduced_datum.value.get('instrument')
-            if instrument_name in TNS_INSTRUMENT_IDS:
-                initial['instrument'] = (TNS_INSTRUMENT_IDS[instrument_name], instrument_name)
+        first_det = photometry.filter(value__magnitude__isnull=False).order_by('timestamp').first()
+        if first_det:
+            initial['observation_date'] = first_det.timestamp
+            initial['flux'] = first_det.value.get('magnitude')
+            initial['flux_error'] = first_det.value.get('error')
+            initial['limiting_flux'] = first_det.value.get('limit')
+            initial['filter'] = guess_tns_filter_id(first_det)
+            instrument_name = re.sub(' \(.*\)', '', re.sub('[-_ ].*', '', first_det.source_name))
+            initial['instrument'] = TNS_INSTRUMENT_IDS.get(instrument_name)
+            initial['data_source_group'] = TNS_DATA_SOURCE_GROUP_IDS.get(instrument_name)
+
+            last_nondet = photometry.filter(value__magnitude__isnull=True,
+                                            timestamp__lt=first_det.timestamp).order_by('timestamp').last()
+            if last_nondet:
+                initial['nondetection_date'] = last_nondet.timestamp
+                initial['nondetection_limit'] = last_nondet.value.get('limit')
+                initial['nondetection_filter'] = guess_tns_filter_id(last_nondet)
+                instrument_name = re.sub(' \(.*\)', '', re.sub('[-_ ].*', '', last_nondet.source_name))
+                initial['nondetection_instrument'] = TNS_INSTRUMENT_IDS.get(instrument_name)
+            else:
+                initial['archive'] = 0
         return initial
 
     def form_valid(self, form):
-        report_id = send_tns_report(form.generate_tns_report())
-        iau_name = get_tns_report_reply(report_id, self.request)
+        if ((form.cleaned_data['nondetection_date'] and form.cleaned_data['nondetection_limit']
+             and form.cleaned_data['nondetection_filter'] and form.cleaned_data['nondetection_instrument']
+             and form.cleaned_data['nondetection_units'])
+            or (form.cleaned_data['archive'] and form.cleaned_data['archival_remarks'])):
+            send_to_sandbox = form.cleaned_data['send_to_sandbox']
+            report_id = send_tns_report(form.generate_tns_report(), sandbox=send_to_sandbox)
+            iau_name = get_tns_report_reply(report_id, self.request, sandbox=send_to_sandbox)
 
-        # update the target name
-        if iau_name is not None:
-            target = Target.objects.get(pk=self.kwargs['pk'])
-            target.name = iau_name
-            target.save()
-        return redirect(self.get_success_url())
+            # update the target name
+            if iau_name is not None and not send_to_sandbox:
+                target = Target.objects.get(pk=self.kwargs['pk'])
+                target.name = iau_name
+                target.save()
+            return redirect(self.get_success_url())
+        else:
+            messages.error(self.request, 'Either nondetection (date, instrument, limit, units, filter) or archival info is required.')
+            return self.render_to_response(self.get_context_data(form=form))
 
     def get_success_url(self):
         return reverse_lazy('targets:detail', kwargs=self.kwargs)
@@ -271,17 +352,22 @@ class TargetClassifyView(PermissionListMixin, TemplateResponseMixin, FormMixin, 
         spectra = target.reduceddatum_set.filter(data_type='spectroscopy')
         if spectra.exists():
             spectrum = spectra.latest()
-            initial['observation_date'] = spectrum.timestamp
-            initial['ascii_file'] = spectrum.data_product.data
+            initial['observation_date'] = spectrum.timestamp.isoformat(sep=' ')[:-9]
+            if spectrum.data_product.get_file_extension() in ['.fits', '.fz']:
+                initial['fits_file'] = spectrum.data_product.data
+            else:
+                initial['ascii_file'] = spectrum.data_product.data
+            initial['group'] = TNS_GROUP_IDS.get(spectrum.source_name)
         return initial
 
     def form_valid(self, form):
-        new_filenames = upload_files_to_tns(form.files_to_upload())
-        report_id = send_tns_report(form.generate_tns_report(new_filenames))
-        iau_name = get_tns_report_reply(report_id, self.request)
+        send_to_sandbox = form.cleaned_data['send_to_sandbox']
+        new_filenames = upload_files_to_tns(form.files_to_upload(), sandbox=send_to_sandbox)
+        report_id = send_tns_report(form.generate_tns_report(new_filenames), sandbox=send_to_sandbox)
+        iau_name = get_tns_report_reply(report_id, self.request, sandbox=send_to_sandbox)
 
         # update the target name
-        if iau_name is not None:
+        if iau_name is not None and not send_to_sandbox:
             target = Target.objects.get(pk=self.kwargs['pk'])
             target.name = iau_name
             target.save()
