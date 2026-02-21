@@ -335,6 +335,11 @@ class TargetClassifyView(PermissionListMixin, TemplateResponseMixin, FormMixin, 
         context['target'] = Target.objects.get(pk=self.kwargs['pk'])
         return context
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['target'] = Target.objects.get(pk=self.kwargs['pk'])
+        return kwargs
+
     def get_initial(self):
         target = Target.objects.get(pk=self.kwargs['pk'])
         initial = {
@@ -353,33 +358,35 @@ class TargetClassifyView(PermissionListMixin, TemplateResponseMixin, FormMixin, 
         if spectra.exists():
             spectrum = spectra.latest()
             initial['observation_date'] = spectrum.timestamp.isoformat(sep=' ', timespec='milliseconds')[:-6]
-            if spectrum.data_product.get_file_extension() in ['.fits', '.fz']:
-                initial['fits_file'] = spectrum.data_product.data
-            else:
-                initial['ascii_file'] = spectrum.data_product.data
+            initial['spectrum'] = spectrum.pk
             initial['group'] = TNS_GROUP_IDS.get(spectrum.source_name)
+            initial['instrument'] = TNS_INSTRUMENT_IDS.get(spectrum.source_name)
         return initial
 
     def form_valid(self, form):
-        send_to_sandbox = form.cleaned_data['send_to_sandbox']
-        new_filenames = upload_files_to_tns(form.files_to_upload(), sandbox=send_to_sandbox)
-        report_id = send_tns_report(form.generate_tns_report(new_filenames), sandbox=send_to_sandbox)
-        iau_name = get_tns_report_reply(report_id, self.request, sandbox=send_to_sandbox)
+        if form.cleaned_data['ascii_file'] or form.cleaned_data['spectrum']:
+            send_to_sandbox = form.cleaned_data['send_to_sandbox']
+            new_filenames = upload_files_to_tns(form.files_to_upload(), sandbox=send_to_sandbox)
+            report_id = send_tns_report(form.generate_tns_report(new_filenames), sandbox=send_to_sandbox)
+            iau_name = get_tns_report_reply(report_id, self.request, sandbox=send_to_sandbox)
 
-        # update the target name
-        if iau_name is not None and not send_to_sandbox:
-            target = Target.objects.get(pk=self.kwargs['pk'])
-            target.name = iau_name
-            target.save()
+            # update the target name
+            if iau_name is not None and not send_to_sandbox:
+                target = Target.objects.get(pk=self.kwargs['pk'])
+                target.name = iau_name
+                target.save()
 
-            classification = dict(TNS_CLASSIFICATION_CHOICES)[int(form.cleaned_data['classification'])]
-            update_or_create_target_extra(target, 'Classification', classification)
-            messages.success(self.request, f"Classification set to {classification}")
-            if form.cleaned_data['redshift']:
-                update_or_create_target_extra(target, 'Redshift', form.cleaned_data['redshift'])
-                messages.success(self.request, f"Redshift set to {form.cleaned_data['redshift']}")
+                classification = dict(TNS_CLASSIFICATION_CHOICES)[int(form.cleaned_data['classification'])]
+                update_or_create_target_extra(target, 'Classification', classification)
+                messages.success(self.request, f"Classification set to {classification}")
+                if form.cleaned_data['redshift']:
+                    update_or_create_target_extra(target, 'Redshift', form.cleaned_data['redshift'])
+                    messages.success(self.request, f"Redshift set to {form.cleaned_data['redshift']}")
 
-        return redirect(self.get_success_url())
+            return redirect(self.get_success_url())
+        else:
+            messages.error(self.request, 'Either ASCII file or spectrum is required.')
+            return self.render_to_response(self.get_context_data(form=form))
 
     def get_success_url(self):
         return reverse_lazy('targets:detail', kwargs=self.kwargs)

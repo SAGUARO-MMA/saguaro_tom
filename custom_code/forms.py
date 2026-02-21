@@ -4,8 +4,11 @@ from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Layout, Row, Column, Submit, HTML
 from crispy_forms.bootstrap import AppendedText, PrependedAppendedText
 from tom_targets.models import TargetList
+from tom_dataproducts.models import ReducedDatum
 from .models import TargetListExtra
 from datetime import datetime, timezone
+from io import StringIO
+import numpy as np
 import json
 import os
 
@@ -368,6 +371,46 @@ class TargetReportForm(forms.Form):
         return json.dumps(report_data)
 
 
+def _get_spectrum_choices(target):
+    reduceddatums = target.reduceddatum_set.filter(data_type='spectroscopy').order_by('timestamp')
+    choices = [(None, '-------')]
+    for rd in reduceddatums:
+        description = f'{rd.source_name} {rd.data_type} @ {rd.timestamp.isoformat(sep=" ", timespec="milliseconds")[:-6]} <ReducedDatum {rd.pk}>'
+        choices.append((rd.pk, description))
+    return choices
+
+
+def reduced_datum_to_ascii_file(rd):
+    """
+    Create a virtual ASCII file from a spectrum ReducedDatum for upload to TNS
+    """
+    file_buffer = StringIO()
+    timestring = rd.timestamp.isoformat(timespec="milliseconds")[:-6]
+    header = (
+        f"# OBJECT  = '{rd.target.name}'\n"
+        f"# DATE-OBS= '{timestring}'\n"
+    )
+    if rd.source_name:
+        header += f"# TELESCOP= '{rd.source_name}'\n"
+    if 'flux_units' in rd.value:
+        bunit = rd.value['flux_units']
+        header += f"# BUNIT   = '{bunit}'\n"
+    if 'wavelength_units' in rd.value:
+        cunit = rd.value['wavelength_units']
+        header += f"# CUNIT1  = '{cunit}'\n"
+    file_buffer.write(header)
+    output_spectrum = np.transpose([rd.value['wavelength'], rd.value['flux']])
+    np.savetxt(file_buffer, output_spectrum, fmt=('%f', '%e'))
+    file_buffer.seek(0)  # return to the beginning of the buffer
+    if rd.data_product is not None:
+        file_name = rd.data_product.get_file_name()
+        if file_name.endswith('.fits') or file_name.endswith('.fits.fz'):
+            file_name = file_name.rstrip('.fz').rstrip('.fits') + '.txt'
+    else:
+        file_name = f'saguaro_{rd.pk}.txt'
+    return file_name, file_buffer, 'text/plain'
+
+
 class TargetClassifyForm(forms.Form):
     name = forms.CharField()
     classifier = forms.CharField(widget=forms.Textarea(attrs={'rows': 1}),
@@ -389,13 +432,21 @@ class TargetClassifyForm(forms.Form):
         (4, 'Arcs'),
         (5, 'Synthetic'),
     ])
-    ascii_file = forms.FileField(label='ASCII file')
-    fits_file = forms.FileField(label='FITS file', required=False)
+    spectrum = forms.TypedChoiceField(required=False,
+                                      coerce=lambda pk: ReducedDatum.objects.get(pk=pk))
+    ascii_file = forms.FileField(label='ASCII file', required=False,
+                                 help_text='Uploading a file here overrides the ASCII file from the spectrum field')
+    fits_file = forms.FileField(label='FITS file', required=False,
+                                help_text='Uploading a file here overrides the FITS file from the spectrum field (if any)')
     spectrum_remarks = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 1}))
     send_to_sandbox = forms.BooleanField(required=False)
 
     def __init__(self, *args, **kwargs):
+        target = kwargs.pop('target', None)
         super().__init__(*args, **kwargs)
+        if target is not None:
+            self.fields['spectrum'].choices = _get_spectrum_choices(target)
+
         self.helper = FormHelper()
         self.helper.layout = Layout(
             Row(
@@ -409,6 +460,7 @@ class TargetClassifyForm(forms.Form):
             ),
             Row(Column('classification_remarks')),
             Row(HTML('<h4>Classification Spectrum</h4>')),
+            Row(Column('spectrum')),
             Row(
                 Column('observation_date'),
                 Column('observer'),
@@ -435,12 +487,19 @@ class TargetClassifyForm(forms.Form):
                 self.cleaned_data['ascii_file'].open(),
                 'text/plain'
             )
+        elif self.cleaned_data['spectrum']:
+            files_to_upload['files[0]'] = reduced_datum_to_ascii_file(self.cleaned_data['spectrum'])
+
         if self.cleaned_data['fits_file']:
             files_to_upload['files[1]'] = (
                 os.path.basename(self.cleaned_data['fits_file'].name),
                 self.cleaned_data['fits_file'].open(),
                 'application/fits'
             )
+        elif (self.cleaned_data['spectrum']
+              and self.cleaned_data['spectrum'].data_product.get_file_extension() == '.fits'):
+            fits_file = self.cleaned_data['spectrum'].data_product
+            files_to_upload['files[1]'] = (fits_file.get_file_name(), fits_file.data.open(), 'application/fits')
         return files_to_upload
 
     def generate_tns_report(self, new_filenames=None):
@@ -450,10 +509,6 @@ class TargetClassifyForm(forms.Form):
 
         Returns the report as a JSON-formatted string
         """
-        if new_filenames is None:
-            ascii_filename = os.path.basename(self.cleaned_data['ascii_file'].name)
-        else:
-            ascii_filename = new_filenames[0]
         report_data = {
             "classification_report": {
                 "0": {
@@ -471,19 +526,22 @@ class TargetClassifyForm(forms.Form):
                             "observer": self.cleaned_data['observer'],
                             "reducer": self.cleaned_data['reducer'],
                             "spectypeid": self.cleaned_data['spectrum_type'],
-                            "ascii_file": ascii_filename,
                             "remarks": self.cleaned_data['spectrum_remarks'],
                         },
                     },
                 }
             }
         }
-        if self.cleaned_data['fits_file']:
-            if new_filenames is None:
-                fits_filename = os.path.basename(self.cleaned_data['fits_file'].name)
-            else:
-                fits_filename = new_filenames[1]
-            report_data['classification_report']['0']['spectra']['0']['fits_file'] = fits_filename
+        if new_filenames:
+            report_data['classification_report']['0']['spectra']['0']['ascii_file'] = new_filenames[0]
+            if len(new_filenames) > 1:
+                report_data['classification_report']['0']['spectra']['0']['fits_file'] = new_filenames[1]
+        else:  # assuming they were previously uploaded
+            files_to_upload = self.files_to_upload()
+            if 'files[0]' in files_to_upload:
+                report_data['classification_report']['0']['spectra']['0']['ascii_file'] = files_to_upload['files[0]'][0]
+            if 'files[1]' in files_to_upload:
+                report_data['classification_report']['0']['spectra']['0']['fits_file'] = files_to_upload['files[1]'][0]
         return json.dumps(report_data)
 
 
