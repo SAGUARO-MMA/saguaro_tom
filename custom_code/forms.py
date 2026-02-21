@@ -330,13 +330,13 @@ class TargetReportForm(forms.Form):
                     "reporting_groupid": self.cleaned_data['reporting_group'],
                     "data_source_groupid": self.cleaned_data['data_source_group'],
                     "reporter": self.cleaned_data['reporter'],
-                    "discovery_datetime": self.cleaned_data['discovery_date'].isoformat(sep=' ')[:-9],
+                    "discovery_datetime": self.cleaned_data['discovery_date'].isoformat(sep=' ', timespec='milliseconds')[:-6],
                     "at_type": self.cleaned_data['at_type'],
                     "host_name": self.cleaned_data['host_name'],
                     "host_redshift": self.cleaned_data['host_redshift'],
                     "internal_name": self.cleaned_data['internal_name'],
                     "non_detection": {
-                        "obsdate": self.cleaned_data['nondetection_date'].isoformat(sep=' ')[:-9],
+                        "obsdate": self.cleaned_data['nondetection_date'].isoformat(sep=' ', timespec='milliseconds')[:-6],
                         "limiting_flux": self.cleaned_data['nondetection_limit'],
                         "flux_unitid": self.cleaned_data['nondetection_units'],
                         "filterid": self.cleaned_data['nondetection_filter'],
@@ -349,7 +349,7 @@ class TargetReportForm(forms.Form):
                     "photometry": {
                         "photometry_group": {
                             "0": {
-                                "obsdate": self.cleaned_data['observation_date'].isoformat(sep=' ')[:-9],
+                                "obsdate": self.cleaned_data['observation_date'].isoformat(sep=' ', timespec='milliseconds')[:-6],
                                 "flux": self.cleaned_data['flux'],
                                 "flux_error": self.cleaned_data['flux_error'],
                                 "limiting_flux": self.cleaned_data['limiting_flux'],
@@ -465,7 +465,7 @@ class TargetClassifyForm(forms.Form):
                     "remarks": self.cleaned_data['classification_remarks'],
                     "spectra": {
                         "0": {
-                            "obsdate": self.cleaned_data['observation_date'].isoformat(sep=' ')[:-9],
+                            "obsdate": self.cleaned_data['observation_date'].isoformat(sep=' ', timespec='milliseconds')[:-6],
                             "instrumentid": self.cleaned_data['instrument'],
                             "exptime": self.cleaned_data['exposure_time'],
                             "observer": self.cleaned_data['observer'],

@@ -279,7 +279,7 @@ class TargetReportView(PermissionListMixin, TemplateResponseMixin, FormMixin, Pr
         photometry = target.reduceddatum_set.filter(data_type='photometry')
         first_det = photometry.filter(value__magnitude__isnull=False).order_by('timestamp').first()
         if first_det:
-            initial['observation_date'] = first_det.timestamp.isoformat(sep=' ')[:-9]
+            initial['observation_date'] = first_det.timestamp.isoformat(sep=' ', timespec='milliseconds')[:-6]
             initial['flux'] = first_det.value.get('magnitude')
             initial['flux_error'] = first_det.value.get('error')
             initial['limiting_flux'] = first_det.value.get('limit')
@@ -291,7 +291,7 @@ class TargetReportView(PermissionListMixin, TemplateResponseMixin, FormMixin, Pr
             last_nondet = photometry.filter(value__magnitude__isnull=True,
                                             timestamp__lt=first_det.timestamp).order_by('timestamp').last()
             if last_nondet:
-                initial['nondetection_date'] = last_nondet.timestamp.isoformat(sep=' ')[:-9]
+                initial['nondetection_date'] = last_nondet.timestamp.isoformat(sep=' ', timespec='milliseconds')[:-6]
                 initial['nondetection_limit'] = last_nondet.value.get('limit')
                 initial['nondetection_filter'] = guess_tns_filter_id(last_nondet)
                 instrument_name = re.sub(' \(.*\)', '', re.sub('[-_ ].*', '', last_nondet.source_name))
@@ -352,7 +352,7 @@ class TargetClassifyView(PermissionListMixin, TemplateResponseMixin, FormMixin, 
         spectra = target.reduceddatum_set.filter(data_type='spectroscopy')
         if spectra.exists():
             spectrum = spectra.latest()
-            initial['observation_date'] = spectrum.timestamp.isoformat(sep=' ')[:-9]
+            initial['observation_date'] = spectrum.timestamp.isoformat(sep=' ', timespec='milliseconds')[:-6]
             if spectrum.data_product.get_file_extension() in ['.fits', '.fz']:
                 initial['fits_file'] = spectrum.data_product.data
             else:
