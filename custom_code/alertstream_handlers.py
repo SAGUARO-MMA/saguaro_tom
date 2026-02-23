@@ -337,8 +337,8 @@ def handle_antares_stream(alert):
             # only take the time to run the vetting if we need to
             succeeded = vet_or_post_error(target, slack_lsstddf)
 
-        if not succeeded:
-            return # the error message was already sent in slack
+            if not succeeded:
+                return # the error message was already sent in slack
             
         # then parse the returned values to send relevant messages
         telescope_id = alert.alerts[-1].properties['ant_survey']
