@@ -417,7 +417,7 @@ ALERT_STREAMS = [
             'API_SECRET': ANTARES_API_SECRET,
             'GROUP': ANTARES_GROUP_ID,
             'TOPIC_HANDLERS': {
-                'extragalactic_staging': 'custom_code.alertstream_handlers.handle_antares_stream',
+                'in_lsst_ddf': 'custom_code.alertstream_handlers.handle_antares_stream',
             }
         },
     }
