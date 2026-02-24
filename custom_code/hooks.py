@@ -65,42 +65,13 @@ def update_or_create_target_extra(target, key, value):
 
 def target_post_save(target, created, tns_time_limit: float=5.):
     """This hook runs following update of a target."""
-    logger.info('Target post save hook: %s created: %s', target, created)
-
     messages = []
     tns_query_status = None
     if created:
-        coord = SkyCoord(target.ra, target.dec, unit='deg')
-        target.galactic_lng = coord.galactic.l.deg
-        target.galactic_lat = coord.galactic.b.deg
-        target.save()
-
-        if target.extra_fields.get('MW E(B-V)') is None:
-            try:
-                mwebv = IrsaDust.get_query_table(coord, section='ebv')['ext SandF ref'][0]
-            except Exception as e:
-                logger.error(f'Error querying IRSA dust for {target.name}')
-            else:
-                update_or_create_target_extra(target, 'MW E(B-V)', mwebv)
-                messages.append(f'MW E(B-V) set to {mwebv:.4f}')
-
-
-        update_or_create_target_extra(target=target, key='healpix', value=HPX.skycoord_to_healpix(coord))
-
-        qso, qoffset, asassn, asassnoffset, tns_results, gaia, gaiaoffset, gaiaclass, ps1prob, ps1, ps1offset = \
-            static_cats_query([target.ra], [target.dec], db_connect=DB_CONNECT)
-
-        if tns_results:
-            for iau_name, redshift, classification, internal_names in tns_results:
-                # choose the name that already matches, if more than one
-                # and make sure we ignore TNS classification prefixes that can change
-                basename = split_name(iau_name)['basename']
-                if basename == split_name(target.name)['basename']:
-                    break
-
-            # now query the real TNS by name for even more recent updates
-            objname = iau_name if iau_name.startswith('FRB') else basename
-            get_obj = [("objname", objname), ("objid", ""), ("photometry", "1"), ("spectra", "0")]
+        # if the target has a TNS name, query the TNS API for updated coords, photometry, name, redshift, classification
+        tns_objname = split_name(target.name)['tns_objname']
+        if tns_objname is not None:
+            get_obj = [("objname", tns_objname), ("objid", ""), ("photometry", "1"), ("spectra", "0")]
             response, time_to_wait = TNS_get(get_obj,
                                              settings.BROKERS['TNS']['bot_id'],
                                              settings.BROKERS['TNS']['bot_name'],
@@ -116,7 +87,6 @@ def target_post_save(target, created, tns_time_limit: float=5.):
                 if target.ra != tns_ra or target.dec != tns_dec:
                     target.ra = tns_ra
                     target.dec = tns_dec
-                    target.save()
                     messages.append(f'Updated coordinates to {target.ra:.6f}, {target.dec:.6f} based on TNS')
 
                 # ingest any photometry
@@ -144,38 +114,55 @@ def target_post_save(target, created, tns_time_limit: float=5.):
 
                 # if query is successful, use these up-to-date versions instead of what's in the local copy
                 iau_name = tns_reply['name_prefix'] + tns_reply['objname']
-                if tns_reply['redshift']:
-                    redshift = float(tns_reply['redshift'])
+                if target.name != iau_name:
+                    target.name = iau_name
+                    messages.append(f"Found a match in the TNS: {target.name}")
+
                 classification = tns_reply['object_type']['name']
-                internal_names = tns_reply['internal_names']
+                if classification and target.extra_fields.get('Classification') != classification:
+                    update_or_create_target_extra(target, 'Classification', classification)
+                    messages.append(f"Classification set to {classification}")
+
+                redshift = float(tns_reply['redshift']) if tns_reply['redshift'] else np.nan
+                if np.isfinite(redshift) and target.extra_fields.get('Redshift') != redshift:
+                    update_or_create_target_extra(target, 'Redshift', redshift)
+                    messages.append(f"Redshift set to {redshift}")
+
+                for alias in tns_reply['internal_names'].split(','):
+                    if (alias and alias.replace(' ', '') != target.name.replace(' ', '')
+                            and not TargetName.objects.filter(name=alias).exists()):
+                        tn = TargetName.objects.create(target=target, name=alias)
+                        messages.append(f'Added alias {tn.name} from TNS')
 
             else:
                 if isinstance(response, Response):
                     tns_query_status = f"""
-TNS Request for <https://wis-tns.org/object/{basename}|{iau_name}> responded with code {response.status_code}: {response.reason}
+TNS Request for <https://wis-tns.org/object/{tns_objname}|{target.name}> responded with code {response.status_code}: {response.reason}
 """
                 else:
                     tns_query_status = f'We ran out of API calls to the TNS with {time_to_wait}s left! This exceeded the {tns_time_limit}s limit!'
                     
                 logger.info(tns_query_status)
 
-            # update the target details from the TNS query, if successful, or from the local copy in the database
-            if target.name != iau_name:
-                target.name = iau_name
-                target.save()
-                messages.append(f"Found a match in the TNS: {target.name}")
-            if classification and target.extra_fields.get('Classification') != classification:
-                update_or_create_target_extra(target, 'Classification', classification)
-                messages.append(f"Classification set to {classification}")
-            if redshift is not None and np.isfinite(redshift) and target.extra_fields.get('Redshift') != redshift:
-                update_or_create_target_extra(target, 'Redshift', redshift)
-                messages.append(f"Redshift set to {redshift}")
-            for alias in internal_names.split(','):
-                if (alias and alias.replace(' ', '') != target.name.replace(' ', '')
-                        and not TargetName.objects.filter(name=alias).exists()):
-                    tn = TargetName.objects.create(target=target, name=alias)
-                    messages.append(f'Added alias {tn.name} from TNS')
-                
+        # always keep the galactic coordinates, healpix, and MW extinction up to date with updated coordinates
+        coord = SkyCoord(target.ra, target.dec, unit='deg')
+        target.galactic_lng = coord.galactic.l.deg
+        target.galactic_lat = coord.galactic.b.deg
+        update_or_create_target_extra(target=target, key='healpix', value=HPX.skycoord_to_healpix(coord))
+
+        if target.extra_fields.get('MW E(B-V)') is None:
+            try:
+                mwebv = IrsaDust.get_query_table(coord, section='ebv')['ext SandF ref'][0]
+            except Exception as e:
+                logger.error(f'Error querying IRSA dust for {target.name}')
+            else:
+                update_or_create_target_extra(target, 'MW E(B-V)', mwebv)
+                messages.append(f'MW E(B-V) set to {mwebv:.4f}')
+
+        # crossmatch with local point-source and galaxy catalogs (local tns_results are ignored)
+        qso, qoffset, asassn, asassnoffset, tns_results, gaia, gaiaoffset, gaiaclass, ps1prob, ps1, ps1offset = \
+            static_cats_query([target.ra], [target.dec], db_connect=DB_CONNECT)
+
         update_or_create_target_extra(target=target, key='QSO Match', value=qso[0])
         if qso[0] != 'None':
             update_or_create_target_extra(target=target, key='QSO Offset', value=qoffset[0])
@@ -197,15 +184,21 @@ TNS Request for <https://wis-tns.org/object/{basename}|{iau_name}> responded wit
         matches, hostdict = galaxy_search(target.ra, target.dec, db_connect=DB_CONNECT)
         update_or_create_target_extra(target=target, key='Host Galaxies', value=json.dumps(hostdict))
 
-        if hostdict and target.distance is None:
-            dist = hostdict[0].get('Dist', np.nan)
-            if np.isfinite(dist):
-                target.distance = dist
-            disterr = hostdict[0].get('DistErr', np.nan)
-            if np.all(np.isfinite(disterr)):
-                target.distance_err = np.mean(disterr)
-            target.save()
+        # set the initial guess for the transient distance, to make absolute magnitudes work automatically
+        if target.distance is None:
+            redshift = target.targetextra_set.filter(key='Redshift').first()
+            if redshift is not None and redshift.float_value >= 0.02:  # from the transient redshift, if known
+                messages.append(f'Updating distance of {target.name} based on redshift')
+                target.distance = COSMOLOGY.luminosity_distance(redshift.float_value).to_value('Mpc')
+            elif hostdict:  # otherwise from the most probable host
+                dist = hostdict[0].get('Dist', np.nan)
+                if np.isfinite(dist):
+                    target.distance = dist
+                disterr = hostdict[0].get('DistErr', np.nan)
+                if np.all(np.isfinite(disterr)):
+                    target.distance_err = np.mean(disterr)
 
+        # ingest any ZTF photometry and internal names from SASSy; TODO: switch this to ANTARES
         ztfphot = query_ZTFpubphot(target.ra, target.dec, db_connect=DB_CONNECT)
         newztfphot = []
         if ztfphot:
@@ -216,15 +209,12 @@ TNS Request for <https://wis-tns.org/object/{basename}|{iau_name}> responded wit
                 if newdatetime not in olddatetimes:
                     logger.info('New ZTF point at {0}.'.format(newdatetime))
                     newztfphot.append(candidate)
-                if not TargetName.objects.filter(name=candidate['oid']).exists():
+                if not TargetName.objects.filter(name=candidate['oid']).exists() and target.name != candidate['oid']:
                     tn = TargetName.objects.create(target=target, name=candidate['oid'])
                     messages.append(f'Added alias {tn.name} from ZTF')
         process_reduced_ztf_data(target, newztfphot)
 
-    redshift = target.targetextra_set.filter(key='Redshift')
-    if redshift.exists() and redshift.first().float_value >= 0.02 and target.distance is None:
-        messages.append(f'Updating distance of {target.name} based on redshift')
-        target.distance = COSMOLOGY.luminosity_distance(redshift.first().float_value).to('Mpc').value
+        # only save once to avoid too many recursive calls to this function
         target.save()
 
     for message in messages:
