@@ -25,8 +25,7 @@ from .filters import CandidateFilter, CSSFieldCredibleRegionFilter, NonLocalized
 from .forms import TargetListExtraFormset, TargetReportForm, TargetClassifyForm
 from .forms import NonLocalizedEventFormHelper, CandidateFormHelper
 from .forms import TNS_FILTER_CHOICES, TNS_INSTRUMENT_CHOICES, TNS_CLASSIFICATION_CHOICES
-from .hooks import target_post_save, update_or_create_target_extra
-from .tasks import target_run_mpc
+from .hooks import vet_or_post_error, update_or_create_target_extra, target_run_mpc
 from .templatetags.skymap_extras import get_preferred_localization
 from .templatetags.target_extras import split_name
 
@@ -327,12 +326,11 @@ class TargetVettingView(LoginRequiredMixin, RedirectView):
         Method that handles the GET requests for this view. Calls the kilonova vetting code.
         """
         target = Target.objects.get(pk=kwargs['pk'])
-        banners, tns_query_status = target_post_save(target, created=True)
+        banners, errors = vet_or_post_error(target, created=True, run_mpc=False, run_atlas=False)
         for banner in banners:
             messages.success(request, banner)
-
-        if tns_query_status is not None:
-            messages.add_message(request,99,tns_query_status)
+        for error in errors:
+            messages.error(request, error)
             
         return HttpResponseRedirect(self.get_redirect_url())
 

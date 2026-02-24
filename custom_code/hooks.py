@@ -3,8 +3,10 @@ from requests import Response
 from kne_cand_vetting.catalogs import static_cats_query
 from kne_cand_vetting.galaxy_matching import galaxy_search
 from kne_cand_vetting.survey_phot import TNS_get, query_ZTFpubphot
+from kne_cand_vetting.mpc import minor_planet_match
 from tom_targets.models import TargetExtra, TargetName
 from tom_dataproducts.models import ReducedDatum
+from tom_dataproducts.tasks import atlas_query
 from .templatetags.target_extras import split_name
 import json
 import numpy as np
@@ -14,6 +16,8 @@ from astropy.coordinates import SkyCoord
 from astroquery.ipac.irsa.irsa_dust import IrsaDust
 from healpix_alchemy.constants import HPX
 from django.conf import settings
+from django_tasks import task
+import traceback
 
 DB_CONNECT = "postgresql+psycopg2://{USER}:{PASSWORD}@{HOST}:{PORT}/{NAME}".format(**settings.DATABASES['default'])
 COSMOLOGY = FlatLambdaCDM(H0=70., Om0=0.3)
@@ -63,10 +67,27 @@ def update_or_create_target_extra(target, key, value):
     te.save()
 
 
-def target_post_save(target, created, tns_time_limit: float=5.):
+@task(queue_name="mpc")
+def target_run_mpc(latest_det_id, _verbose=False):
+    """check if a given photometric detection is a minor planet"""
+    latest_det = ReducedDatum.objects.get(id=latest_det_id)
+    match = minor_planet_match(latest_det.target.ra, latest_det.target.dec, Time(latest_det.timestamp).mjd)
+    if match is not None:
+        name, sep = match
+        update_or_create_target_extra(latest_det.target, 'Minor Planet Match', name)
+        update_or_create_target_extra(latest_det.target, 'Minor Planet Date', latest_det.timestamp)
+        update_or_create_target_extra(latest_det.target, 'Minor Planet Offset', sep)
+        logger.info(f'{latest_det.target.name} is {sep:.1f}" from minor planet {name}')
+    else:
+        update_or_create_target_extra(latest_det.target, 'Minor Planet Match', 'None')
+        update_or_create_target_extra(latest_det.target, 'Minor Planet Date', latest_det.timestamp)
+        logger.info(f"{latest_det.target.name} is not a minor planet!")
+
+
+def vet_or_post_error(target, created=True, tns_time_limit: float=5., run_mpc=True, run_atlas=True, slack_client=None):
     """This hook runs following update of a target."""
     messages = []
-    tns_query_status = None
+    errors = []
     if created:
         # if the target has a TNS name, query the TNS API for updated coords, photometry, name, redshift, classification
         tns_objname = split_name(target.name)['tns_objname']
@@ -141,8 +162,10 @@ TNS Request for <https://wis-tns.org/object/{tns_objname}|{target.name}> respond
 """
                 else:
                     tns_query_status = f'We ran out of API calls to the TNS with {time_to_wait}s left! This exceeded the {tns_time_limit}s limit!'
-                    
-                logger.info(tns_query_status)
+                logger.error(tns_query_status)
+                errors.append(tns_query_status)
+                if slack_client is not None:
+                    slack_client.send_slack_message_from_text(text=tns_query_status)
 
         # always keep the galactic coordinates, healpix, and MW extinction up to date with updated coordinates
         coord = SkyCoord(target.ra, target.dec, unit='deg')
@@ -217,7 +240,22 @@ TNS Request for <https://wis-tns.org/object/{tns_objname}|{target.name}> respond
         # only save once to avoid too many recursive calls to this function
         target.save()
 
+        try:
+            if run_mpc:
+                detections = target.reduceddatum_set.filter(data_type="photometry", value__magnitude__isnull=False)
+                if detections.exists():
+                    target_run_mpc.enqueue(detections.latest().id)
+            if run_atlas:
+                mjd_now = Time.now().mjd
+                atlas_query.enqueue(mjd_now - 20., mjd_now, target.id, 'atlas_photometry')
+        except Exception as e:
+            logger.error(''.join(traceback.format_exception(e)))
+            error_message = f'Error vetting target {target.name}:\n{e}'
+            errors.append(error_message)
+            if slack_client is not None:
+                slack_client.send_slack_message_from_text(error_message)
+
     for message in messages:
         logger.info(message)
 
-    return messages, tns_query_status
+    return messages, errors

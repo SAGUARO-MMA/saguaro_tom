@@ -11,9 +11,7 @@ import urllib
 from email.mime.text import MIMEText
 import smtplib
 import logging
-from tom_dataproducts.tasks import atlas_query
-from .hooks import target_post_save
-from .tasks import target_run_mpc
+from .hooks import vet_or_post_error
 from .templatetags.nonlocalizedevent_extras import format_inverse_far, format_distance, format_area, get_most_likely_class
 from .healpix_utils import update_all_credible_region_percents_for_survey_fields, create_elliptical_localization
 from .cssfield_selection import calculate_footprint_probabilities, rank_css_fields
@@ -22,7 +20,6 @@ from slack_notifier.slack_notifier import SlackNotifier
 from slack_notifier.slack_filters import AntaresSlackFilter
 from slack_notifier.util import send_slack_gw, pick_slack_channel
 from astropy.table import Table
-from astropy.time import Time
 from io import BytesIO
 import astropy_healpix as ah
 import numpy as np
@@ -96,25 +93,6 @@ ALERT_TEXT = [  # index = number of localizations available
 slack_ep = SlackNotifier(slack_channel="alerts-ep", token=settings.SLACK_TOKEN_EP)
 slack_lsstddf = AntaresSlackFilter(token=settings.SLACK_TOKEN_TNS50)
 
-def vet_or_post_error(target, slack_client):
-    try:
-        # set the tns query time limit to infinity because we don't care if we
-        # need to wait for this script to run
-        _, tns_query_status = target_post_save(target, created=True, tns_time_limit=np.inf)
-        if tns_query_status is not None:
-            logger.warning(tns_query_status)
-            slack_client.send_slack_message_from_text(text=tns_query_status)
-        detections = target.reduceddatum_set.filter(data_type="photometry", value__magnitude__isnull=False)
-        if detections.exists():
-            target_run_mpc.enqueue(detections.latest().id)
-        mjd_now = Time.now().mjd
-        atlas_query.enqueue(mjd_now - 20., mjd_now, target.id, 'atlas_photometry')
-        return True
-    
-    except Exception as e:
-        logger.error(''.join(traceback.format_exception(e)))
-        slack_client.send_slack_message_from_text(f'Error vetting target {target.name}:\n{e}')
-        return False
 
 def send_email(subject, body, is_test_alert=False):
     """This doesn't currently work"""
@@ -315,7 +293,7 @@ def handle_einstein_probe_alert(message, metadata):
     ep_name = alert['id'][0]
     t_ep = Target.objects.create(name=ep_name, type='SIDEREAL', ra=ep_ra, dec=ep_dec, permissions='PUBLIC')
     EventCandidate.objects.create(target=t_ep, nonlocalizedevent=nonlocalizedevent)
-    vet_or_post_error(t_ep, slack_ep)
+    vet_or_post_error(t_ep, created=True, tns_time_limit=np.inf, slack_client=slack_ep)
     query = {'localization_event': nonlocalizedevent.event_id, 'localization_prob': 95, 'localization_dt': 3}
     survey_obs_link = f"https://{Site.objects.get_current().domain}{reverse('surveys:observations')}?{urllib.parse.urlencode(query)}"
     alert_text = ALERT_TEXT_EP.format(survey_obs_link=survey_obs_link, target_link=settings.TARGET_LINKS[0][0]
@@ -335,9 +313,9 @@ def handle_antares_stream(alert):
         target = res[0]
         if not target.targetextra_set.filter(key='Host Galaxies').exists():
             # only take the time to run the vetting if we need to
-            succeeded = vet_or_post_error(target, slack_lsstddf)
+            _, errors = vet_or_post_error(target, created=True, tns_time_limit=np.inf, slack_client=slack_lsstddf)
 
-            if not succeeded:
+            if errors:
                 return # the error message was already sent in slack
             
         # then parse the returned values to send relevant messages
