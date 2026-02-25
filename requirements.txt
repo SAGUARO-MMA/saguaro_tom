@@ -14,9 +14,9 @@ lightcurve-fitting
 ligo.skymap
 matplotlib
 numpy
-tomtoolkit==2.31.2
+tomtoolkit @ git+https://github.com/griffin-h/tom_base.git@bugfix/runbrokerquery
 tom-alertstreams==1.2.1
-tom-antares @ git+https://github.com/TOMToolkit/tom_antares.git@dev
+tom-antares @ git+https://github.com/SAGUARO-MMA/tom_antares.git@tom-alertstreams-tmp
 tom-mmt @ git+https://github.com/griffin-h/tom_mmt
 tom-nonlocalizedevents @ git+https://github.com/TOMToolkit/tom_nonlocalizedevents.git
 tom-registration
