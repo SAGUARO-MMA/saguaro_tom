@@ -39,6 +39,9 @@ class AntaresSlackFilter(SlackNotifier):
             base_str = f"{target.name} has been updated from the Antares alert stream with the following aliases: {', '.join(aliases_added)}"
         else:
             base_str = f"{target.name} has been updated from the Antares alert stream."
+        peak = target.reduceddatum_set.order_by('value__magnitude').first()
+        if peak:
+            base_str += f" ({peak.value['magnitude']:.1f} mag)"
 
         # host info
         if target_extra.value != 'None':
