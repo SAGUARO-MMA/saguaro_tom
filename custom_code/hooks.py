@@ -7,6 +7,7 @@ from kne_cand_vetting.mpc import minor_planet_match
 from tom_targets.models import TargetExtra, TargetName
 from tom_dataproducts.models import ReducedDatum
 from tom_dataproducts.tasks import atlas_query
+from slack_notifier.slack_notifier import SlackNotifier
 from .templatetags.target_extras import split_name
 import json
 import numpy as np
@@ -254,6 +255,20 @@ TNS Request for <https://wis-tns.org/object/{tns_objname}|{target.name}> respond
             errors.append(error_message)
             if slack_client is not None:
                 slack_client.send_slack_message_from_text(error_message)
+
+        # TODO: this is very temporary
+        slack_m49 = SlackNotifier(slack_channel='alerts', token=settings.SLACK_TOKEN_TNS50)
+        m49 = SkyCoord(187.6007, 8.4389, unit='deg')
+        separation = coord.separation(m49).deg
+        if separation <= 1.1:
+            msg = f'<{settings.TARGET_LINKS[0][0]}|{{target.name}}> is {separation:.2f} deg from M49'.format(target=target)
+            peak = target.reduceddatum_set.order_by('value__magnitude').first()
+            if peak:
+                peak_mag = peak.value['magnitude']
+                msg += f" ({peak_mag:.1f} mag)"
+                if peak_mag < 21.:
+                    msg = '<!channel> ' + msg
+            slack_m49.send_slack_message_from_text(msg)
 
     for message in messages:
         logger.info(message)
