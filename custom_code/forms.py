@@ -338,17 +338,6 @@ class TargetReportForm(forms.Form):
                     "host_name": self.cleaned_data['host_name'],
                     "host_redshift": self.cleaned_data['host_redshift'],
                     "internal_name": self.cleaned_data['internal_name'],
-                    "non_detection": {
-                        "obsdate": self.cleaned_data['nondetection_date'].isoformat(sep=' ', timespec='milliseconds')[:-6],
-                        "limiting_flux": self.cleaned_data['nondetection_limit'],
-                        "flux_unitid": self.cleaned_data['nondetection_units'],
-                        "filterid": self.cleaned_data['nondetection_filter'],
-                        "instrumentid": self.cleaned_data['nondetection_instrument'],
-                        "observer": self.cleaned_data['nondetection_observer'],
-                        "comments": self.cleaned_data['nondetection_remarks'],
-                        "archiveid": self.cleaned_data['archive'],
-                        "archival_remarks": self.cleaned_data['archival_remarks'],
-                    },
                     "photometry": {
                         "photometry_group": {
                             "0": {
@@ -368,6 +357,22 @@ class TargetReportForm(forms.Form):
                 }
             }
         }
+        if self.cleaned_data['nondetection_date']:
+            report_data['at_report']["0"]["non_detection"] = {
+                "obsdate": self.cleaned_data['nondetection_date'].isoformat(sep=' ', timespec='milliseconds')[:-6],
+                "limiting_flux": self.cleaned_data['nondetection_limit'],
+                "flux_unitid": self.cleaned_data['nondetection_units'],
+                "filterid": self.cleaned_data['nondetection_filter'],
+                "instrumentid": self.cleaned_data['nondetection_instrument'],
+                "observer": self.cleaned_data['nondetection_observer'],
+                "comments": self.cleaned_data['nondetection_remarks'],
+            }
+        else:
+            report_data['at_report']["0"]["non_detection"] = {
+                "archiveid": self.cleaned_data['archive'],
+                "archival_remarks": self.cleaned_data['archival_remarks'],
+                "comments": self.cleaned_data['nondetection_remarks'],
+            }
         return json.dumps(report_data)
 
 
