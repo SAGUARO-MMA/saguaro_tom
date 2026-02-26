@@ -108,7 +108,8 @@ class Command(BaseCommand):
                 INSERT INTO tom_targets_targetname (name, created, target_id, modified)
                 SELECT tm.name, NOW(), tm.id, NOW()
                 FROM top_tns_matches AS tm
-                WHERE tm.name != tm.tns_name AND LEFT(tm.name, 1) != 'J';
+                WHERE tm.name != tm.tns_name AND LEFT(tm.name, 1) != 'J'
+                ON CONFLICT (name) DO NOTHING;
 
                 --STEP 3: merge any other matches into the new target
                 CREATE TEMPORARY TABLE targets_to_merge AS
@@ -181,7 +182,8 @@ class Command(BaseCommand):
                 INSERT INTO tom_targets_targetname (name, created, target_id, modified)
                 SELECT old_name, NOW(), new_id, NOW()
                 FROM targets_to_merge AS tm
-                WHERE LEFT(old_name, 1) != 'J';
+                WHERE LEFT(old_name, 1) != 'J'
+                ON CONFLICT (name) DO NOTHING;
                 """
             )
         logger.info(f"Merged {len(deleted_targets):d} targets into TNS targets.")
