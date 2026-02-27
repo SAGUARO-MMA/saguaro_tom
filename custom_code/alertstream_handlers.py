@@ -306,7 +306,6 @@ def handle_einstein_probe_alert(message, metadata):
     logger.info(f'Finished processing alert for {nonlocalizedevent.event_id}')
 
 
-@
 def handle_antares_stream_async(locus):
     # temporarily skip old alerts TODO: decide if we want this
     if locus.properties['newest_alert_observation_time'] < np.floor(Time.now().mjd):
