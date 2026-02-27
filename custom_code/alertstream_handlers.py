@@ -20,6 +20,7 @@ from slack_notifier.slack_notifier import SlackNotifier
 from slack_notifier.slack_filters import AntaresSlackFilter
 from slack_notifier.util import send_slack_gw, pick_slack_channel
 from astropy.table import Table
+from astropy.time import Time
 from io import BytesIO
 import astropy_healpix as ah
 import numpy as np
@@ -304,6 +305,10 @@ def handle_einstein_probe_alert(message, metadata):
     logger.info(f'Finished processing alert for {nonlocalizedevent.event_id}')
 
 def handle_antares_stream(alert):
+    # temporarily skip old alerts TODO: decide if we want this
+    if alert.properties['newest_alert_observation_time'] < np.floor(Time.now().mjd):
+        logger.debug(f'skipping old alert {alert.locus_id}')
+        return
 
     try:
         # first run the default handler
