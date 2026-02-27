@@ -306,14 +306,24 @@ def handle_einstein_probe_alert(message, metadata):
     logger.info(f'Finished processing alert for {nonlocalizedevent.event_id}')
 
 
-class FiniteJSONEncoder(json.JSONEncoder):
-    """
-    Remove any NaN or Infinity from an object before JSON encoding
-    """
-    def default(self, obj):
-        if isinstance(obj, float) and not np.isfinite(obj):
-            return str(obj)
-        return super().default(obj)
+def serialize_antares_alert(locus):
+    return {
+            'locus_id': locus.locus_id,
+            'ra': locus.ra,
+            'dec': locus.dec,
+            'properties': locus.properties,
+            'tags': locus.tags,
+            # 'lightcurve': locus.lightcurve.to_json(),
+            'catalogs': locus.catalogs,
+            'alerts': [
+                {
+                    'alert_id': alert.alert_id,
+                    'mjd': alert.mjd,
+                    'properties': {key: val for key, val in alert.properties.items() if not key.startswith('lsst_dia')},
+                }
+                for alert in locus.alerts
+            ],
+        }
 
 
 def handle_antares_stream_async(locus):
@@ -322,9 +332,8 @@ def handle_antares_stream_async(locus):
         logger.debug(f'skipping old alert {locus.locus_id}')
         return
 
-    alert = ANTARESBroker().alert_to_dict(locus)
-    alert_finite = json.loads(json.dumps(alert, cls=FiniteJSONEncoder))
-    handle_antares_stream.enqueue(alert_finite)
+    alert_small = serialize_antares_alert(locus)
+    handle_antares_stream.enqueue(alert_small)
     logger.debug(f'sent {locus.locus_id} to queue')
 
 
