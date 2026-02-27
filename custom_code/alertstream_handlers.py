@@ -364,7 +364,7 @@ def handle_antares_stream(alert, cone_search_radius_arcsec=2.):
                 )
 
         # then parse the returned values to send relevant messages
-        telescope_id = alert['alerts'][-1].properties['ant_survey']
+        telescope_id = alert['alerts'][-1]['properties']['ant_survey']
         telescope = ANTARESBroker.surveys.get(telescope_id, "ZTF")
         slack_lsstddf.send_slack_message(target=target, telescope_stream=telescope)
 
