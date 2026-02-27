@@ -7,6 +7,7 @@ from django.contrib.auth.models import Group
 from django.contrib.sites.models import Site
 from django.conf import settings
 from django.urls import reverse
+from django_tasks import task
 import urllib
 from email.mime.text import MIMEText
 import smtplib
@@ -25,9 +26,9 @@ from io import BytesIO
 import astropy_healpix as ah
 import numpy as np
 import traceback
-from tom_targets.models import Target
+from tom_targets.models import Target, TargetName
+from tom_targets.utils import cone_search_filter
 import time
-from tom_antares.alertstream_handlers import handle_alert as default_antares_handler
 from tom_antares.antares import ANTARESBroker
 logger = logging.getLogger(__name__)
 
@@ -304,29 +305,69 @@ def handle_einstein_probe_alert(message, metadata):
 
     logger.info(f'Finished processing alert for {nonlocalizedevent.event_id}')
 
-def handle_antares_stream(alert):
+
+@
+def handle_antares_stream_async(locus):
     # temporarily skip old alerts TODO: decide if we want this
-    if alert.properties['newest_alert_observation_time'] < np.floor(Time.now().mjd):
-        logger.debug(f'skipping old alert {alert.locus_id}')
+    if locus.properties['newest_alert_observation_time'] < np.floor(Time.now().mjd):
+        logger.debug(f'skipping old alert {locus.locus_id}')
         return
 
-    try:
-        # first run the default handler
-        res = default_antares_handler(alert)
-        
-        # we need to vet this target to get host galaxies
-        target = res[0]
-        if not target.targetextra_set.filter(key='Host Galaxies').exists():
-            # only take the time to run the vetting if we need to
-            _, errors = vet_or_post_error(target, created=True, tns_time_limit=np.inf, slack_client=slack_lsstddf)
+    alert = ANTARESBroker().alert_to_dict(locus)
+    handle_antares_stream.enqueue(alert)
+    logger.debug(f'sent {locus.locus_id} to queue')
 
-            if errors:
-                return # the error message was already sent in slack
-            
+
+@task(queue_name="antares")
+def handle_antares_stream(alert, cone_search_radius_arcsec=2.):
+    try:
+        broker = ANTARESBroker()
+
+        # check for existing targets within 2"
+        target_matches = list(cone_search_filter(Target.objects.all(), alert['ra'], alert['dec'], cone_search_radius_arcsec / 3600.).order_by("separation"))
+        logger.info(f"Targets within {cone_search_radius_arcsec:.1f} arcsec: {target_matches}")
+
+        if target_matches:
+            # then this target already exists in the Targets table
+            target = target_matches[0]
+            logger.info(f"Found existing target matching this alert: {target.name}")
+
+            # only take the time to run the vetting if we need to get host galaxies
+            if not target.targetextra_set.filter(key='Host Galaxies').exists():
+                vet_or_post_error(target, created=True, tns_time_limit=np.inf, slack_client=slack_lsstddf)
+
+            # update the TargetName objects returned to instead point to the existing target
+            aliases = broker.aliases_from_locus(alert, target)
+
+        else:
+            # then this target does not exist, so we create it from scratch
+            target, _, aliases = broker.to_target(alert)
+            logger.info(f"No existing target found, adding {target.name} as new target")
+
+        broker.process_reduced_data(target, alert)
+
+        # save the aliases that we found for this target
+        logger.info(f"Adding {aliases} to {target}")
+        aliases_added = []
+        for alias in aliases:
+            existing_alias = TargetName.objects.filter(name=alias.name)
+            if not existing_alias.exists():
+                alias.save()
+                aliases_added.append(alias.name)
+            elif existing_alias.exclude(target=target).exists():
+                # this will happen if the alias exists under a different target
+                # than the one we are trying to save it with
+                # in which case we should log a warning
+                logger.warning(
+                    f"The name alias {alias.name} exists under the target {existing_alias.first().target}, "
+                    f"which is different from the nearest target in the existing database (which is {target}). "
+                    "We are NOT re-assigning this alias!"
+                )
+
         # then parse the returned values to send relevant messages
         telescope_id = alert.alerts[-1].properties['ant_survey']
         telescope = ANTARESBroker.surveys.get(telescope_id, "ZTF")
-        slack_lsstddf.send_slack_message(*res, telescope_stream=telescope)
+        slack_lsstddf.send_slack_message(target=target, telescope_stream=telescope)
 
     except Exception as exc:
         # we don't want this *ever* to crash, just log the error, send it as a slack
