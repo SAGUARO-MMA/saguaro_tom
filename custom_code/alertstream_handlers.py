@@ -386,7 +386,8 @@ def handle_antares_stream(alert, cone_search_radius_arcsec=2.):
         # then parse the returned values to send relevant messages
         telescope_id = alert['alerts'][-1]['properties']['ant_survey']
         telescope = ANTARESBroker.surveys.get(telescope_id, "ZTF")
-        slack_lsstddf.send_slack_message(target=target, telescope_stream=telescope)
+        slack_lsstddf.send_slack_message(target=target, created=bool(target_matches), aliases_added=aliases_added,
+                                         telescope_stream=telescope)
 
     except Exception as exc:
         # we don't want this *ever* to crash, just log the error, send it as a slack
