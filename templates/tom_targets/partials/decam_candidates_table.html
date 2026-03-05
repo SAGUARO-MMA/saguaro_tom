@@ -12,8 +12,8 @@
       <th>S/N</th>
       <th>Gaia</th>
       <th>DESI</th>
-      <th>Template</th>
       <th>Science</th>
+      <th>Template</th>
       <th>Difference</th>
     </tr>
   </thead>
@@ -54,21 +54,21 @@
       </td>
       <td>
         {% if candidate.thumb_template %}
-          <img alt="template" src="{{ candidate|decam_thumbnail_url:'template' }}" height="80">
+          <img alt="science" src="{{ candidate|decam_thumbnail_url:'science' }}" height="150">
         {% else %}
           —
         {% endif %}
       </td>
       <td>
         {% if candidate.thumb_science %}
-          <img alt="science" src="{{ candidate|decam_thumbnail_url:'science' }}" height="80">
+          <img alt="template" src="{{ candidate|decam_thumbnail_url:'template' }}" height="150">
         {% else %}
           —
         {% endif %}
       </td>
       <td>
         {% if candidate.thumb_difference %}
-          <img alt="difference" src="{{ candidate|decam_thumbnail_url:'difference' }}" height="80">
+          <img alt="difference" src="{{ candidate|decam_thumbnail_url:'difference' }}" height="150">
         {% else %}
           —
         {% endif %}
