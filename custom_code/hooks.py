@@ -7,6 +7,8 @@ from kne_cand_vetting.mpc import minor_planet_match
 from tom_targets.models import TargetExtra, TargetName
 from tom_dataproducts.models import ReducedDatum
 from tom_dataproducts.tasks import atlas_query
+from tom_targets.models import Target
+from tom_targets.utils import cone_search_filter
 from slack_notifier.slack_notifier import SlackNotifier
 from .templatetags.target_extras import split_name
 import json
@@ -260,7 +262,8 @@ TNS Request for <https://wis-tns.org/object/{tns_objname}|{target.name}> respond
         slack_m49 = SlackNotifier(slack_channel='alerts', token=settings.SLACK_TOKEN_TNS50)
         m49 = SkyCoord(187.6007, 8.4389, unit='deg')
         separation = coord.separation(m49).deg
-        if separation <= 1.1:
+        target_matches = cone_search_filter(Target.objects.exclude(id=target.id), coord.ra.deg, coord.dec.deg, 2. / 3600.)
+        if separation <= 1.1 and not target_matches.exists():
             msg = f'<{settings.TARGET_LINKS[0][0]}|{{target.name}}> is {separation:.2f} deg from M49'.format(target=target)
             peak = target.reduceddatum_set.order_by('value__magnitude').first()
             if peak:
