@@ -111,7 +111,7 @@ WSGI_APPLICATION = 'saguaro_tom.wsgi.application'
 TASKS = {
     "default": {
         "BACKEND": "django_tasks.backends.database.DatabaseBackend",
-        "QUEUES": ["default", "mpc"]
+        "QUEUES": ["default", "mpc", "antares"]
     }
 }
 
@@ -419,7 +419,7 @@ ALERT_STREAMS = [
             'API_SECRET': ANTARES_API_SECRET,
             'GROUP': ANTARES_GROUP_ID,
             'TOPIC_HANDLERS': {
-                'in_lsst_ddf': 'custom_code.alertstream_handlers.handle_antares_stream',
+                'in_lsst_ddf': 'custom_code.alertstream_handlers.handle_antares_stream_async',
             }
         },
     }
