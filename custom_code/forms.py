@@ -4,8 +4,11 @@ from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Layout, Row, Column, Submit, HTML
 from crispy_forms.bootstrap import AppendedText, PrependedAppendedText
 from tom_targets.models import TargetList
+from tom_dataproducts.models import ReducedDatum
 from .models import TargetListExtra
-from datetime import datetime
+from datetime import datetime, timezone
+from io import StringIO
+import numpy as np
 import json
 import os
 
@@ -14,6 +17,7 @@ TargetListExtraFormset = inlineformset_factory(TargetList, TargetListExtra, fiel
                                                widgets={'value': forms.TextInput()})
 
 TNS_FILTER_CHOICES = [
+    ('', ''),
     (0, "Other"),
     (1, "Clear"),
     (10, "U-Johnson"),
@@ -33,6 +37,18 @@ TNS_FILTER_CHOICES = [
     (24, "z-Sloan"),
     (25, "y-P1"),
     (26, "w-P1"),
+    (71, "cyan-ATLAS"),
+    (72, "orange-ATLAS"),
+    (73, "wide-ATLAS"),
+    (110, "g-ZTF"),
+    (111, "r-ZTF"),
+    (112, "i-ZTF"),
+    (160, "u-LSST"),
+    (161, "g-LSST"),
+    (162, "r-LSST"),
+    (163, "i-LSST"),
+    (164, "z-LSST"),
+    (165, "y-LSST"),
 ]
 
 TNS_INSTRUMENT_CHOICES = [
@@ -68,19 +84,26 @@ TNS_INSTRUMENT_CHOICES = [
     (130, "Keck1 - MOSFIRE"),
     (137, "Magellan-Baade - MagE"),
     (141, "APO-3.5m - APO-TSPEC"),
+    (159, "ATLAS-HKO - ATLAS-02"),
+    (160, "ATLAS-MLO - ATLAS-01"),
     (166, "Gemini-N - GNIRS"),
     (180, "MMT - MMIRS"),
+    (196, "P48 - ZTF-Cam"),
     (197, "Gemini-S - Flamingos-2"),
     (172, "CTIO-4m - DECAM"),
     (208, "LCO1m - Sinistro"),
     (221, "MMT - BINOSPEC"),
     (252, "Keck2 - NIRES"),
+    (255, "ATLAS-STH - ATLAS-03"),
+    (256, "ATLAS-CHL - ATLAS-04"),
     (259, "Keck2 - KCWI"),
     (260, "SOAR - TripleSpec"),
     (287, "Rubin - LSSTCam"),
+    (290, "ATLAS-TDO - ATLAS-05"),
 ]
 TNS_INSTRUMENT_CHOICES.sort(key=lambda x: x[1])
-TNS_INSTRUMENT_CHOICES.insert(0, (0, "Other"))
+TNS_INSTRUMENT_CHOICES.insert(0, ('', ''))
+TNS_INSTRUMENT_CHOICES.insert(1, (0, "Other"))
 
 TNS_CLASSIFICATION_CHOICES = [
     (0, "Other"),
@@ -156,72 +179,106 @@ TNS_GROUP_CHOICES = [
     (177, "PASSTA"),
     (178, "Shadow"),
 ]
+
+TNS_DATA_SOURCE_GROUP_CHOICES = TNS_GROUP_CHOICES + [
+    (18, "ATLAS"),
+    (49, "ZTF"),
+    (165, "Rubin"),
+]
+
 TNS_GROUP_CHOICES.sort(key=lambda x: x[1])
+TNS_GROUP_CHOICES.insert(0, (0, "None"))
+TNS_DATA_SOURCE_GROUP_CHOICES.sort(key=lambda x: x[1])
+TNS_DATA_SOURCE_GROUP_CHOICES.insert(0, (0, "None"))
+
+TNS_UNIT_CHOICES = [
+    (0, "Other"),
+    (1, "ABMag"),
+    (2, "STMag"),
+    (3, "VegaMag"),
+    (4, "erg cm(-2) sec(-1)"),
+    (5, "erg cm(-2) sec(-1) Hz(-1)"),
+    (6, "erg cm(-2) sec(-1) Ang(-1)"),
+    (7, "counts sec(-1)"),
+    (8, "Jy"),
+    (9, "mJy"),
+    (10, "Neutrino events"),
+    (33, "Photons sec(-1) cm(-2)"),
+]
 
 
 class TargetReportForm(forms.Form):
+    # discovery
     ra = forms.FloatField(label='R.A.')
     dec = forms.FloatField(label='Dec.')
-    reporting_group = forms.ChoiceField(choices=TNS_GROUP_CHOICES, initial=(66, "SAGUARO"))
-    discovery_data_source = forms.ChoiceField(choices=TNS_GROUP_CHOICES, initial=(66, "SAGUARO"))
+    reporting_group = forms.ChoiceField(choices=TNS_GROUP_CHOICES)
+    data_source_group = forms.ChoiceField(choices=TNS_DATA_SOURCE_GROUP_CHOICES)
     reporter = forms.CharField(widget=forms.Textarea(attrs={'rows': 1}),
-                               help_text="First1 Last1 (Affil1), First2 Last2 (Affil2), &hellip;, "
-                                         "on behalf of Survey (optional)")
-    discovery_date = forms.DateTimeField(initial=datetime.utcnow())
+                               help_text="FirstName1 LastName1 (Affil1), FirstName2 LastName2 (Affil2), &hellip;, "
+                                         "on behalf of SurveyName (optional)")
+    discovery_date = forms.DateTimeField(initial=datetime.now(timezone.utc))
     at_type = forms.ChoiceField(choices=[
-        (0, "Other"),
-        (1, "PSN"),
-        (2, "PNV"),
-        (3, "AGN"),
-        (4, "NUC"),
-        (5, "FRB"),
+        (0, "Other - Undefined"),
+        (1, "PSN - Possible SN"),
+        (2, "PNV - Possible Nova"),
+        (3, "AGN - Known AGN"),
+        (4, "NUC - Possibly nuclear"),
+        (5, "FRB - Fast Radio Burst"),
     ], initial=(1, "PSN"), label='AT type')
+    host_name = forms.CharField(required=False)
+    host_redshift = forms.FloatField(required=False)
+    internal_name = forms.CharField(required=False)
+    discovery_remarks = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 1}))
+
+    # nondetection
+    nondetection_date = forms.DateTimeField(required=False, label='Observation date')
+    nondetection_limit = forms.FloatField(required=False, label='Limiting flux')
+    nondetection_units = forms.ChoiceField(choices=TNS_UNIT_CHOICES, label='Flux units', initial=(1, "ABMag"), required=False)
+    nondetection_filter = forms.ChoiceField(choices=TNS_FILTER_CHOICES, label='Filter', required=False)
+    nondetection_instrument = forms.ChoiceField(choices=TNS_INSTRUMENT_CHOICES, label='Instrument', required=False)
+    nondetection_observer = forms.CharField(label='Observer', required=False)
     archive = forms.ChoiceField(choices=[
+        ('', ''),
         (0, "Other"),
         (1, "SDSS"),
         (2, "DSS"),
-    ], initial=(0, "Other"))
-    archival_remarks = forms.CharField(initial="CSS")
+    ], help_text="Required if no nondetection", required=False)
+    archival_remarks = forms.CharField(help_text='Required if "Other"', required=False)
+    nondetection_remarks = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 1}))
+
+    # photometry
     observation_date = forms.DateTimeField()
     flux = forms.FloatField()
-    flux_error = forms.FloatField()
-    flux_units = forms.ChoiceField(choices=[
-        (0, "Other"),
-        (1, "ABMag"),
-        (2, "STMag"),
-        (3, "VegaMag"),
-        (4, "erg cm(-2) sec(-1)"),
-        (5, "erg cm(-2) sec(-1) Hz(-1)"),
-        (6, "erg cm(-2) sec(-1) Ang(-1)"),
-        (7, "counts sec(-1)"),
-        (8, "Jy"),
-        (9, "mJy"),
-        (10, "Neutrino events"),
-        (33, "Photons sec(-1) cm(-2)"),
-    ], initial=(1, "ABMag"))
-    filter = forms.ChoiceField(choices=TNS_FILTER_CHOICES, initial=(22, "r-Sloan"))
-    instrument = forms.ChoiceField(choices=TNS_INSTRUMENT_CHOICES, initial=(0, "Other"))
+    flux_error = forms.FloatField(required=False)
     limiting_flux = forms.FloatField(required=False)
+    flux_units = forms.ChoiceField(choices=TNS_UNIT_CHOICES, initial=(1, "ABMag"))
+    filter = forms.ChoiceField(choices=TNS_FILTER_CHOICES)
+    instrument = forms.ChoiceField(choices=TNS_INSTRUMENT_CHOICES)
     exposure_time = forms.FloatField(required=False)
     observer = forms.CharField(required=False)
-    discovery_remarks = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 1}))
     photometry_remarks = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 1}))
-    nondetection_remarks = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 1}))
+
+    send_to_sandbox = forms.BooleanField(required=False)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.helper = FormHelper()
         self.helper.layout = Layout(
             Row(
-                Column('reporter', css_class='col-md-6'),
+                Column('reporter', css_class='col-md-9'),
                 Column('reporting_group'),
-                Column('discovery_data_source'),
             ),
             Row(
                 Column(AppendedText('ra', 'deg')),
                 Column(AppendedText('dec', 'deg')),
                 Column('discovery_date'),
                 Column('at_type'),
+            ),
+            Row(
+                Column('host_name'),
+                Column('host_redshift'),
+                Column('internal_name'),
+                Column('data_source_group'),
             ),
             Row(Column('discovery_remarks')),
             Row(HTML('<h4>Discovery Photometry</h4>')),
@@ -240,11 +297,21 @@ class TargetReportForm(forms.Form):
             Row(Column('photometry_remarks')),
             Row(HTML('<h4>Last Nondetection</h4>')),
             Row(
+                Column('nondetection_date'),
+                Column('nondetection_instrument'),
+                Column('nondetection_limit'),
+                Column('nondetection_observer'),
+            ),
+            Row(
                 Column('archive'),
                 Column('archival_remarks'),
-                Column('nondetection_remarks', css_class='col-md-6'),
+                Column('nondetection_units'),
+                Column('nondetection_filter'),
             ),
-            Row(Column(Submit('submit', 'Submit Report'))),
+            Row(
+                Column('nondetection_remarks'),
+            ),
+            Row(Column(Submit('submit', 'Submit Report'), 'send_to_sandbox')),
         )
 
     def generate_tns_report(self):
@@ -263,26 +330,24 @@ class TargetReportForm(forms.Form):
                     "dec": {
                         "value": self.cleaned_data['dec'],
                     },
-                    "reporting_group_id": self.cleaned_data['reporting_group'],
-                    "discovery_data_source_id": self.cleaned_data['discovery_data_source'],
+                    "reporting_groupid": self.cleaned_data['reporting_group'],
+                    "data_source_groupid": self.cleaned_data['data_source_group'],
                     "reporter": self.cleaned_data['reporter'],
-                    "discovery_datetime": self.cleaned_data['discovery_date'].strftime('%Y-%m-%d %H:%M:%S'),
+                    "discovery_datetime": self.cleaned_data['discovery_date'].isoformat(sep=' ', timespec='milliseconds')[:-6],
                     "at_type": self.cleaned_data['at_type'],
-                    "non_detection": {
-                        "archiveid": self.cleaned_data['archive'],
-                        "archival_remarks": self.cleaned_data['archival_remarks'],
-                        "comments": self.cleaned_data['nondetection_remarks'],
-                    },
+                    "host_name": self.cleaned_data['host_name'],
+                    "host_redshift": self.cleaned_data['host_redshift'],
+                    "internal_name": self.cleaned_data['internal_name'],
                     "photometry": {
                         "photometry_group": {
                             "0": {
-                                "obsdate": self.cleaned_data['observation_date'].strftime('%Y-%m-%d %H:%M:%S'),
+                                "obsdate": self.cleaned_data['observation_date'].isoformat(sep=' ', timespec='milliseconds')[:-6],
                                 "flux": self.cleaned_data['flux'],
                                 "flux_error": self.cleaned_data['flux_error'],
-                                "flux_units": self.cleaned_data['flux_units'],
-                                "filter_value": self.cleaned_data['filter'],
-                                "instrument_value": self.cleaned_data['instrument'],
                                 "limiting_flux": self.cleaned_data['limiting_flux'],
+                                "flux_unitid": self.cleaned_data['flux_units'],
+                                "filterid": self.cleaned_data['filter'],
+                                "instrumentid": self.cleaned_data['instrument'],
                                 "exptime": self.cleaned_data['exposure_time'],
                                 "observer": self.cleaned_data['observer'],
                                 "comments": self.cleaned_data['photometry_remarks'],
@@ -292,7 +357,63 @@ class TargetReportForm(forms.Form):
                 }
             }
         }
+        if self.cleaned_data['nondetection_date']:
+            report_data['at_report']["0"]["non_detection"] = {
+                "obsdate": self.cleaned_data['nondetection_date'].isoformat(sep=' ', timespec='milliseconds')[:-6],
+                "limiting_flux": self.cleaned_data['nondetection_limit'],
+                "flux_unitid": self.cleaned_data['nondetection_units'],
+                "filterid": self.cleaned_data['nondetection_filter'],
+                "instrumentid": self.cleaned_data['nondetection_instrument'],
+                "observer": self.cleaned_data['nondetection_observer'],
+                "comments": self.cleaned_data['nondetection_remarks'],
+            }
+        else:
+            report_data['at_report']["0"]["non_detection"] = {
+                "archiveid": self.cleaned_data['archive'],
+                "archival_remarks": self.cleaned_data['archival_remarks'],
+                "comments": self.cleaned_data['nondetection_remarks'],
+            }
         return json.dumps(report_data)
+
+
+def _get_spectrum_choices(target):
+    reduceddatums = target.reduceddatum_set.filter(data_type='spectroscopy').order_by('timestamp')
+    choices = [(None, '-------')]
+    for rd in reduceddatums:
+        description = f'{rd.source_name} {rd.data_type} @ {rd.timestamp.isoformat(sep=" ", timespec="milliseconds")[:-6]} <ReducedDatum {rd.pk}>'
+        choices.append((rd.pk, description))
+    return choices
+
+
+def reduced_datum_to_ascii_file(rd):
+    """
+    Create a virtual ASCII file from a spectrum ReducedDatum for upload to TNS
+    """
+    file_buffer = StringIO()
+    timestring = rd.timestamp.isoformat(timespec="milliseconds")[:-6]
+    header = (
+        f"# OBJECT  = '{rd.target.name}'\n"
+        f"# DATE-OBS= '{timestring}'\n"
+    )
+    if rd.source_name:
+        header += f"# TELESCOP= '{rd.source_name}'\n"
+    if 'flux_units' in rd.value:
+        bunit = rd.value['flux_units']
+        header += f"# BUNIT   = '{bunit}'\n"
+    if 'wavelength_units' in rd.value:
+        cunit = rd.value['wavelength_units']
+        header += f"# CUNIT1  = '{cunit}'\n"
+    file_buffer.write(header)
+    output_spectrum = np.transpose([rd.value['wavelength'], rd.value['flux']])
+    np.savetxt(file_buffer, output_spectrum, fmt=('%f', '%e'))
+    file_buffer.seek(0)  # return to the beginning of the buffer
+    if rd.data_product is not None:
+        file_name = rd.data_product.get_file_name()
+        if file_name.endswith('.fits') or file_name.endswith('.fits.fz'):
+            file_name = file_name.rstrip('.fz').rstrip('.fits') + '.txt'
+    else:
+        file_name = f'saguaro_{rd.pk}.txt'
+    return file_name, file_buffer, 'text/plain'
 
 
 class TargetClassifyForm(forms.Form):
@@ -302,10 +423,10 @@ class TargetClassifyForm(forms.Form):
                                            "on behalf of SurveyName (optional)")
     classification = forms.ChoiceField(choices=TNS_CLASSIFICATION_CHOICES, initial=(1, "SN"))
     redshift = forms.FloatField(required=False)
-    group = forms.ChoiceField(choices=TNS_GROUP_CHOICES, initial=(66, "SAGUARO"))
+    group = forms.ChoiceField(choices=TNS_GROUP_CHOICES)
     classification_remarks = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 1}))
     observation_date = forms.DateTimeField()
-    instrument = forms.ChoiceField(choices=TNS_INSTRUMENT_CHOICES, initial=(0, "Other"))
+    instrument = forms.ChoiceField(choices=TNS_INSTRUMENT_CHOICES)
     exposure_time = forms.FloatField(required=False)
     observer = forms.CharField()
     reducer = forms.CharField(required=False)
@@ -316,12 +437,21 @@ class TargetClassifyForm(forms.Form):
         (4, 'Arcs'),
         (5, 'Synthetic'),
     ])
-    ascii_file = forms.FileField(label='ASCII file')
-    fits_file = forms.FileField(label='FITS file', required=False)
+    spectrum = forms.TypedChoiceField(required=False,
+                                      coerce=lambda pk: ReducedDatum.objects.get(pk=pk))
+    ascii_file = forms.FileField(label='ASCII file', required=False,
+                                 help_text='Uploading a file here overrides the ASCII file from the spectrum field')
+    fits_file = forms.FileField(label='FITS file', required=False,
+                                help_text='Uploading a file here overrides the FITS file from the spectrum field (if any)')
     spectrum_remarks = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 1}))
+    send_to_sandbox = forms.BooleanField(required=False)
 
     def __init__(self, *args, **kwargs):
+        target = kwargs.pop('target', None)
         super().__init__(*args, **kwargs)
+        if target is not None:
+            self.fields['spectrum'].choices = _get_spectrum_choices(target)
+
         self.helper = FormHelper()
         self.helper.layout = Layout(
             Row(
@@ -335,6 +465,7 @@ class TargetClassifyForm(forms.Form):
             ),
             Row(Column('classification_remarks')),
             Row(HTML('<h4>Classification Spectrum</h4>')),
+            Row(Column('spectrum')),
             Row(
                 Column('observation_date'),
                 Column('observer'),
@@ -350,23 +481,30 @@ class TargetClassifyForm(forms.Form):
                 Column('fits_file'),
             ),
             Row(Column('spectrum_remarks')),
-            Row(Column(Submit('submit', 'Submit Report'))),
+            Row(Column(Submit('submit', 'Submit Report'), 'send_to_sandbox')),
         )
 
     def files_to_upload(self):
         files_to_upload = {}
-        if self.cleaned_data['ascii_file'] is not None:
+        if self.cleaned_data['ascii_file']:
             files_to_upload['files[0]'] = (
                 os.path.basename(self.cleaned_data['ascii_file'].name),
                 self.cleaned_data['ascii_file'].open(),
                 'text/plain'
             )
-        if self.cleaned_data['fits_file'] is not None:
+        elif self.cleaned_data['spectrum']:
+            files_to_upload['files[0]'] = reduced_datum_to_ascii_file(self.cleaned_data['spectrum'])
+
+        if self.cleaned_data['fits_file']:
             files_to_upload['files[1]'] = (
                 os.path.basename(self.cleaned_data['fits_file'].name),
                 self.cleaned_data['fits_file'].open(),
                 'application/fits'
             )
+        elif (self.cleaned_data['spectrum']
+              and self.cleaned_data['spectrum'].data_product.get_file_extension() == '.fits'):
+            fits_file = self.cleaned_data['spectrum'].data_product
+            files_to_upload['files[1]'] = (fits_file.get_file_name(), fits_file.data.open(), 'application/fits')
         return files_to_upload
 
     def generate_tns_report(self, new_filenames=None):
@@ -376,10 +514,6 @@ class TargetClassifyForm(forms.Form):
 
         Returns the report as a JSON-formatted string
         """
-        if new_filenames is None:
-            ascii_filename = os.path.basename(self.cleaned_data['ascii_file'].name)
-        else:
-            ascii_filename = new_filenames[0]
         report_data = {
             "classification_report": {
                 "0": {
@@ -390,28 +524,29 @@ class TargetClassifyForm(forms.Form):
                     "groupid": self.cleaned_data['group'],
                     "remarks": self.cleaned_data['classification_remarks'],
                     "spectra": {
-                        "spectra-group": {
-                            "0": {
-                                "obsdate": self.cleaned_data['observation_date'].strftime('%Y-%m-%d %H:%M:%S'),
-                                "instrumentid": self.cleaned_data['instrument'],
-                                "exptime": self.cleaned_data['exposure_time'],
-                                "observer": self.cleaned_data['observer'],
-                                "reducer": self.cleaned_data['reducer'],
-                                "spectypeid": self.cleaned_data['spectrum_type'],
-                                "ascii_file": ascii_filename,
-                                "remarks": self.cleaned_data['spectrum_remarks'],
-                            },
-                        }
+                        "0": {
+                            "obsdate": self.cleaned_data['observation_date'].isoformat(sep=' ', timespec='milliseconds')[:-6],
+                            "instrumentid": self.cleaned_data['instrument'],
+                            "exptime": self.cleaned_data['exposure_time'],
+                            "observer": self.cleaned_data['observer'],
+                            "reducer": self.cleaned_data['reducer'],
+                            "spectypeid": self.cleaned_data['spectrum_type'],
+                            "remarks": self.cleaned_data['spectrum_remarks'],
+                        },
                     },
                 }
             }
         }
-        if self.cleaned_data['fits_file'] is not None:
-            if new_filenames is None:
-                fits_filename = os.path.basename(self.cleaned_data['fits_file'].name)
-            else:
-                fits_filename = new_filenames[1]
-            report_data['classification_report']['0']['spectra']['spectra_group']['0']['fits_file'] = fits_filename
+        if new_filenames:
+            report_data['classification_report']['0']['spectra']['0']['ascii_file'] = new_filenames[0]
+            if len(new_filenames) > 1:
+                report_data['classification_report']['0']['spectra']['0']['fits_file'] = new_filenames[1]
+        else:  # assuming they were previously uploaded
+            files_to_upload = self.files_to_upload()
+            if 'files[0]' in files_to_upload:
+                report_data['classification_report']['0']['spectra']['0']['ascii_file'] = files_to_upload['files[0]'][0]
+            if 'files[1]' in files_to_upload:
+                report_data['classification_report']['0']['spectra']['0']['fits_file'] = files_to_upload['files[1]'][0]
         return json.dumps(report_data)
 
 
