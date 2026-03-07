@@ -3,13 +3,12 @@ from django.conf import settings
 from django.db import connection
 from tom_targets.models import Target
 from custom_code.healpix_utils import create_candidates_from_targets
-from custom_code.alertstream_handlers import vet_or_post_error
+from custom_code.hooks import vet_or_post_error
 from custom_code.templatetags.skymap_extras import get_preferred_localization
 from custom_code.templatetags.target_extras import split_name
 from tom_treasuremap.management.commands.report_pointings import get_active_nonlocalizedevents
 from datetime import datetime, timedelta
 import numpy as np
-import json
 import logging
 
 from slack_notifier.slack_notifier import SlackNotifier
@@ -109,7 +108,8 @@ class Command(BaseCommand):
                 INSERT INTO tom_targets_targetname (name, created, target_id, modified)
                 SELECT tm.name, NOW(), tm.id, NOW()
                 FROM top_tns_matches AS tm
-                WHERE tm.name != tm.tns_name AND LEFT(tm.name, 1) != 'J';
+                WHERE tm.name != tm.tns_name AND LEFT(tm.name, 1) != 'J'
+                ON CONFLICT (name) DO NOTHING;
 
                 --STEP 3: merge any other matches into the new target
                 CREATE TEMPORARY TABLE targets_to_merge AS
@@ -182,7 +182,8 @@ class Command(BaseCommand):
                 INSERT INTO tom_targets_targetname (name, created, target_id, modified)
                 SELECT old_name, NOW(), new_id, NOW()
                 FROM targets_to_merge AS tm
-                WHERE LEFT(old_name, 1) != 'J';
+                WHERE LEFT(old_name, 1) != 'J'
+                ON CONFLICT (name) DO NOTHING;
                 """
             )
         logger.info(f"Merged {len(deleted_targets):d} targets into TNS targets.")
@@ -203,13 +204,13 @@ class Command(BaseCommand):
 
         for targets in [new_targets, updated_targets]:
             for target in targets:
-                vet_or_post_error(target, slack_tns)
+                vet_or_post_error(target, created=True, tns_time_limit=np.inf, slack_client=slack_tns)
                 slack_tns.send_slack_message(target=target)
                 if target.dec < 40.:  # only southern and equatorial targets
                     slack_tns50.send_slack_message(target=target)
 
         for target in updated_targets_coords:
-            vet_or_post_error(target, slack_tns)
+            vet_or_post_error(target, created=True, tns_time_limit=np.inf, slack_client=slack_tns)
 
         # automatically associate with nonlocalized events
         for nle in get_active_nonlocalizedevents(lookback_days=lookback_days_nle):

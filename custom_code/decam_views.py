@@ -10,7 +10,10 @@ from django.http import HttpResponse, Http404
 from django.views import View
 from django.views.generic import ListView 
 from astropy.time import Time
-from .models import Candidate, DecamCandidate
+from django.db.models import Count
+from django.db.models.functions import Floor
+from .filters import CandidateFilter
+from .models import DecamCandidate
 
 
 class DecamCandidateView(View):
@@ -82,7 +85,7 @@ class DecamCandidateListView(ListView):
     model = DecamCandidate
     template_name = 'tom_targets/decam_candidate_list.html'
     context_object_name = 'decam_candidates'
-    paginate_by = 50  # Fewer since we're grouping
+    paginate_by = 50
     
     def get_queryset(self):
         """Apply filters and return candidates."""
@@ -94,8 +97,18 @@ class DecamCandidateListView(ListView):
             'observation_record__survey_field'
         ).all()
         
-        # Apply all the filters (keep existing filter logic)
+        # Date filter - default to LATEST date if none selected
         obs_date = self.request.GET.get('date')
+        if obs_date == 'latest':
+            # Get the most recent observation date
+            latest = DecamCandidate.objects.filter(mjd_obs__isnull=False).order_by('-mjd_obs').first()
+            if latest:
+                try:
+                    t = Time(latest.mjd_obs, format='mjd')
+                    obs_date = t.datetime.strftime('%Y-%m-%d')
+                except:
+                    obs_date = None
+        
         if obs_date:
             try:
                 t = Time(obs_date, format='iso')
@@ -104,15 +117,23 @@ class DecamCandidateListView(ListView):
                 queryset = queryset.filter(mjd_obs__gte=mjd_start, mjd_obs__lt=mjd_end)
             except:
                 pass
-        
+
+        # Name filter - filter by target name prefix (comma-separated)
+        name_filter = self.request.GET.get('name_filter')
+        if name_filter:
+            queryset = CandidateFilter.multifilter(queryset, 'target__name__startswith', name_filter)
+
+        # Field filter
         field = self.request.GET.get('field')
         if field and field != 'all':
             queryset = queryset.filter(observation_record__survey_field__name=field)
         
+        # Filter band
         filter_band = self.request.GET.get('filter_band')
         if filter_band and filter_band != 'all':
             queryset = queryset.filter(filter_name=filter_band)
         
+        # CNN score
         cnn_min = self.request.GET.get('cnn_min')
         if cnn_min:
             try:
@@ -120,6 +141,7 @@ class DecamCandidateListView(ListView):
             except:
                 pass
         
+        # SNR
         snr_min = self.request.GET.get('snr_min')
         if snr_min:
             try:
@@ -127,67 +149,35 @@ class DecamCandidateListView(ListView):
             except:
                 pass
         
+        # Not in Gaia
         if self.request.GET.get('not_in_gaia') == 'true':
             queryset = queryset.filter(Q(in_gaia__isnull=True) | Q(in_gaia=''))
         
+        # Has host
         if self.request.GET.get('has_host') == 'true':
             queryset = queryset.filter(Q(desi_bgs__isnull=False) & ~Q(desi_bgs=''))
         
-        return queryset.order_by('target_id','-mjd_obs','filter_name')
+        # Sort by CNN score (highest first), then target, then filter
+        # NULLs will be at the end
+        from django.db.models import F
+        return queryset.order_by(
+ 	     F('cnnscore').desc(nulls_last=True),
+	     F('snr_fphot').desc(nulls_last=True),
+            'target_id',       # Group by target
+            'filter_name'      # g, i, r, z within each target
+        )
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        
-        # Group candidates by target and observation date
-        from collections import defaultdict
-        grouped = defaultdict(lambda: defaultdict(list))
-        
-        for candidate in self.get_queryset():
-            if candidate.target and candidate.observation_date:
-                # Group by target_id and date
-                key = (candidate.target.id, candidate.observation_date)
-                grouped[key]['target'] = candidate.target
-                grouped[key]['date'] = candidate.observation_date
-                grouped[key]['field'] = candidate.observation_record.survey_field.name if candidate.observation_record and candidate.observation_record.survey_field else '—'
-                grouped[key]['observations'].append(candidate)
-        
-        # Convert to list and sort
-        grouped_list = []
-        for (target_id, date), data in grouped.items():
-            # Organize observations by filter
-            by_filter = {}
-            for obs in data['observations']:
-                if obs.filter_name:
-                    by_filter[obs.filter_name] = obs
-            
-            grouped_list.append({
-                'target': data['target'],
-                'date': date,
-                'field': data['field'],
-                'by_filter': by_filter,
-                'all_obs': data['observations'],
-            })
-        
-        # Sort by date descending
-        grouped_list.sort(key=lambda x: x['date'], reverse=True)
-        
-        context['grouped_candidates'] = grouped_list
-        
-        # Keep existing context for filters
+
+        # Get all candidates for dropdown options
         all_candidates = DecamCandidate.objects.all()
         
-        dates_dict = {}
-        for candidate in all_candidates.filter(mjd_obs__isnull=False):
-            if candidate.mjd_obs:
-                try:
-                    t = Time(candidate.mjd_obs, format='mjd')
-                    obs_date = t.datetime.strftime('%Y-%m-%d')
-                    dates_dict[obs_date] = dates_dict.get(obs_date, 0) + 1
-                except:
-                    continue
-        
-        context['observation_dates'] = sorted(dates_dict.items(), key=lambda x: x[0], reverse=True)
-        
+        # Build date list
+        dates = all_candidates.annotate(date=Floor('mjd_obs')).values('date').order_by('-date').annotate(count=Count('id'))
+        context['observation_dates'] = [(Time(date['date'], format='mjd').strftime('%Y-%m-%d'), date['count']) for date in dates]
+
+        # Get unique fields
         fields = DecamCandidate.objects.filter(
             observation_record__survey_field__isnull=False
         ).values_list(
@@ -195,7 +185,19 @@ class DecamCandidateListView(ListView):
         ).distinct().order_by('observation_record__survey_field__name')
         context['fields'] = list(fields)
         
-        context['selected_date'] = self.request.GET.get('date', '')
+        # Current filter values - if no date selected, use latest
+        selected_date = self.request.GET.get('date', '')
+        if selected_date == 'latest':
+            latest = DecamCandidate.objects.filter(mjd_obs__isnull=False).order_by('-mjd_obs').first()
+            if latest:
+                try:
+                    t = Time(latest.mjd_obs, format='mjd')
+                    selected_date = t.datetime.strftime('%Y-%m-%d')
+                except:
+                    selected_date = ''
+        
+        context['selected_date'] = selected_date
+        context['name_filter'] = self.request.GET.get('name_filter', '')
         context['selected_field'] = self.request.GET.get('field', 'all')
         context['selected_filter_band'] = self.request.GET.get('filter_band', 'all')
         context['cnn_min'] = self.request.GET.get('cnn_min', '')
@@ -203,6 +205,7 @@ class DecamCandidateListView(ListView):
         context['not_in_gaia'] = self.request.GET.get('not_in_gaia', 'false')
         context['has_host'] = self.request.GET.get('has_host', 'false')
         
+        # Stats
         context['total_candidates'] = all_candidates.count()
         context['filtered_count'] = self.get_queryset().count()
         
