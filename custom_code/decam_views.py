@@ -161,9 +161,9 @@ class DecamCandidateListView(ListView):
         # NULLs will be at the end
         from django.db.models import F
         return queryset.order_by(
- 	     F('cnnscore').desc(nulls_last=True),
+ 	    'target_id',
+	     F('cnnscore').desc(nulls_last=True),
 	     F('snr_fphot').desc(nulls_last=True),
-            'target_id',       # Group by target
             'filter_name'      # g, i, r, z within each target
         )
     
