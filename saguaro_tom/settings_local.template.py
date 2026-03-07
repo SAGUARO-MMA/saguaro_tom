@@ -1,4 +1,7 @@
 ALLOWED_HOST = ''       # hostname or IP address of the web server (leave blank for development)
+ANTARES_API_KEY = ''    # username for ANTARES authentication
+ANTARES_API_SECRET = '' # password for ANTARES authentication
+ANTARES_GROUP_ID = ''   # make up a unique ID for your ANTARES alert consumer
 ATLAS_API_KEY = ''      # API key for the ATLAS forced photometry server
 CONTACT_EMAIL = ''      # contact email for MMT observation request notes
 CSS_HOSTNAME = ''       # hostname to which to send CSS .prog files

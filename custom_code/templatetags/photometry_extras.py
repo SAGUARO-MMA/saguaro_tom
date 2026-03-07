@@ -1,10 +1,11 @@
-from django import template
+from django import template, forms
 from django.conf import settings
 from guardian.shortcuts import get_objects_for_user
 from plotly import offline
 import plotly.graph_objs as go
 from plotly import colors
 from tom_dataproducts.models import ReducedDatum
+from tom_dataproducts.forms import DataShareForm
 import numpy as np
 from datetime import datetime
 import re
@@ -242,6 +243,31 @@ def photometry_for_target(context, target, width=700, height=600, background=Non
     }
 
 
+@register.inclusion_tag('tom_dataproducts/partials/photometry_datalist_for_target.html', takes_context=True)
+def get_photometry_data(context, target, target_share=False):
+    """
+    Displays a table of the all photometric points for a target.
+    """
+    initial = {'submitter': context['request'].user,
+               'target': target,
+               'data_type': 'photometry',
+               'share_title': f"Updated data for {target.name} from {getattr(settings, 'TOM_NAME', 'TOM Toolkit')}.",
+               }
+    form = DataShareForm(initial=initial)
+    form.fields['data_type'].widget = forms.HiddenInput()
+
+    sharing = getattr(settings, "DATA_SHARING", None)
+    hermes_sharing = sharing and sharing.get('hermes', {}).get('HERMES_API_KEY')
+
+    context = {'data': target.reduceddatum_set.filter(data_type='photometry').order_by('-timestamp'),
+               'target': target,
+               'target_data_share_form': form,
+               'sharing_destinations': form.fields['share_destination'].choices,
+               'hermes_sharing': hermes_sharing,
+               'target_share': target_share}
+    return context
+
+
 @register.filter
 def format_mag(datum, d=2):
     if datum.get('magnitude'):
@@ -249,11 +275,13 @@ def format_mag(datum, d=2):
         if datum.get('error'):
             datum['error'] = float(datum['error'])
             display_str = f'{{magnitude:.{d}f}} ± {{error:.{d}f}}'
-        elif datum.get('limit'):
-            display_str = f'> {{magnitude:.{d}f}}'
         else:
             display_str = f'{{magnitude:.{d}f}}'
-        return display_str.format(**datum)
+    elif datum.get('limit'):
+        display_str = f'> {{limit:.{d}f}}'
+    else:
+        display_str = ''
+    return display_str.format(**datum)
 
 
 @register.filter

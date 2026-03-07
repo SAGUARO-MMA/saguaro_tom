@@ -11,6 +11,8 @@
         {% with target_name|split_name as name %}
         {% if name.tns_objname %}
             <a href="https://www.wis-tns.org/object/{{ name.tns_objname }}" target="_blank"><img src="https://www.wis-tns.org/sites/default/files/favicon.png" alt="TNS" title="TNS" class="icon" /></a>
+        {% elif name.prefix == "ANT" %}
+            <a href="https://antares.noirlab.edu/loci/{{ target_name }}" target="_blank"><img src="https://antares.noirlab.edu/favicon.ico" alt="ANTARES" title="ANTARES" class="icon" /></a>
         {% elif name.prefix == "ZTF" %}
             <a href="https://alerce.online/object/{{ target_name }}" target="_blank"><img src="https://alerce.online/favicon.ico" alt="ALeRCE" title="ALeRCE" class="icon" /></a>
             <a href="https://antares.noirlab.edu/loci/lookup/{{ target_name }}" target="_blank"><img src="https://antares.noirlab.edu/favicon.ico" alt="ANTARES" title="ANTARES" class="icon" /></a>

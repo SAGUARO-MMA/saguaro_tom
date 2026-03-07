@@ -52,9 +52,11 @@ INSTALLED_APPS = [
     'django_gravatar',
     'tom_targets',
     'tom_alerts',
+    'tom_antares',
     'tom_catalogs',
     'tom_observations',
     'tom_dataproducts',
+    'tom_dataservices',
     'tom_alertstreams',
     'tom_nonlocalizedevents',
     'tom_registration',
@@ -64,6 +66,7 @@ INSTALLED_APPS = [
     'tom_treasuremap',
     'django_tasks',
     'django_tasks.backends.database',
+    'django_tables2',
 ]
 
 MIDDLEWARE = [
@@ -75,6 +78,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django_htmx.middleware.HtmxMiddleware',
     'tom_common.middleware.Raise403Middleware',
     'tom_common.middleware.ExternalServiceMiddleware',
     'tom_common.middleware.AuthStrategyMiddleware',
@@ -107,7 +111,7 @@ WSGI_APPLICATION = 'saguaro_tom.wsgi.application'
 TASKS = {
     "default": {
         "BACKEND": "django_tasks.backends.database.DatabaseBackend",
-        "QUEUES": ["default", "mpc"]
+        "QUEUES": ["default", "mpc", "antares"]
     }
 }
 
@@ -209,6 +213,7 @@ CACHES = {
 
 # TOM Specific configuration
 TARGET_TYPE = 'SIDEREAL'
+TARGET_DEFAULT_PERMISSION = 'PUBLIC'
 
 FACILITIES = {
     'LCO': {
@@ -292,7 +297,7 @@ TOM_FACILITY_CLASSES = [
 
 TOM_ALERT_CLASSES = [
     'tom_alerts.brokers.alerce.ALeRCEBroker',
-    'tom_alerts.brokers.antares.ANTARESBroker',
+    'tom_antares.antares.ANTARESBroker',
     'tom_alerts.brokers.gaia.GaiaBroker',
     'tom_alerts.brokers.hermes.HermesBroker',
     'tom_alerts.brokers.lasair.LasairBroker',
@@ -308,6 +313,8 @@ BROKERS = {
         'bot_name': 'SAGUARO_Bot1',
     }
 }
+
+CONE_SEARCH_RADIUS = 2.
 
 TOM_HARVESTER_CLASSES = [
     'tom_catalogs.harvesters.simbad.SimbadHarvester',
@@ -354,7 +361,7 @@ OPEN_URLS = ['/accounts/register/']
 MATCH_MANAGERS = {'Target': 'custom_code.managers.StrictTargetMatchManager'}
 
 HOOKS = {
-    'target_post_save': 'custom_code.hooks.target_post_save',
+    'target_post_save': 'custom_code.hooks.vet_or_post_error',
     'observation_change_state': 'tom_common.hooks.observation_change_state',
     'data_product_post_upload': 'tom_dataproducts.hooks.data_product_post_upload',
     'data_product_post_save': 'tom_dataproducts.hooks.data_product_post_save',
@@ -404,6 +411,18 @@ ALERT_STREAMS = [
             },
         },
     },
+    {
+        'ACTIVE': True,
+        'NAME': 'tom_alertstreams.alertstreams.antares.AntaresAlertStream',
+        'OPTIONS': {
+            'API_KEY': ANTARES_API_KEY,
+            'API_SECRET': ANTARES_API_SECRET,
+            'GROUP': ANTARES_GROUP_ID,
+            'TOPIC_HANDLERS': {
+                'in_lsst_ddf': 'custom_code.alertstream_handlers.handle_antares_stream_async',
+            }
+        },
+    }
 ]
 
 VUE_FRONTEND_DIR_TOM_NONLOCAL = os.path.join(STATIC_ROOT, 'tom_nonlocalizedevents/vue')
