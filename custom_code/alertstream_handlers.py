@@ -306,14 +306,17 @@ def handle_einstein_probe_alert(message, metadata):
     logger.info(f'Finished processing alert for {nonlocalizedevent.event_id}')
 
 
-class FiniteJSONEncoder(json.JSONEncoder):
+def nan2str(obj):
     """
     Remove any NaN or Infinity from an object before JSON encoding
     """
-    def default(self, obj):
-        if isinstance(obj, float) and not np.isfinite(obj):
-            return str(obj)
-        return super().default(obj)
+    if isinstance(obj, dict):
+        return {k: nan2str(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [nan2str(v) for v in obj]
+    elif isinstance(obj, float) and not np.isfinite(obj):
+        return str(obj)
+    return obj
 
 
 def serialize_antares_alert(locus):
@@ -343,7 +346,7 @@ def handle_antares_stream_async(locus):
         return
 
     alert_small = serialize_antares_alert(locus)
-    alert_finite = json.loads(json.dumps(alert_small, cls=FiniteJSONEncoder))
+    alert_finite = nan2str(alert_small)
     handle_antares_stream.enqueue(alert_finite)
     logger.debug(f'sent {locus.locus_id} to queue')
 
