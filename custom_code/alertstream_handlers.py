@@ -347,8 +347,11 @@ def handle_antares_stream_async(locus):
 
     alert_small = serialize_antares_alert(locus)
     alert_finite = nan2str(alert_small)
-    handle_antares_stream.enqueue(alert_finite)
-    logger.debug(f'sent {locus.locus_id} to queue')
+    try:
+        handle_antares_stream.enqueue(alert_finite)
+        logger.debug(f'sent {locus.locus_id} to queue')
+    except Exception as exc:
+        dump_alert_and_send_error(alert_finite, exc)
 
 
 @task(queue_name="antares")
@@ -404,14 +407,17 @@ def handle_antares_stream(alert, cone_search_radius_arcsec=2.):
                                          telescope_stream=telescope)
 
     except Exception as exc:
-        # we don't want this *ever* to crash, just log the error, send it as a slack
-        # message, and dump the alert to a json file
-        dump_dir = "antares-alert-errors"
-        if not os.path.exists(dump_dir):
-            os.makedirs(dump_dir)
-        dump_path = f"{dump_dir}/{uuid.uuid4()}.json"
-        with open(dump_path, "w") as f:
-            json.dump(alert, f, indent=4)
-        msg = f"ANTARES stream ingestion failed with {exc}! Failing alert dumped to saguaro@sand:~/{dump_path}"
-        logger.warning(msg)
-        slack_lsstddf.send_slack_message_from_text(msg)
+        dump_alert_and_send_error(alert, exc)
+
+
+def dump_alert_and_send_error(alert, exc, dump_dir="antares-alert-errors", slack_client=slack_lsstddf):
+    """
+    we don't want this *ever* to crash, just log the error, send it as a slack message, and dump the alert to a json file
+    """
+    os.makedirs(dump_dir, exist_ok=True)
+    dump_path = f"{dump_dir}/{uuid.uuid4()}.json"
+    with open(dump_path, "w") as f:
+        json.dump(alert, f, indent=4)
+    msg = f"ANTARES stream ingestion failed with {exc}! Failing alert dumped to saguaro@sand:~/{dump_path}"
+    logger.warning(msg)
+    slack_client.send_slack_message_from_text(msg)
