@@ -258,21 +258,6 @@ TNS Request for <https://wis-tns.org/object/{tns_objname}|{target.name}> respond
             if slack_client is not None:
                 slack_client.send_slack_message_from_text(error_message)
 
-        # TODO: this is very temporary
-        slack_m49 = SlackNotifier(slack_channel='alerts', token=settings.SLACK_TOKEN_TNS50)
-        m49 = SkyCoord(187.6007, 8.4389, unit='deg')
-        separation = coord.separation(m49).deg
-        target_matches = cone_search_filter(Target.objects.exclude(id=target.id), coord.ra.deg, coord.dec.deg, 2. / 3600.)
-        if separation <= 1.1 and not target_matches.exists():
-            msg = f'<{settings.TARGET_LINKS[0][0]}|{{target.name}}> is {separation:.2f} deg from M49'.format(target=target)
-            peak = target.reduceddatum_set.order_by('value__magnitude').first()
-            if peak:
-                peak_mag = peak.value['magnitude']
-                msg += f" ({peak_mag:.1f} mag)"
-                if peak_mag < 21.:
-                    msg = '<!channel> ' + msg
-            slack_m49.send_slack_message_from_text(msg)
-
     for message in messages:
         logger.info(message)
 
