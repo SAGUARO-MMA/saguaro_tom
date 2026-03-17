@@ -6,6 +6,7 @@ from datetime import datetime
 import numpy as np
 
 from .slack_notifier import SlackNotifier
+from tom_targets.templatetags.targets_extras import deg_to_sexigesimal
 from custom_code.templatetags.target_extras import split_name
 from django.conf import settings
 
@@ -96,9 +97,9 @@ class DistanceLimitedSlackFilter(SlackNotifier):
         if target_extra is None:
             return
         for galaxy in json.loads(target_extra.value):
-            if galaxy['Source'] in ['GLADE', 'GWGC', 'HECATE'] and galaxy['Dist'] <= self.max_dist:  # catalogs that have dist
-                slack_alert = (f'{target.name} is {galaxy["Offset"]:.1f}" from '
-                               f'galaxy {galaxy["ID"]} at {galaxy["Dist"]:.1f} Mpc.')
+            if galaxy['Source'] in ['GLADE', 'GWGC', 'HECATE'] and galaxy['Dist'] <= 100.:  # catalogs that have dist
+                slack_alert = (f'{target.name} ({deg_to_sexigesimal(target.ra, "hms")} {deg_to_sexigesimal(target.dec, "dms")}) '
+                               f'is {galaxy["Offset"]:.1f}" from galaxy {galaxy["ID"]} at {galaxy["Dist"]:.1f} Mpc.')
                 break
         else:
             return
