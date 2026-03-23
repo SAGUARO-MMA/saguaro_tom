@@ -36,6 +36,20 @@ class _Log10(Func):
     function = 'LOG10'
     template = '%(function)s(%(expressions)s)'
 
+class ExtendedVirgoClusterCatalog(StaticCatalog):
+    catalog_model = EvccQ3C
+    ra_colname = "ra"
+    dec_colname = "dec"
+    colmap = {
+        "evcc":"name",
+        "ra":"ra",
+        "dec":"dec",
+        "rmag":"default_mag"
+    }
+
+    def to_standardized_catalog(self, df):
+        return self._standardize_df(df)
+    
 class AsassnVariableStar(StaticCatalog):
     catalog_model = AsassnQ3C
 

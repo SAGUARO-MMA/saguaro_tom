@@ -29,7 +29,6 @@ cosmo = settings.COSMO
 
 from tom_targets.models import BaseTarget as Target
 from tom_targets.models import TargetExtra
-from .models import ScoreFactor
 from custom_code.healpix_utils import SaTarget
 from tom_nonlocalizedevents.models import (
     EventCandidate,
@@ -58,7 +57,8 @@ from candidate_vetting.public_catalogs.static_catalogs import (
     Milliquas,
     NedLvs,
     TwoMass,
-    DesiDr1
+    DesiDr1,
+    ExtendedVirgoClusterCatalog
 )
 
 HOST_DF_COLMAP = {
@@ -79,7 +79,7 @@ HOST_DF_COLMAP_INVERSE = {v:k for k,v in HOST_DF_COLMAP.items()}
 
 # After we order the dataframe by the Pcc score, remove any host matches with a greater
 # Pcc score than this
-PCC_THRESHOLD = 0.15 # this is the value used in Rastinejad+2022
+PCC_THRESHOLD = 0.80 # this is the value used in Rastinejad+2022
 
 # upper / lower bounds on distance for computing normal / asymmetric Gaussian
 # distributions
@@ -100,7 +100,8 @@ GALAXY_CATALOGS = [
     #NedLvs,
     LsDr10,
     Ps1Galaxy,
-    Sdss12Photoz
+    Sdss12Photoz,
+    ExtendedVirgoClusterCatalog
 ]
 
 GALAXY_CATALOG_RANKING = {c.__name__:i for i,c in enumerate(GALAXY_CATALOGS)}
@@ -354,7 +355,7 @@ def host_association(target_id:int, radius=50, pcc_threshold=PCC_THRESHOLD):
             
         # if no queries are returned we can skip this catalog
         if query_set.count() == 0: continue
-
+        
         # convert to a dataframe and standardize the column names
         df = pd.DataFrame(
             list(
@@ -364,13 +365,8 @@ def host_association(target_id:int, radius=50, pcc_threshold=PCC_THRESHOLD):
         df = cat.to_standardized_catalog(df)
 
         # some extra cleaning before continuing
-        if "z" in df:
-            # we only need to do this if the redshift is in the dataframe
-            # if it isn't then that's fine because it means the catalog we are using
-            # had a derived distance in it already!
-            df = df[df.z > 0.02] # otherwise it probably isn't a real redshift
         df = df.dropna(
-            subset=["default_mag", "ra", "dec", "lumdist", "lumdist_err"]
+            subset=["default_mag", "ra", "dec"] #, "lumdist", "lumdist_err"]
         ) # drop rows without the information we need
         
         # now save the cleaned dataset
