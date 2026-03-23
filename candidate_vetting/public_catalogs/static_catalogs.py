@@ -28,7 +28,8 @@ from ..models import (
     ZtfVarstarQ3C,
     TwomassQ3C,
     NedlvsQ3C,
-    DesiDr1Q3C
+    DesiDr1Q3C,
+    EvccQ3C
 )
 
 class _Log10(Func):
@@ -208,7 +209,7 @@ class GladePlus(StaticCatalog):
         df["lumdist_neg_err"] = df.lumdist_err
         df["lumdist_pos_err"] = df.lumdist_err        
         return df
-
+    
 class Gwgc(StaticCatalog):
     catalog_model = GwgcQ3C
     colmap = {
