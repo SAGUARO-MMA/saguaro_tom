@@ -2,13 +2,14 @@
 Custom filters (i.e., subclasses of SlackNotifier)
 """
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from astropy.time import Time
 import numpy as np
 
 from .slack_notifier import SlackNotifier
 from tom_targets.templatetags.targets_extras import deg_to_sexigesimal
 from custom_code.templatetags.target_extras import split_name
+from django.db.models import Q
 from django.conf import settings
 
 ALERT_LINKS = ' '.join([f'<{link}|{service}>' for link, service in settings.TARGET_LINKS])
@@ -36,17 +37,23 @@ class AntaresSlackFilter(SlackNotifier):
 
         #Check that the first alert is now
         first_alert_mjd = Time(target.reduceddatum_set.filter(data_type="photometry", value__magnitude__isnull = False).earliest()).mjd
-        now_mjd = Time(datetime.now()).mjd
 
-        #want to ignore non-detections
-        new_target = len(target.reduceddatum_set.filter(data_type="photometry", value__magnitude__isnull = False))==1
+        # want to ignore non-detections
+        # And then also throw out anything with a low SNR before a day
+        previous_detections = target.reduceddatum_set.filter(
+            Q(data_type="photometry") &
+            Q(value__magnitude__isnull = False) &
+            Q(timestamp__lt = datetime.now()-timedelta(1)) &
+            Q(value__error__lt = 0.1)
+        )
+        new_alert = previous_detections.count() == 0
 
         if not new_alert:
-            latest_det_mjd = test_target.reduceddatum_set.filter(data_type="photometry", value__magnitude__isnull = False).latest()
-            latest_det_mag = test_target.reduceddatum_set.filter(data_type="photometry", value__magnitude__isnull = False).latest().value['magnitude']
+            latest_det_mjd = target.reduceddatum_set.filter(data_type="photometry", value__magnitude__isnull = False).latest()
+            latest_det_mag = target.reduceddatum_set.filter(data_type="photometry", value__magnitude__isnull = False).latest().value['magnitude']
 
-            second_to_last_det_mjd = test_target.reduceddatum_set.filter(data_type="photometry", timestamp__lt = latest.timestamp).latest()
-            second_to_last_det_mag = test_target.reduceddatum_set.filter(data_type="photometry", timestamp__lt = latest.timestamp).latest().value['magnitude']
+            second_to_last_det_mjd = target.reduceddatum_set.filter(data_type="photometry", timestamp__lt = latest.timestamp).latest()
+            second_to_last_det_mag = target.reduceddatum_set.filter(data_type="photometry", timestamp__lt = latest.timestamp).latest().value['magnitude']
 
             delta_mag = latest_det_mag - second_to_last_det_mag
             delta_t = latest_det_mjd - second_to_last_det_mjd
@@ -58,7 +65,7 @@ class AntaresSlackFilter(SlackNotifier):
         
         #Report all new objects
         #We create things with a lot of past detections so created != new_target
-        if new_target:
+        if new_alert:
             base_str = f"First Detection of {target.name} in the {telescope_stream} alert stream."
         #if not new, look for rapidly rising
         elif rise_rate<-0.5: 
