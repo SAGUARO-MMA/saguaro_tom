@@ -34,9 +34,8 @@ from django.db.models.functions import Sqrt
 
 from .catalog import PhotCatalog
 from .util import _QUERY_METHOD_DOCSTRING, RADIUS_ARCSEC, create_phot
-from pyasassn.client import SkyPatrolClient
 
-from trove_targets.models import Target
+from tom_targets.models import Target
 
 logger = logging.getLogger(__file__)
 
@@ -111,7 +110,7 @@ class TNS_Phot(PhotCatalog):
             logger.exception(f"Retrieving the TNS data failed with {exc}")
             return False
         
-        return self._add_phot(target, data)        
+        return self._add_phot(target, data), response, time_to_reset        
 
     def _add_phot(self, target, tns_reply):
         """
@@ -198,7 +197,6 @@ class TNS_Phot(PhotCatalog):
 class ASASSN_SkyPatrol(PhotCatalog):
     """ASASSN Forced photometry server
     """
-    
     def query(
             self,
             ra:float,
@@ -209,6 +207,7 @@ class ASASSN_SkyPatrol(PhotCatalog):
 
         {_QUERY_METHOD_DOCSTRING}
         """
+        from pyasassn.client import SkyPatrolClient
         client = SkyPatrolClient()
         light_curve = client.cone_search(
             ra_deg=ra,

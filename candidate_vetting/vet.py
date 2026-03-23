@@ -591,8 +591,7 @@ def point_source_association(target_id:int, radius:float=2):
             [ps_match.ang_dist for ps_match in query_set]
         )
         
-    if len(matches):
-        return matches
+    return matches
         
 def agn_association_2d(target_id:int, radius:float=2):
     """

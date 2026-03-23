@@ -6,6 +6,7 @@ from candidate_vetting.vet import (
     point_source_association,
     agn_association_2d
 )
+from candidate_vetting.public_catalogs.phot_catalogs import TNS_Phot
 from trove_mpc import Transient
 
 from tom_targets.models import TargetExtra, TargetName
@@ -104,12 +105,9 @@ def vet_or_post_error(target, created=True, tns_time_limit: float=5., run_mpc=Tr
         # if the target has a TNS name, query the TNS API for updated coords, photometry, name, redshift, classification
         tns_objname = split_name(target.name)['tns_objname']
         if tns_objname is not None:
-            get_obj = [("objname", tns_objname), ("objid", ""), ("photometry", "1"), ("spectra", "0")]
-            response, time_to_wait = TNS_get(get_obj,
-                                             settings.BROKERS['TNS']['bot_id'],
-                                             settings.BROKERS['TNS']['bot_name'],
-                                             settings.BROKERS['TNS']['api_key'],
-                                             timelimit=tns_time_limit)
+
+            # check TNS for new photometry
+            _, response, time_to_wait = TNS_Phot("tns").query(target, timelimit=tns_time_limit)
 
             if response is not None and response.status_code == 200:
                 tns_reply = response.json()['data']
