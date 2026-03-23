@@ -52,7 +52,7 @@ class AntaresSlackFilter(SlackNotifier):
             delta_t = latest_det_mjd - second_to_last_det_mjd
             rise_rate = delta_mag/delta_t #mag/day
 
-        if (has_vs_match or has_agn_match) or peak_mag > 21.:
+        if has_vs_match or has_agn_match:
             # don't send this message!
             return
         
