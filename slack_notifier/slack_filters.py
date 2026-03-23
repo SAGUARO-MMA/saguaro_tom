@@ -33,16 +33,17 @@ class AntaresSlackFilter(SlackNotifier):
         peak = target.reduceddatum_set.order_by('value__magnitude').first()
         peak_mag = peak.value['magnitude'] if peak else np.nan
 
+
         if ((has_vs_match or has_agn_match) and telescope_stream == "ZTF") or peak_mag > 21.:
             # don't send this message!
             return
         
         if created:
-            base_str = f"{target.name} created from the Antares alert stream."
+            base_str = f"{target.name} created from the {telescope_stream} alert stream."
         elif not created and len(aliases_added):
-            base_str = f"{target.name} has been updated from the Antares alert stream with the following aliases: {', '.join(aliases_added)}"
+            base_str = f"{target.name} has been updated from the {telescope_stream} alert stream with the following aliases: {', '.join(aliases_added)}"
         else:
-            base_str = f"{target.name} has been updated from the Antares alert stream."
+            base_str = f"{target.name} has been updated from the {telescope_stream} alert stream."
         if np.isfinite(peak_mag):
             base_str += f" ({peak_mag:.1f} mag)"
 
