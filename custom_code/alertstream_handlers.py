@@ -332,7 +332,7 @@ def serialize_antares_alert(locus):
                 {
                     'alert_id': alert.alert_id,
                     'mjd': alert.mjd,
-                    'properties': {key: val for key, val in alert.properties.items() if not key.startswith('lsst_dia')},
+                    'properties': {key: val for key, val in alert.properties.items() if key.startswith('ant')},
                 }
                 for alert in locus.alerts
             ],
