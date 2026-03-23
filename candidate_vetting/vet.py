@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 from django.conf import settings
 cosmo = settings.COSMO
 
-from trove_targets.models import Target
+from tom_targets.models import BaseTarget as Target
 from tom_targets.models import TargetExtra
 from .models import ScoreFactor
 from custom_code.healpix_utils import SaTarget
@@ -95,9 +95,9 @@ GALAXY_CATALOGS = [
     GladePlus,
     Gwgc,
     Hecate,
-    DesiDr1,
-    # DesiSpec, # this duplicates with DESI DR1 (which also includes the EDR data)
-    NedLvs,
+    #DesiDr1,
+    DesiSpec, # this duplicates with DESI DR1 (which also includes the EDR data)
+    #NedLvs,
     LsDr10,
     Ps1Galaxy,
     Sdss12Photoz
@@ -187,47 +187,6 @@ def _distance_at_healpix(nonlocalized_event_name, target_id, max_time=Time.now()
         ).fetchall()[0]
 
     return dist, dist_err
-
-def update_score_factor(event_candidate, key, value):
-    ScoreFactor.objects.update_or_create(
-        event_candidate = event_candidate,
-        key = key,
-        defaults = dict(value = value)
-    )
-
-def delete_score_factor(event_candidate, key):
-    """This is basically only used since we are updating various scores
-    and may want to delete some, rather than update them, in the process"""
-    # first get any score factors that match this event candidate and key
-    matches = ScoreFactor.objects.filter(
-        event_candidate=event_candidate,
-        key = key
-    )
-
-    if matches.count():
-        matches.delete()
-
-def save_score_to_targetextra(target, key, score):
-    """
-    Saves the scores that don't change to a TargetExtra object rather than a ScoreFactor
-    This is for:
-    1. point source score
-    2. MPC score
-    Since they are independent of the NLE that we are vetting the target against
-    """
-
-    # first delete the host galaxy key for this target if it already exists
-    te = TargetExtra.objects.filter(target_id=target.id, key=key)
-    if te.exists():
-        te.delete()
-
-    # then save the new score
-    TargetExtra.objects.update_or_create(
-        target=target,
-        key=key,
-        value=score
-    )
-
         
 def _save_host_galaxy_df(df, target):
 
@@ -413,7 +372,7 @@ def host_association(target_id:int, radius=50, pcc_threshold=PCC_THRESHOLD):
         df = df.dropna(
             subset=["default_mag", "ra", "dec", "lumdist", "lumdist_err"]
         ) # drop rows without the information we need
-                
+        
         # now save the cleaned dataset
         df["catalog"] = cat.__class__.__name__
         res.append(df)
@@ -607,31 +566,34 @@ def point_source_association(target_id:int, radius:float=2):
     target = Target.objects.get(id=target_id)
     ra, dec = target.ra, target.dec
     
-    point_source_catalogs = [
-        AsassnVariableStar,
-        Gaiadr3Variable,
-        Ps1PointSource,
-        ZtfVarStar,
+    point_source_catalogs = {
+        "source_id": AsassnVariableStar,
+        "source_id": Gaiadr3Variable,
+        "objid": Ps1PointSource,
+        #ZtfVarStar,
 
         # this is the 2MASS point source catalog
         # I'm leaving it commented out because we need to test it a bit more before
         # using it!
         #TwoMass 
-    ]
-
-    for catalog in point_source_catalogs:
+    }
+    
+    matches = {}
+    for name_column, catalog in point_source_catalogs.items():
         cat = catalog()
         query_set = cat.query(ra, dec, radius)
 
         # if no matches returned, good! We can check another PS catalog
         if query_set.count() == 0: continue
-
-        # otherwise we need to return a score of 0 for this candidate because
-        # it corresponds to a point source
-        return 0
-
-    return 1
-
+        
+        matches[cat.catalog_model.__name__] = (
+            [ps_match.__dict__[name_column] for ps_match in query_set],
+            [ps_match.ang_dist for ps_match in query_set]
+        )
+        
+    if len(matches):
+        return matches
+        
 def agn_association_2d(target_id:int, radius:float=2):
     """
     This searches the AGN catalogs for a match for this target

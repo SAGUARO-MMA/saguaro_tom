@@ -113,6 +113,10 @@ def cone_search_q3c(
             dec_colname,
             radius/3600
         )
+    ).annotate(
+        ang_dist = AngDist(
+            ra_colname, dec_colname, ra, dec
+        )
     )
 
 def pcc_q3c(

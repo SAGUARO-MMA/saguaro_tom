@@ -14,6 +14,8 @@ https://docs.djangoproject.com/en/2.1/ref/settings/
 from .settings_local import *
 import os
 import tempfile
+from astropy.cosmology import FlatLambdaCDM
+from astropy import units as _u
 
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
@@ -62,6 +64,7 @@ INSTALLED_APPS = [
     'tom_registration',
     'webpack_loader',
     'custom_code',
+    'candidate_vetting',
     'tom_surveys',
     'tom_treasuremap',
     'django_tasks',
@@ -450,3 +453,10 @@ TOM_REGISTRATION = {
 EMAIL_SUBJECT_PREFIX = ''
 EMAIL_USE_TLS = True
 SERVER_EMAIL = f'Salsa Saguaro <{EMAIL_HOST_USER}>'
+
+
+COSMO = FlatLambdaCDM(
+    H0 = 69.6 * _u.km / _u.s / _u.Mpc,
+    Tcmb0 = 2.725 * _u.K,
+    Om0 = 0.3
+)

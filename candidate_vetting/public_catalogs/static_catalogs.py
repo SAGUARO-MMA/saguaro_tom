@@ -123,12 +123,12 @@ class NedLvs(StaticCatalog):
         df["lumdist_pos_err"] = df.lumdist_err
 
         return df
-    
+
 class ZtfVarStar(StaticCatalog):
     catalog_model = ZtfVarstarQ3C
     ra_colname = "radeg"
     dec_colname = "dedeg"
-    
+
 class DesiSpec(StaticCatalog):
     catalog_model = DesiSpecQ3C
     ra_colname = "target_ra"
@@ -170,6 +170,9 @@ class FermiLat(StaticCatalog):
     
 class Gaiadr3Variable(StaticCatalog):
     catalog_model = Gaiadr3VariableQ3C
+    colmap = {
+        "source_id":"name"
+    }
     
 class GladePlus(StaticCatalog):
     catalog_model = GladePlusQ3C
