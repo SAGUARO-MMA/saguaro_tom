@@ -1,21 +1,12 @@
 """
 This is an abstract base class for catalogs
 """
-import os
 from abc import ABC, abstractmethod
 
 from django.db import models
 
 from .util import RADIUS_ARCSEC, cone_search_q3c, pcc_q3c 
 
-# database connection constants
-DB_HOST = os.getenv('POSTGRES_HOST', 'localhost')
-DB_NAME = os.getenv('POSTGRES_DB', 'sassy')
-DB_PASS = os.getenv('POSTGRES_PASSWORD', None)
-DB_PORT = os.getenv('POSTGRES_PORT', 5432)
-DB_USER = os.getenv('POSTGRES_USER', 'sassy')
-
-DB_CONNECT = f"postgresql+psycopg2://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 class Catalog(ABC):
 
@@ -68,8 +59,6 @@ class StaticCatalog(Catalog):
         ----------
         name : str
             The name of the catalog
-        db_connect : str, optional
-            The connection url for the database, uses global variables
         verbose : bool, default=True
             If the class should be verbose and print a bunch of stuff (for debug)
         """
