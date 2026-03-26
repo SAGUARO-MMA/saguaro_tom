@@ -35,7 +35,7 @@ class Catalog(ABC):
         return NotImplemented
     
     @abstractmethod
-    def query():
+    def query(self, *args, **kwargs):
         """The method that actually does the querying
 
         This is an abstract method and must be implemented to construct the class
@@ -57,8 +57,6 @@ class StaticCatalog(Catalog):
 
         Parameters
         ----------
-        name : str
-            The name of the catalog
         verbose : bool, default=True
             If the class should be verbose and print a bunch of stuff (for debug)
         """
