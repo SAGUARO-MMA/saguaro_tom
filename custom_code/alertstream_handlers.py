@@ -306,19 +306,6 @@ def handle_einstein_probe_alert(message, metadata):
     logger.info(f'Finished processing alert for {nonlocalizedevent.event_id}')
 
 
-def nan2str(obj):
-    """
-    Remove any NaN or Infinity from an object before JSON encoding
-    """
-    if isinstance(obj, dict):
-        return {k: nan2str(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [nan2str(v) for v in obj]
-    elif isinstance(obj, float) and not np.isfinite(obj):
-        return str(obj)
-    return obj
-
-
 def handle_antares_stream_async(locus):
     # temporarily skip old alerts TODO: decide if we want this
     if locus.properties['newest_alert_observation_time'] < np.floor(Time.now().mjd):
@@ -326,8 +313,7 @@ def handle_antares_stream_async(locus):
         return
 
     data_service = AntaresDataService()
-    alert_small = data_service.serialize_locus(locus)
-    alert_finite = nan2str(alert_small)
+    alert_finite = data_service.serialize_locus(locus)
     try:
         handle_antares_stream.enqueue(alert_finite)
         logger.debug(f'sent {locus.locus_id} to queue')
