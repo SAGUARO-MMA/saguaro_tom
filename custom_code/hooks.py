@@ -7,9 +7,7 @@ from kne_cand_vetting.mpc import minor_planet_match
 from tom_targets.models import TargetExtra, TargetName
 from tom_dataproducts.models import ReducedDatum
 from tom_dataproducts.tasks import atlas_query
-from tom_targets.models import Target
-from tom_targets.utils import cone_search_filter
-from slack_notifier.slack_notifier import SlackNotifier
+from tom_antares.antares import AntaresDataService
 from .templatetags.target_extras import split_name
 import json
 import numpy as np
@@ -224,21 +222,12 @@ TNS Request for <https://wis-tns.org/object/{tns_objname}|{target.name}> respond
                 if np.all(np.isfinite(disterr)):
                     target.distance_err = np.mean(disterr)
 
-        # ingest any ZTF photometry and internal names from SASSy; TODO: switch this to ANTARES
-        ztfphot = query_ZTFpubphot(target.ra, target.dec, db_connect=DB_CONNECT)
-        newztfphot = []
-        if ztfphot:
-            olddatetimes = [rd.timestamp for rd in target.reduceddatum_set.all()]
-            for candidate in ztfphot:
-                jd = Time(candidate['candidate']['jd'], format='jd', scale='utc')
-                newdatetime = jd.to_datetime(timezone=TimezoneInfo())
-                if newdatetime not in olddatetimes:
-                    logger.info('New ZTF point at {0}.'.format(newdatetime))
-                    newztfphot.append(candidate)
-                if not TargetName.objects.filter(name=candidate['oid']).exists() and target.name != candidate['oid']:
-                    tn = TargetName.objects.create(target=target, name=candidate['oid'])
-                    messages.append(f'Added alias {tn.name} from ZTF')
-        process_reduced_ztf_data(target, newztfphot)
+            # ingest any ZTF or LSST photometry and internal names from ANTARES
+            data_service = AntaresDataService()
+            data = data_service.query_reduced_data(target)
+            data_service.to_reduced_datums(target, data)
+            alias_data = data_service.query_aliases(target=target)
+            data_service.to_aliases(target, alias_data)
 
         # only save once to avoid too many recursive calls to this function
         target.save()

@@ -29,7 +29,7 @@ import traceback
 from tom_targets.models import Target, TargetName
 from tom_targets.utils import cone_search_filter
 import time
-from tom_antares.antares import ANTARESBroker
+from tom_antares.antares import AntaresDataService
 logger = logging.getLogger(__name__)
 
 # for einstein probe
@@ -319,33 +319,14 @@ def nan2str(obj):
     return obj
 
 
-def serialize_antares_alert(locus):
-    return {
-            'locus_id': locus.locus_id,
-            'ra': locus.ra,
-            'dec': locus.dec,
-            'properties': locus.properties,
-            'tags': locus.tags,
-            # 'lightcurve': locus.lightcurve.to_json(),
-            'catalogs': locus.catalogs,
-            'alerts': [
-                {
-                    'alert_id': alert.alert_id,
-                    'mjd': alert.mjd,
-                    'properties': {key: val for key, val in alert.properties.items() if not key.startswith('lsst_dia')},
-                }
-                for alert in locus.alerts
-            ],
-        }
-
-
 def handle_antares_stream_async(locus):
     # temporarily skip old alerts TODO: decide if we want this
     if locus.properties['newest_alert_observation_time'] < np.floor(Time.now().mjd):
         logger.debug(f'skipping old alert {locus.locus_id}')
         return
 
-    alert_small = serialize_antares_alert(locus)
+    data_service = AntaresDataService()
+    alert_small = data_service.serialize_locus(locus)
     alert_finite = nan2str(alert_small)
     try:
         handle_antares_stream.enqueue(alert_finite)
@@ -357,7 +338,7 @@ def handle_antares_stream_async(locus):
 @task(queue_name="antares")
 def handle_antares_stream(alert, cone_search_radius_arcsec=2.):
     try:
-        broker = ANTARESBroker()
+        data_service = AntaresDataService()
 
         # check for existing targets within 2"
         target_matches = list(cone_search_filter(Target.objects.all(), alert['ra'], alert['dec'], cone_search_radius_arcsec / 3600.).order_by("separation"))
@@ -368,41 +349,17 @@ def handle_antares_stream(alert, cone_search_radius_arcsec=2.):
             target = target_matches[0]
             logger.info(f"Found existing target matching this alert: {target.name}")
 
-            # only take the time to run the vetting if we need to get host galaxies
-            if not target.targetextra_set.filter(key='Host Galaxies').exists():
-                vet_or_post_error(target, created=True, tns_time_limit=np.inf, slack_client=slack_lsstddf)
-
-            # update the TargetName objects returned to instead point to the existing target
-            aliases = broker.aliases_from_locus(alert, target)
+            # vetting includes updating ANTARES photometry/aliases and adding host galaxies needed for Slack
+            vet_or_post_error(target, created=True, tns_time_limit=np.inf, slack_client=slack_lsstddf)
 
         else:
             # then this target does not exist, so we create it from scratch
-            target, _, aliases = broker.to_target(alert)
+            target = data_service.to_target(alert)
             logger.info(f"No existing target found, adding {target.name} as new target")
-
-        broker.process_reduced_data(target, alert)
-
-        # save the aliases that we found for this target
-        logger.info(f"Adding {aliases} to {target}")
-        aliases_added = []
-        for alias in aliases:
-            existing_alias = TargetName.objects.filter(name=alias.name)
-            if not existing_alias.exists():
-                alias.save()
-                aliases_added.append(alias.name)
-            elif existing_alias.exclude(target=target).exists():
-                # this will happen if the alias exists under a different target
-                # than the one we are trying to save it with
-                # in which case we should log a warning
-                logger.warning(
-                    f"The name alias {alias.name} exists under the target {existing_alias.first().target}, "
-                    f"which is different from the nearest target in the existing database (which is {target}). "
-                    "We are NOT re-assigning this alias!"
-                )
 
         # then parse the returned values to send relevant messages
         telescope_id = alert['alerts'][-1]['properties']['ant_survey']
-        telescope = ANTARESBroker.surveys.get(telescope_id, "ZTF")
+        telescope = data_service.surveys.get(telescope_id)
         slack_lsstddf.send_slack_message(target=target, created=bool(target_matches), aliases_added=aliases_added,
                                          telescope_stream=telescope)
 
