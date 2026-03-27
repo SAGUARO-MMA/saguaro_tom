@@ -341,20 +341,21 @@ def serialize_antares_alert(locus):
 
 def handle_antares_stream_async(locus):
     # temporarily skip old alerts TODO: decide if we want this
-    if locus.properties['newest_alert_observation_time'] < np.floor(Time.now().mjd):
-        logger.debug(f'skipping old alert {locus.locus_id}')
-        return
-
+    #if locus.properties['newest_alert_observation_time'] < np.floor(Time.now().mjd):
+    #    logger.debug(f'skipping old alert {locus.locus_id}')
+    #    return
+    #import pdb; pdb.set_trace()
     alert_small = serialize_antares_alert(locus)
     alert_finite = nan2str(alert_small)
     try:
-        handle_antares_stream.enqueue(alert_finite)
+        #handle_antares_stream.enqueue(alert_finite)
+        handle_antares_stream(alert_finite)
         logger.debug(f'sent {locus.locus_id} to queue')
     except Exception as exc:
         dump_alert_and_send_error(alert_finite, exc)
 
 
-@task(queue_name="antares")
+#@task(queue_name="antares")
 def handle_antares_stream(alert, cone_search_radius_arcsec=2.):
     try:
         broker = ANTARESBroker()
