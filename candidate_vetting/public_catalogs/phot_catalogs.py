@@ -505,7 +505,7 @@ class ATLAS_Forced_Phot(PhotCatalog):
                 try:
                     comb5SigLimit = 23.9 - 2.5 * math.log10(5. * combError)
                 except ValueError:
-                    logger.warn("Skipping this ATLAS photometry point because math.log10 raises a domain error!")
+                    logger.warning("Skipping this ATLAS photometry point because math.log10 raises a domain error!")
                     continue # this skips to the next for-loop iteration
                     
                 # GIVE ME NUMBER OF DATA POINTS COMBINED
@@ -786,11 +786,11 @@ class ZTF_Forced_Phot(PhotCatalog):
 
         return downloaded_file_names
 
-    def _ztf_forced_photometry(self,ra, decl, jdstart=None, jdend=None, days=60, send=True):
+    def _ztf_forced_photometry(self,ra, decl, jdstart=None, jdend=None, days=60., send=True):
         """Start the ZTF forced photometry job"""
         
         if jdend is None:
-            jdend = Time(datetime.utcnow(), scale='utc').jd
+            jdend = Time.now().jd
 
         if jdstart is None:
             jdstart = jdend - days

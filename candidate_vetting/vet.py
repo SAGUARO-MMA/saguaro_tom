@@ -548,20 +548,20 @@ def point_source_association(target_id:int, radius:float=2):
     target = Target.objects.get(id=target_id)
     ra, dec = target.ra, target.dec
     
-    point_source_catalogs = {
-        "source_id": AsassnVariableStar,
-        "source_id": Gaiadr3Variable,
-        "objid": Ps1PointSource,
+    point_source_catalogs = [
+        ("source_id", AsassnVariableStar),
+        ("source_id", Gaiadr3Variable),
+        ("objid", Ps1PointSource),
         #ZtfVarStar,
 
         # this is the 2MASS point source catalog
         # I'm leaving it commented out because we need to test it a bit more before
         # using it!
         #TwoMass 
-    }
+    ]
     
     matches = {}
-    for name_column, catalog in point_source_catalogs.items():
+    for name_column, catalog in point_source_catalogs:
         cat = catalog()
         query_set = cat.query(ra, dec, radius)
 
