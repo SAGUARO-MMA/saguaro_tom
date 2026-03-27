@@ -3,9 +3,8 @@ Define the static catalogs for querying
 """
 from astropy import units as u
 import pandas as pd
-import numpy as np
 
-from django.db.models import F, Q, Func, Value, IntegerField, Case, When, CharField
+from django.db.models import F, Func, Value, IntegerField, Case, When, CharField
 from django.db.models.functions import Cast
 from django.conf import settings
 cosmo = settings.COSMO

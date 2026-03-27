@@ -5,7 +5,6 @@ Code to query dynamically updating photometry catalogs
 import os
 import glob
 import requests
-import time
 import json
 import logging
 import re
@@ -577,7 +576,6 @@ class ZTF_Forced_Phot(PhotCatalog):
             return
         
         ztf_forced_phot_file = None
-        start_time = time.time()
         total_time_waited = 0
         while ztf_forced_phot_file is None:
             # wait for the ZTF email to arrive
@@ -744,16 +742,11 @@ class ZTF_Forced_Phot(PhotCatalog):
                     content_type = msg.get_content_type()
                     body = msg.get_payload(decode=True).decode()
 
-                    this_date = msg['Date']
-                    this_date_tuple = email.utils.parsedate_tz(msg['Date'])
-                    local_date = datetime.fromtimestamp(email.utils.mktime_tz(this_date_tuple))
-
                     # Check if this is the correct one
                     if not content_type=="text/plain":
                         continue # move onto the next email 
 
-                    processing_match = self._match_ztf_message(job_info, body, local_date)
-                    subject, encoding = email.header.decode_header(msg.get("Subject"))[0]
+                    processing_match = self._match_ztf_message(job_info, body)
 
                     if not processing_match:
                         continue # move onto the next email
@@ -865,7 +858,7 @@ class ZTF_Forced_Phot(PhotCatalog):
 
         return url.split('/')[-1]
 
-    def _match_ztf_message(self, job_info, message_body, message_time_epoch):
+    def _match_ztf_message(self, job_info, message_body):
 
         match = False
 

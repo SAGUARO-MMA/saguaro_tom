@@ -5,11 +5,9 @@ import numpy as np
 
 import warnings
 
-from django.db.models import (
-    Func, BooleanField, FloatField, DecimalField, ExpressionWrapper
-)
+from django.db.models import Func, BooleanField, FloatField, ExpressionWrapper
 from django.db.models import F, Value
-from django.db.models.functions import Pi, Exp, Power
+from django.db.models.functions import Power
 
 from tom_dataproducts.models import ReducedDatum
 

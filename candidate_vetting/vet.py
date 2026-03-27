@@ -7,7 +7,7 @@ import io
 import numpy as np
 import pandas as pd
 from scipy.stats import norm, rv_continuous
-from scipy.integrate import trapezoid, quad
+from scipy.integrate import trapezoid
 
 from astropy.utils.introspection import minversion
 if minversion(np, "2.0.0"):
@@ -30,18 +30,8 @@ cosmo = settings.COSMO
 from tom_targets.models import BaseTarget as Target
 from tom_targets.models import TargetExtra
 from custom_code.healpix_utils import SaTarget
-from tom_nonlocalizedevents.models import (
-    EventCandidate,
-    EventLocalization,
-    SkymapTile,
-    NonLocalizedEvent
-)
-from tom_nonlocalizedevents.healpix_utils import (
-    sa_engine,
-    SaSkymapTile,
-    uniq_to_bigintrange,
-    update_all_credible_region_percents_for_candidates
-)
+from tom_nonlocalizedevents.models import EventLocalization, NonLocalizedEvent
+from tom_nonlocalizedevents.healpix_utils import sa_engine, SaSkymapTile
 from candidate_vetting.public_catalogs.static_catalogs import (
     DesiSpec,
     GladePlus,
@@ -52,12 +42,8 @@ from candidate_vetting.public_catalogs.static_catalogs import (
     Sdss12Photoz,
     AsassnVariableStar,
     Gaiadr3Variable,
-    ZtfVarStar,
     Ps1PointSource,
     Milliquas,
-    NedLvs,
-    TwoMass,
-    DesiDr1,
     ExtendedVirgoClusterCatalog
 )
 
