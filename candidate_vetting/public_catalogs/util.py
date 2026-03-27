@@ -136,8 +136,10 @@ def pcc_q3c(
         The RA in degrees
     dec : float
         The dec in degrees
-    radius : float, default={RADIUS_ARCSEC}
-        The search radius in arcseconds
+    pcc_max : float
+        The maximum probability of chance coincidence
+    mag_colname: str
+        The magnitude column name in the SQL table
     ra_colname: str, default='ra'
         The RA column name in the SQL table
     dec_colname: str, default="dec"
