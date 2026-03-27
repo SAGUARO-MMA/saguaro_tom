@@ -285,7 +285,7 @@ class ATLAS_Forced_Phot(PhotCatalog):
                 else:
                     print(f'ERROR {resp.status_code}')
                     print(resp.json())
-                    sys.exit()
+                    return False
 
         result_url = None
         taskstarted_printed = False
@@ -308,7 +308,7 @@ class ATLAS_Forced_Phot(PhotCatalog):
                 else:
                     print(f'ERROR {resp.status_code}')
                     print(resp.text)
-                    sys.exit()
+                    return False
 
         with requests.Session() as s:
             textdata = s.get(result_url, headers=headers).text
