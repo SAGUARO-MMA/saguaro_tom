@@ -82,12 +82,10 @@ def target_run_mpc(latest_det_id, _verbose=False):
     mpc_match = t.minor_planet_match(date)
     
     if mpc_match is not None:
-        name = mpc_match.match_name
-        sep = mpc_match.distance
-        update_or_create_target_extra(latest_det.target, 'Minor Planet Match', name)
+        update_or_create_target_extra(latest_det.target, 'Minor Planet Match', mpc_match.match_name)
         update_or_create_target_extra(latest_det.target, 'Minor Planet Date', latest_det.timestamp)
-        update_or_create_target_extra(latest_det.target, 'Minor Planet Offset', sep)
-        logger.info(f'{latest_det.target.name} is {sep:.1f}" from minor planet {name}')
+        update_or_create_target_extra(latest_det.target, 'Minor Planet Offset', mpc_match.distance)
+        logger.info(f'{latest_det.target.name} is {mpc_match.distance:.1f}" from minor planet {mpc_match.match_name}')
     else:
         update_or_create_target_extra(latest_det.target, 'Minor Planet Match', 'None')
         update_or_create_target_extra(latest_det.target, 'Minor Planet Date', latest_det.timestamp)
