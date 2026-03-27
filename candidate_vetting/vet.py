@@ -148,7 +148,7 @@ def _localization_from_name(nonlocalized_event_name, max_time=Time.now()):
         for loc in all_localizations_sorted[1:]:
             curr_loc_time = Time(localization.date, format="datetime")
             test_loc_time = Time(loc.date, format="datetime")
-            if test_loc_time > curr_loc_time and test_loc_time <= max_time:
+            if curr_loc_time < test_loc_time <= max_time:
                 localization = loc
 
     return localization
@@ -265,7 +265,6 @@ def skymap_association(
         nonlocalized_event_name:str,
         target_id:int,
         max_time = Time.now(),
-        prob:float=0.95
 ) -> float:
 
     # grab the EventLocalization object for nonlocalized_event_name
@@ -278,7 +277,7 @@ def skymap_association(
     ).filter(
         SaTarget.basetarget_ptr_id == target_id
     ).lateral()
-    
+
     # find the probdensity at the tile of the target_id
     # and for this localization id
     probdensity_subq = sa.select(
@@ -287,7 +286,7 @@ def skymap_association(
         SaSkymapTile.tile.contains(target_hpx_subq.c.healpix),
         SaSkymapTile.localization_id == localization.id
     )
-    
+
     # then we can sum from that probability density to the maximum
     cumprob_query = sa.select(
         sa.func.sum(

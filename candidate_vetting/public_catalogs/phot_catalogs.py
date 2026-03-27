@@ -45,7 +45,7 @@ class TNS_Phot(PhotCatalog):
     def query(
             self,
             target:Target,
-            timelimit:int = 10
+            timelimit:float = 10.
     ):
         f"""Query the TNS for photometry they have available on this event
 
@@ -689,7 +689,7 @@ class ZTF_Forced_Phot(PhotCatalog):
                 # this should be considered a limit
                 value["limit"] = flux_zp - 2.5*np.log10(snr_limit*flux_err)
 
-            created = create_phot(
+            create_phot(
                 target = targ,
                 time = time.to_datetime(timezone=TimezoneInfo()),
                 fluxdict = value,
@@ -822,7 +822,7 @@ class ZTF_Forced_Phot(PhotCatalog):
 
         if send:
             p = subprocess.Popen(wget_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-            stdout, stderr = p.communicate()
+            p.communicate()
 
         os.chmod(log_file_name,0o0777)
         return log_file_name
@@ -835,7 +835,7 @@ class ZTF_Forced_Phot(PhotCatalog):
                 [
                     random.choice(
                         string.ascii_uppercase + string.digits
-                    ) for i in range(10)
+                    ) for _ in range(10)
                 ]
             )
             
@@ -854,7 +854,7 @@ class ZTF_Forced_Phot(PhotCatalog):
         logger.info('\t' + wget_command)
 
         p = subprocess.Popen(wget_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-        stdout, stderr = p.communicate()
+        p.communicate()
 
         return url.split('/')[-1]
 
