@@ -81,7 +81,7 @@ def target_run_mpc(latest_det_id, _verbose=False):
     latest_det = ReducedDatum.objects.get(id=latest_det_id)
     
     date = Time(latest_det.timestamp).mjd
-    t = Transient(target.ra, target.dec)
+    t = Transient(latest_det.target.ra, latest_det.target.dec)
     mpc_match = t.minor_planet_match(date)
     
     if mpc_match is not None:
