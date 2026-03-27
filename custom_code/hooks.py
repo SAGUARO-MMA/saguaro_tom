@@ -27,9 +27,6 @@ from django.conf import settings
 from django_tasks import task
 import traceback
 
-DB_CONNECT = "postgresql+psycopg2://{USER}:{PASSWORD}@{HOST}:{PORT}/{NAME}".format(**settings.DATABASES['default'])
-COSMOLOGY = settings.COSMO
-
 logger = logging.getLogger(__name__)
 new_format = logging.Formatter('[%(asctime)s] %(levelname)s : s%(message)s')
 for handler in logger.handlers:
@@ -227,7 +224,7 @@ TNS Request for <https://wis-tns.org/object/{tns_objname}|{target.name}> respond
             redshift = target.targetextra_set.filter(key='Redshift').first()
             if redshift is not None and redshift.float_value >= 0.02:  # from the transient redshift, if known
                 messages.append(f'Updating distance of {target.name} based on redshift')
-                target.distance = COSMOLOGY.luminosity_distance(redshift.float_value).to_value('Mpc')
+                target.distance = settings.COSMO.luminosity_distance(redshift.float_value).to_value('Mpc')
             elif hostdict:  # otherwise from the most probable host
                 dist = hostdict[0].get('Dist', np.nan)
                 if np.isfinite(dist):
