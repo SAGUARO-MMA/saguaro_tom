@@ -1,9 +1,14 @@
 import logging
 from requests import Response
-from kne_cand_vetting.catalogs import static_cats_query
-from kne_cand_vetting.galaxy_matching import galaxy_search
-from kne_cand_vetting.survey_phot import TNS_get, query_ZTFpubphot
-from kne_cand_vetting.mpc import minor_planet_match
+
+from candidate_vetting.vet import (
+    host_association,
+    point_source_association,
+    agn_association_2d
+)
+from candidate_vetting.public_catalogs.phot_catalogs import TNS_Phot
+from trove_mpc import Transient
+
 from tom_targets.models import TargetExtra, TargetName
 from tom_dataproducts.models import ReducedDatum
 from tom_dataproducts.tasks import atlas_query
@@ -21,9 +26,6 @@ from healpix_alchemy.constants import HPX
 from django.conf import settings
 from django_tasks import task
 import traceback
-
-DB_CONNECT = "postgresql+psycopg2://{USER}:{PASSWORD}@{HOST}:{PORT}/{NAME}".format(**settings.DATABASES['default'])
-COSMOLOGY = FlatLambdaCDM(H0=70., Om0=0.3)
 
 logger = logging.getLogger(__name__)
 new_format = logging.Formatter('[%(asctime)s] %(levelname)s : s%(message)s')
@@ -74,13 +76,16 @@ def update_or_create_target_extra(target, key, value):
 def target_run_mpc(latest_det_id, _verbose=False):
     """check if a given photometric detection is a minor planet"""
     latest_det = ReducedDatum.objects.get(id=latest_det_id)
-    match = minor_planet_match(latest_det.target.ra, latest_det.target.dec, Time(latest_det.timestamp).mjd)
-    if match is not None:
-        name, sep = match
-        update_or_create_target_extra(latest_det.target, 'Minor Planet Match', name)
+    
+    date = Time(latest_det.timestamp).mjd
+    t = Transient(latest_det.target.ra, latest_det.target.dec)
+    mpc_match = t.minor_planet_match(date)
+    
+    if mpc_match is not None:
+        update_or_create_target_extra(latest_det.target, 'Minor Planet Match', mpc_match.match_name)
         update_or_create_target_extra(latest_det.target, 'Minor Planet Date', latest_det.timestamp)
-        update_or_create_target_extra(latest_det.target, 'Minor Planet Offset', sep)
-        logger.info(f'{latest_det.target.name} is {sep:.1f}" from minor planet {name}')
+        update_or_create_target_extra(latest_det.target, 'Minor Planet Offset', mpc_match.distance)
+        logger.info(f'{latest_det.target.name} is {mpc_match.distance:.1f}" from minor planet {mpc_match.match_name}')
     else:
         update_or_create_target_extra(latest_det.target, 'Minor Planet Match', 'None')
         update_or_create_target_extra(latest_det.target, 'Minor Planet Date', latest_det.timestamp)
@@ -95,12 +100,9 @@ def vet_or_post_error(target, created=True, tns_time_limit: float=5., run_mpc=Tr
         # if the target has a TNS name, query the TNS API for updated coords, photometry, name, redshift, classification
         tns_objname = split_name(target.name)['tns_objname']
         if tns_objname is not None:
-            get_obj = [("objname", tns_objname), ("objid", ""), ("photometry", "1"), ("spectra", "0")]
-            response, time_to_wait = TNS_get(get_obj,
-                                             settings.BROKERS['TNS']['bot_id'],
-                                             settings.BROKERS['TNS']['bot_name'],
-                                             settings.BROKERS['TNS']['api_key'],
-                                             timelimit=tns_time_limit)
+
+            # check TNS for new photometry
+            _, response, time_to_wait = TNS_Phot("tns").query(target, timelimit=tns_time_limit)
 
             if response is not None and response.status_code == 200:
                 tns_reply = response.json()['data']
@@ -175,7 +177,7 @@ TNS Request for <https://wis-tns.org/object/{tns_objname}|{target.name}> respond
         target.galactic_lng = coord.galactic.l.deg
         target.galactic_lat = coord.galactic.b.deg
         update_or_create_target_extra(target=target, key='healpix', value=HPX.skycoord_to_healpix(coord))
-
+        
         if target.extra_fields.get('MW E(B-V)') is None:
             try:
                 mwebv = IrsaDust.get_query_table(coord, section='ebv')['ext SandF ref'][0]
@@ -186,36 +188,41 @@ TNS Request for <https://wis-tns.org/object/{tns_objname}|{target.name}> respond
                 messages.append(f'MW E(B-V) set to {mwebv:.4f}')
 
         # crossmatch with local point-source and galaxy catalogs (local tns_results are ignored)
-        qso, qoffset, asassn, asassnoffset, tns_results, gaia, gaiaoffset, gaiaclass, ps1prob, ps1, ps1offset = \
-            static_cats_query([target.ra], [target.dec], db_connect=DB_CONNECT)
-
-        update_or_create_target_extra(target=target, key='QSO Match', value=qso[0])
-        if qso[0] != 'None':
-            update_or_create_target_extra(target=target, key='QSO Offset', value=qoffset[0])
-
-        update_or_create_target_extra(target=target, key='ASASSN Match', value=asassn[0])
-        if asassn[0] != 'None':
+        host_df = host_association(target.id)
+        agn_df = agn_association_2d(target.id)
+        ps_matches = point_source_association(target.id)
+        
+        if "AsassnQ3C" in ps_matches:
+            asassn = ps_matches["AsassnQ3C"][0]
+            asassnoffset = ps_matches["AsassnQ3C"][1]
+            update_or_create_target_extra(target=target, key='ASASSN Match', value=asassn[0])
             update_or_create_target_extra(target=target, key='ASASSN Offset', value=asassnoffset[0])
+        else:    
+            update_or_create_target_extra(target=target, key='ASASSN Match', value="None")
 
-        update_or_create_target_extra(target=target, key='Gaia Match', value=gaia[0])
-        if gaia[0] != 'None':
+        if "Gaiadr3VariableQ3C" in ps_matches:
+            gaia = ps_matches["Gaiadr3VariableQ3C"][0]
+            gaiaoffset = ps_matches["Gaiadr3VariableQ3C"][1]
+            update_or_create_target_extra(target=target, key='Gaia Match', value=gaia[0])
             update_or_create_target_extra(target=target, key='Gaia VS Offset', value=gaiaoffset[0])
-            update_or_create_target_extra(target=target, key='Gaia VS Class', value=gaiaclass[0])
+        else:
+            update_or_create_target_extra(target=target, key='Gaia Match', value="None")            
+            
+        if "Ps1Q3C" in ps_matches:
+            gaia = ps_matches["Ps1Q3C"][0]
+            gaiaoffset = ps_matches["Ps1Q3C"][1]
+            update_or_create_target_extra(target=target, key='PS1 Match', value=gaia[0])
+            update_or_create_target_extra(target=target, key='PS1 Offset', value=gaiaoffset[0])
+        else:
+            update_or_create_target_extra(target=target, key='PS1 Match', value="None")
 
-        update_or_create_target_extra(target=target, key='PS1 match', value=ps1[0])
-        if ps1[0] != 'None' and ps1[0] != 'Multiple matches' and ps1[0] != 'Galaxy match':
-            update_or_create_target_extra(target=target, key='PS1 Star Prob.', value=ps1prob[0])
-            update_or_create_target_extra(target=target, key='PS1 Offset', value=ps1offset[0])
-
-        matches, hostdict = galaxy_search(target.ra, target.dec, db_connect=DB_CONNECT)
-        update_or_create_target_extra(target=target, key='Host Galaxies', value=json.dumps(hostdict))
-
+            
         # set the initial guess for the transient distance, to make absolute magnitudes work automatically
         if target.distance is None:
             redshift = target.targetextra_set.filter(key='Redshift').first()
             if redshift is not None and redshift.float_value >= 0.02:  # from the transient redshift, if known
                 messages.append(f'Updating distance of {target.name} based on redshift')
-                target.distance = COSMOLOGY.luminosity_distance(redshift.float_value).to_value('Mpc')
+                target.distance = settings.COSMO.luminosity_distance(redshift.float_value).to_value('Mpc')
             elif hostdict:  # otherwise from the most probable host
                 dist = hostdict[0].get('Dist', np.nan)
                 if np.isfinite(dist):
@@ -223,22 +230,6 @@ TNS Request for <https://wis-tns.org/object/{tns_objname}|{target.name}> respond
                 disterr = hostdict[0].get('DistErr', np.nan)
                 if np.all(np.isfinite(disterr)):
                     target.distance_err = np.mean(disterr)
-
-        # ingest any ZTF photometry and internal names from SASSy; TODO: switch this to ANTARES
-        ztfphot = query_ZTFpubphot(target.ra, target.dec, db_connect=DB_CONNECT)
-        newztfphot = []
-        if ztfphot:
-            olddatetimes = [rd.timestamp for rd in target.reduceddatum_set.all()]
-            for candidate in ztfphot:
-                jd = Time(candidate['candidate']['jd'], format='jd', scale='utc')
-                newdatetime = jd.to_datetime(timezone=TimezoneInfo())
-                if newdatetime not in olddatetimes:
-                    logger.info('New ZTF point at {0}.'.format(newdatetime))
-                    newztfphot.append(candidate)
-                if not TargetName.objects.filter(name=candidate['oid']).exists() and target.name != candidate['oid']:
-                    tn = TargetName.objects.create(target=target, name=candidate['oid'])
-                    messages.append(f'Added alias {tn.name} from ZTF')
-        process_reduced_ztf_data(target, newztfphot)
 
         # only save once to avoid too many recursive calls to this function
         target.save()
