@@ -94,10 +94,9 @@ The asynchronous workers should automatically restart when `sand` restarts, than
 If the workers do not restart, or you need to restart them manually, run the following on `sand`:
 ```
 pkill -f db_worker
-cd /var/www/saguaro_tom/
-source venv/bin/activate
+source /var/www/saguaro_tom/venv/bin/activate
 for i in $(seq 1 48)
-    do nohup venv/bin/python manage.py db_worker --queue-name '*' -v3 > /home/saguaro/django_tasks_logs/django-tasks.${i}.log 2>&1 &
+    do nohup /var/www/saguaro_tom/venv/bin/python manage.py db_worker --queue-name '*' -v3 > /home/saguaro/django_tasks_logs/django-tasks.${i}.log 2>&1 &
 done
 ```
 
