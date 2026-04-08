@@ -99,10 +99,16 @@ class AntaresSlackFilter(SlackNotifier):
             host_str = "\nThe three most likely host galaxies are:\n"
             for galaxy in json.loads(target_extra.value):
                 if galaxy['Dist'] is None:
-                    galaxy['Dist'] = "Unknown Dist."
+                    print_dist = "Unknown Dist."
+                else:
+                    print_dist = f"{galaxy['Dist']:.1f}"
+                
                 if galaxy['Offset'] is None:
-                    galaxy['Offset'] = "Unknown Offset"
-                host_str += f"\t{n+1}. {galaxy['Offset']:.3f}\" from {galaxy['ID']} ({galaxy['Source']}) at {galaxy['Dist']:.1f} Mpc\n"
+                    print_offset = "Unknown Offset"
+                else:
+                    print_offset = f"{galaxy['Offset']:.3f}"
+                    
+                host_str += f"\t{n+1}. {print_offset}\" from {galaxy['ID']} ({galaxy['Source']}) at {print_dist} Mpc\n"
                 n += 1
                 if n > 2:
                     break
