@@ -2,12 +2,14 @@
 Custom filters (i.e., subclasses of SlackNotifier)
 """
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
+from astropy.time import Time
 import numpy as np
 
 from .slack_notifier import SlackNotifier
 from tom_targets.templatetags.targets_extras import deg_to_sexigesimal
 from custom_code.templatetags.target_extras import split_name
+from django.db.models import Q
 from django.conf import settings
 
 ALERT_LINKS = ' '.join([f'<{link}|{service}>' for link, service in settings.TARGET_LINKS])
@@ -33,18 +35,63 @@ class AntaresSlackFilter(SlackNotifier):
         peak = target.reduceddatum_set.order_by('value__magnitude').first()
         peak_mag = peak.value['magnitude'] if peak else np.nan
 
-        if ((has_vs_match or has_agn_match) and telescope_stream == "ZTF") or peak_mag > 21.:
+        #Check that the first alert is now
+        first_alert_mjd = Time(
+            target.reduceddatum_set.filter(
+                data_type="photometry",
+                value__magnitude__isnull = False
+            ).earliest().timestamp
+        ).mjd
+
+        # want to ignore non-detections
+        # And then also throw out anything with a low SNR before a day
+        latest = target.reduceddatum_set.filter(data_type="photometry", value__magnitude__isnull = False).latest()
+        previous_detections = target.reduceddatum_set.filter(
+            Q(data_type="photometry") &
+            Q(value__magnitude__isnull = False) &
+            Q(timestamp__lt = latest.timestamp-timedelta(1)) &
+            Q(value__error__lt = 0.1)
+        )
+        new_alert = previous_detections.count() == 0
+
+        if not new_alert:
+            latest_det_mag = latest.value['magnitude']
+
+            second_to_last_det = target.reduceddatum_set.filter(
+                data_type="photometry",
+                timestamp__lt = latest.timestamp,
+                value__magnitude__isnull = False
+            ).latest()
+            second_to_last_det_mag = second_to_last_det.value['magnitude']
+
+            delta_mag = abs(latest_det_mag - second_to_last_det_mag)
+            delta_t = Time(latest.timestamp).mjd - Time(second_to_last_det.timestamp).mjd
+            rise_rate = delta_mag/delta_t #mag/day
+
+        if has_vs_match or has_agn_match:
             # don't send this message!
             return
         
-        if created:
-            base_str = f"{target.name} created from the Antares alert stream."
-        elif not created and len(aliases_added):
-            base_str = f"{target.name} has been updated from the Antares alert stream with the following aliases: {', '.join(aliases_added)}"
+        #Report all new objects
+        #We create things with a lot of past detections so created != new_target
+        if new_alert:
+            base_str = f"First Detection of {target.name} in the {telescope_stream} alert stream."
+        #if not new, look for rapidly rising
+        elif rise_rate<-0.5: 
+            base_str = f"Rapidly rising object {target.name} in the {telescope_stream} alert stream at {rise_rate:0.2f} mag/day"
+            if len(aliases_added):
+                base_str += f" aliases: {', '.join(aliases_added)}"
+        # Even if sparsely spaced, catch things that significantly change
+        elif delta_mag < -0.5:
+            base_str = f"Rapidly rising object {target.name} in the {telescope_stream} alert stream, changing by {delta_mag:1.2f} mag since last detection {delta_t:1.2f} days ago)"
+            if len(aliases_added):
+                base_str += f" aliases: {', '.join(aliases_added)}"
         else:
-            base_str = f"{target.name} has been updated from the Antares alert stream."
+            # don't send this message!
+            return
+
         if np.isfinite(peak_mag):
-            base_str += f" ({peak_mag:.1f} mag)"
+            base_str += f"\nBrightest at {peak_mag:.1f} mag"
 
         # host info
         if target_extra.value != 'None':
@@ -60,27 +107,11 @@ class AntaresSlackFilter(SlackNotifier):
             base_str += f"\nNo host galaxies are found in SAGUARO for {target.name}\n"
 
         base_str += "\n"
-            
-        # variable star and AGN matches
-        if has_agn_match:
-            base_str += f"\nAGN Match: {agn_match.value}"
-
-        if has_vs_match:
-            base_str += "Variable Star Matches:\n"
-            for vs_match in vs_matches:
-                if vs_match.value == 'None': continue
-                base_str += f"\t* {vs_match.value} offset by "
-                if vs_match.key == "Gaia Match":
-                    vs_offset = target.targetextra_set.filter(key='Gaia VS Offset').first()
-                    base_str += f"{float(vs_offset.value):.3f}\"\n"
-                else:
-                    base_str += f"<2\"\n"
-                    
                 
         # photometry info
         # TODO: Put some text in the slack message about the rise rate, etc.
         target.tns_objname = split_name(target.name)['tns_objname']
-        base_str += ' ' + ALERT_LINKS.format(target=target)
+        base_str += ' ' + ALERT_LINKS.format(target=target) 
         return base_str
                 
 class DistanceLimitedSlackFilter(SlackNotifier):

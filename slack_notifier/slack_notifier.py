@@ -45,12 +45,16 @@ class SlackNotifier(WebClient):
                         channel = channel,
                         text = msg,
                         thread_ts = thread_id,
-                        reply_broadcast = True
+                        reply_broadcast = True,
+                        unfurl_links = False,
+                        unfurl_media = False,
                     )
                 else:
                     self.chat_postMessage(
                         channel = channel,
                         text = msg,
+                        unfurl_links = False,
+                        unfurl_media = False,
                     )
             except Exception as exc:
                 logger.warning(f"Sending the slack message crashed with {exc}")

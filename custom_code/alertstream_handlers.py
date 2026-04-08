@@ -332,7 +332,7 @@ def serialize_antares_alert(locus):
                 {
                     'alert_id': alert.alert_id,
                     'mjd': alert.mjd,
-                    'properties': {key: val for key, val in alert.properties.items() if not key.startswith('lsst_dia')},
+                    'properties': {key: val for key, val in alert.properties.items() if key.startswith('ant')},
                 }
                 for alert in locus.alerts
             ],
@@ -341,10 +341,9 @@ def serialize_antares_alert(locus):
 
 def handle_antares_stream_async(locus):
     # temporarily skip old alerts TODO: decide if we want this
-    if locus.properties['newest_alert_observation_time'] < np.floor(Time.now().mjd):
-        logger.debug(f'skipping old alert {locus.locus_id}')
-        return
-
+    #if locus.properties['newest_alert_observation_time'] < np.floor(Time.now().mjd):
+    #    logger.debug(f'skipping old alert {locus.locus_id}')
+    #    return
     alert_small = serialize_antares_alert(locus)
     alert_finite = nan2str(alert_small)
     try:

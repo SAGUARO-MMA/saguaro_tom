@@ -30,7 +30,7 @@ def send_slack_gw(body, format_kwargs, is_test_alert=False, is_significant=True,
         logger.info(f'Sending GW alert: {body_slack}')
         if channel is None:
             break  # just print out test alerts for debugging
-        slack_client.chat_postMessage(channel=channel, text=body_slack)
+        slack_client.chat_postMessage(channel=channel, text=body_slack, unfurl_links=False, unfurl_media=False)
         if not all_workspaces:
             break
 
