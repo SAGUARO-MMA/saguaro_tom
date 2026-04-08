@@ -223,12 +223,11 @@ TNS Request for <https://wis-tns.org/object/{tns_objname}|{target.name}> respond
             if redshift is not None and redshift.float_value >= 0.02:  # from the transient redshift, if known
                 messages.append(f'Updating distance of {target.name} based on redshift')
                 target.distance = settings.COSMO.luminosity_distance(redshift.float_value).to_value('Mpc')
-            elif hostdict:  # otherwise from the most probable host
-                dist = hostdict[0].get('Dist', np.nan)
-                if np.isfinite(dist):
+            elif len(host_df):  # otherwise from the most probable host
+                dist = host_df.lumdist.values[0]
+                disterr = host_df.lumdist_err.values[0]
+                if np.isfinite(dist) and np.all(np.isfinite(disterr)):
                     target.distance = dist
-                disterr = hostdict[0].get('DistErr', np.nan)
-                if np.all(np.isfinite(disterr)):
                     target.distance_err = np.mean(disterr)
 
         # only save once to avoid too many recursive calls to this function
