@@ -240,7 +240,13 @@ TNS Request for <https://wis-tns.org/object/{tns_objname}|{target.name}> respond
                     target_run_mpc.enqueue(detections.latest().id)
             if run_atlas:
                 mjd_now = Time.now().mjd
-                atlas_query.enqueue(mjd_now - 20., mjd_now, target.id, 'atlas_photometry')
+                atlas_query.enqueue(
+                    mjd_now - 20.,
+                    mjd_now,
+                    target.id,
+                    'atlas_photometry',
+                    priority=-100 # this takes a while, so only run after other stuff runs
+                )
         except Exception as e:
             logger.error(''.join(traceback.format_exception(e)))
             error_message = f'Error vetting target {target.name}:\n{e}'
