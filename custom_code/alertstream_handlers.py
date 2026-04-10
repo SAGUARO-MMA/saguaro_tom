@@ -354,7 +354,7 @@ def handle_antares_stream_async(locus):
         dump_alert_and_send_error(alert_finite, exc)
 
 
-@task(queue_name="antares")
+@task(queue_name="antares", priority=settings.PRIORITY_HIGH)
 def handle_antares_stream(alert, cone_search_radius_arcsec=2.):
     try:
         broker = ANTARESBroker()

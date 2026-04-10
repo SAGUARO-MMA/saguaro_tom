@@ -462,3 +462,8 @@ COSMO = FlatLambdaCDM(
     Tcmb0 = 2.725 * _u.K,
     Om0 = 0.3
 )
+
+# set some priority level variables for queue prioritization
+PRIORITY_HIGH = 100
+PRIORITY_MID = 10
+PRIORITY_LOW = 0

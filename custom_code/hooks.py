@@ -72,7 +72,7 @@ def update_or_create_target_extra(target, key, value):
     te.save()
 
 
-@task(queue_name="mpc")
+@task(queue_name="mpc", priority=settings.PRIORITY_MID)
 def target_run_mpc(latest_det_id, _verbose=False):
     """check if a given photometric detection is a minor planet"""
     latest_det = ReducedDatum.objects.get(id=latest_det_id)
@@ -240,12 +240,13 @@ TNS Request for <https://wis-tns.org/object/{tns_objname}|{target.name}> respond
                     target_run_mpc.enqueue(detections.latest().id)
             if run_atlas:
                 mjd_now = Time.now().mjd
-                atlas_query.enqueue(
+                atlas_query.using(
+                    priority=settings.PRIORITY_LOW
+                ).enqueue(
                     mjd_now - 20.,
                     mjd_now,
                     target.id,
-                    'atlas_photometry',
-                    priority=-100 # this takes a while, so only run after other stuff runs
+                    'atlas_photometry'
                 )
         except Exception as e:
             logger.error(''.join(traceback.format_exception(e)))
