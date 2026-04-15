@@ -9,7 +9,7 @@ from tom_dataproducts.exceptions import InvalidFileFormatException
 from tom_dataproducts.single_target_data_service.atlas import AtlasForcedPhotometryService
 from tom_dataproducts.single_target_data_service.single_target_data_service import BaseSingleTargetDataServiceQueryForm
 from tom_dataproducts.processors.atlas_processor import AtlasProcessor
-from kne_cand_vetting.survey_phot import ATLAS_stack
+from candidate_vetting.public_catalogs.phot_catalogs import ATLAS_Forced_Phot
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +96,7 @@ class ClippedStackedAtlasProcessor(AtlasProcessor):
         with open(data_product.data.path) as f:
             filecontent = f.read()
 
-        data = ATLAS_stack(filecontent, logger)
+        data = ATLAS_Forced_Phot(name="ATLAS FP")._ATLAS_stack(filecontent)
         if len(data) < 1:
             raise InvalidFileFormatException('Empty table or invalid file type')
 
