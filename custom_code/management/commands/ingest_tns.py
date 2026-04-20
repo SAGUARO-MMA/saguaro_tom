@@ -205,9 +205,7 @@ class Command(BaseCommand):
         for targets in [new_targets, updated_targets]:
             for target in targets:
                 vet_or_post_error(target, created=True, tns_time_limit=np.inf, slack_client=slack_tns)
-                slack_tns.send_slack_message(target=target)
-                if target.dec < 40.:  # only southern and equatorial targets
-                    slack_tns50.send_slack_message(target=target)
+                slack_tns50.send_slack_message(target=target)
 
         for target in updated_targets_coords:
             vet_or_post_error(target, created=True, tns_time_limit=np.inf, slack_client=slack_tns)
