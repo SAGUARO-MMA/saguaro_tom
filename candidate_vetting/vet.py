@@ -357,8 +357,11 @@ def host_association(target_id:int, radius=50, pcc_threshold=PCC_THRESHOLD):
         # now save the cleaned dataset
         df["catalog"] = cat.__class__.__name__
         res.append(df)
-        
-    df = pd.concat(res).reset_index(drop=True)
+
+    if res:  # when no matches, nothing to concatenate
+        df = pd.concat(res).reset_index(drop=True)
+    else:  # return an empty dataframe
+        return pd.DataFrame()
 
     # calculate Pcc
     catalog_coord = SkyCoord(df.ra, df.dec, unit="deg")
