@@ -138,7 +138,8 @@ class DistanceLimitedSlackFilter(SlackNotifier):
         if target_extra is None:
             return
         for galaxy in json.loads(target_extra.value):
-            if galaxy['Source'].upper() in ['GLADE', 'GLADEPLUS', 'GWGC', 'HECATE'] and galaxy['Dist'] <= self.max_dist:  # catalogs that have dist
+            if (galaxy['Source'].upper() in ['GLADE', 'GLADEPLUS', 'GWGC', 'HECATE']
+                    and galaxy['Dist'] is not None and galaxy['Dist'] <= self.max_dist):  # catalogs that have dist
                 slack_alert = (f'{target.name} ({deg_to_sexigesimal(target.ra, "hms")} {deg_to_sexigesimal(target.dec, "dms")}) '
                                f'is {galaxy["Offset"]:.1f}" from galaxy {galaxy["ID"]} at {galaxy["Dist"]:.1f} Mpc.')
                 break
