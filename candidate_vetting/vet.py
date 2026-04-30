@@ -194,7 +194,8 @@ def _save_host_galaxy_df(df, target):
             "default_mag",
             "catalog"
         ]
-    ]
+    ].copy()
+    
     newdf["z_err"] = [
         [neg, pos] if neg != pos # errors are asymmetric
         else neg # errors are not assymetric
