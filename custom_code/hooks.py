@@ -1,4 +1,5 @@
 import logging
+import warnings
 from requests import Response
 
 from candidate_vetting.vet import (
@@ -188,9 +189,11 @@ TNS Request for <https://wis-tns.org/object/{tns_objname}|{target.name}> respond
                 messages.append(f'MW E(B-V) set to {mwebv:.4f}')
 
         # crossmatch with local point-source and galaxy catalogs (local tns_results are ignored)
-        host_df = host_association(target.id)
-        agn_df = agn_association_2d(target.id)
-        ps_matches = point_source_association(target.id)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            host_df = host_association(target.id)
+            agn_df = agn_association_2d(target.id)
+            ps_matches = point_source_association(target.id)
         
         if "AsassnQ3C" in ps_matches:
             asassn = ps_matches["AsassnQ3C"][0]
