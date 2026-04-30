@@ -377,7 +377,6 @@ def host_association(target_id:int, radius=50, pcc_threshold=PCC_THRESHOLD):
     ret_df = df[df.pcc <= pcc_threshold].sort_values("pcc", ascending=True)
     
     end = time.time()
-    print(ret_df)
     print(f"Queries finished in {end-start}s")
 
     # save the host galaxy dataframe to the TargetExtra "Host Galaxies" keyword
