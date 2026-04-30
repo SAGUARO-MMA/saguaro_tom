@@ -62,6 +62,10 @@
         <dd class="col-sm-6">{{ target_extra.float_value|percentformat:0 }}</dd>
     {% elif target_extra.key|slice:'-4:' == 'Date' %}
         <dd class="col-sm-6">{{ target_extra.time_value|date:"Y-m-d" }}</dd>
+    {% elif target_extra.key == 'Associated AGN' %}
+	{% with target_extra.value|parse_json_str as agn_json %}
+            <dd class="col-sm-6">{{ agn_json.0.ID }}</dd>
+        {% endwith %}
     {% else %}
         <dd class="col-sm-6">{{ target_extra.value }}</dd>
     {% endif %}
