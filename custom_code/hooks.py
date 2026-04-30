@@ -29,9 +29,9 @@ from django_tasks import task
 import traceback
 
 logger = logging.getLogger(__name__)
-new_format = logging.Formatter('[%(asctime)s] %(levelname)s : s%(message)s')
-for handler in logger.handlers:
-    handler.setFormatter(new_format)
+#new_format = logging.Formatter('[%(asctime)s] %(levelname)s : s%(message)s')
+#for handler in logger.handlers:
+#    handler.setFormatter(new_format)
 
 def process_reduced_ztf_data(target, candidates):
     """Ingest data from the ZTF JSON format into ``ReducedDatum`` objects. Mostly copied from tom_base v2.13.0."""

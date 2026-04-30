@@ -3,6 +3,7 @@ Vetting code for non-localized events with transients
 """
 import time
 import io
+import logging
 
 import numpy as np
 import pandas as pd
@@ -46,6 +47,8 @@ from candidate_vetting.public_catalogs.static_catalogs import (
     Milliquas,
     ExtendedVirgoClusterCatalog
 )
+
+logger = logging.getLogger(__name__)
 
 HOST_DF_COLMAP = {
     "name":"ID",
@@ -270,7 +273,7 @@ def skymap_association(
 
     # grab the EventLocalization object for nonlocalized_event_name
     localization = _localization_from_name(nonlocalized_event_name, max_time=max_time)
-    print(f"Localization Used: {localization} ({localization.date}; {max_time})")
+    logger.info(f"Localization Used: {localization} ({localization.date}; {max_time})")
 
     # find the healpix where this target is located
     target_hpx_subq = sa.select(
@@ -336,7 +339,7 @@ def host_association(target_id:int, radius=50, pcc_threshold=PCC_THRESHOLD):
     res = []
     for catalog in GALAXY_CATALOGS:
         cat = catalog()
-        print(f"Querying {cat}...")
+        logger.info(f"Querying {cat}...")
         query_set = cat.query(ra, dec, radius=radius)
             
         # if no queries are returned we can skip this catalog
@@ -377,7 +380,7 @@ def host_association(target_id:int, radius=50, pcc_threshold=PCC_THRESHOLD):
     ret_df = df[df.pcc <= pcc_threshold].sort_values("pcc", ascending=True)
     
     end = time.time()
-    print(f"Queries finished in {end-start}s")
+    logger.info(f"Queries finished in {end-start}s")
 
     # save the host galaxy dataframe to the TargetExtra "Host Galaxies" keyword
     if not len(ret_df):
@@ -630,8 +633,7 @@ def agn_association_2d(target_id:int, radius:float=2):
     ret_df = df.copy()
     
     end = time.time()
-    print(ret_df)
-    print(f"Queries finished in {end-start}s")
+    logger.info(f"Queries finished in {end-start}s")
 
     # save the host galaxy dataframe to the TargetExtra "Associated AGN" keyword
     _save_associated_agn_df(ret_df, target)
