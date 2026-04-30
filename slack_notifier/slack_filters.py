@@ -27,10 +27,12 @@ class AntaresSlackFilter(SlackNotifier):
         vs_matches = target.targetextra_set.filter(key__in=[
             "Gaia Match", "PS1 Match", "ASASSN Match"
         ])
-        agn_match = target.targetextra_set.filter(key="QSO Match").first()
+        agn_matches = target.targetextra_set.filter(
+            key__in=["QSO Match", "Associated AGN"]
+        )
 
         has_vs_match = any(m.value != 'None' for m in vs_matches)
-        has_agn_match = agn_match is not None and agn_match.value != 'None'
+        has_agn_match = any(m is not None and m.value != 'None' for m in agn_matches) 
 
         peak = target.reduceddatum_set.order_by('value__magnitude').first()
         peak_mag = peak.value['magnitude'] if peak else np.nan
