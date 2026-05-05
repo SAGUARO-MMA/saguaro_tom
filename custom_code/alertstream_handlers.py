@@ -307,11 +307,6 @@ def handle_einstein_probe_alert(message, metadata):
 
 
 def handle_antares_stream_async(locus):
-    # temporarily skip old alerts TODO: decide if we want this
-    if locus.properties['newest_alert_observation_time'] < np.floor(Time.now().mjd):
-        logger.debug(f'skipping old alert {locus.locus_id}')
-        return
-
     data_service = AntaresDataService()
     alert_finite = data_service.serialize_locus(locus)
     try:
