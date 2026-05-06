@@ -48,3 +48,7 @@ def aladin_custom(target):
     else:
         galaxies = []
     return {'target': target, 'galaxy_ras': [g['RA'] for g in galaxies], 'galaxy_decs': [g['Dec'] for g in galaxies]}
+
+@register.filter
+def parse_json_str(value):
+    return json.loads(value)

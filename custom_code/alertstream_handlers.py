@@ -349,11 +349,12 @@ def handle_antares_stream_async(locus):
     try:
         handle_antares_stream.enqueue(alert_finite)
         logger.debug(f'sent {locus.locus_id} to queue')
-    except Exception as exc:
+    except Exception:
+        exc = traceback.format_exc()
         dump_alert_and_send_error(alert_finite, exc)
 
 
-@task(queue_name="antares")
+@task(queue_name="antares", priority=settings.PRIORITY_HIGH)
 def handle_antares_stream(alert, cone_search_radius_arcsec=2.):
     try:
         broker = ANTARESBroker()
@@ -405,7 +406,8 @@ def handle_antares_stream(alert, cone_search_radius_arcsec=2.):
         slack_lsstddf.send_slack_message(target=target, created=bool(target_matches), aliases_added=aliases_added,
                                          telescope_stream=telescope)
 
-    except Exception as exc:
+    except Exception:
+        exc = traceback.format_exc()
         dump_alert_and_send_error(alert, exc)
 
 
@@ -417,6 +419,5 @@ def dump_alert_and_send_error(alert, exc, dump_dir="antares-alert-errors", slack
     dump_path = f"{dump_dir}/{uuid.uuid4()}.json"
     with open(dump_path, "w") as f:
         json.dump(alert, f, indent=4)
-    msg = f"ANTARES stream ingestion failed with {exc}! Failing alert dumped to saguaro@sand:~/{dump_path}"
-    logger.warning(msg)
+    msg = f"ANTARES stream ingestion failed! Failing alert dumped to saguaro@sand:~/{dump_path}.\n{exc}"
     slack_client.send_slack_message_from_text(msg)

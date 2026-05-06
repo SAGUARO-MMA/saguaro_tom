@@ -27,10 +27,12 @@ class AntaresSlackFilter(SlackNotifier):
         vs_matches = target.targetextra_set.filter(key__in=[
             "Gaia Match", "PS1 Match", "ASASSN Match"
         ])
-        agn_match = target.targetextra_set.filter(key="QSO Match").first()
+        agn_matches = target.targetextra_set.filter(
+            key__in=["QSO Match", "Associated AGN"]
+        )
 
         has_vs_match = any(m.value != 'None' for m in vs_matches)
-        has_agn_match = agn_match is not None and agn_match.value != 'None'
+        has_agn_match = any(m is not None and m.value != 'None' for m in agn_matches) 
 
         peak = target.reduceddatum_set.order_by('value__magnitude').first()
         peak_mag = peak.value['magnitude'] if peak else np.nan
@@ -98,7 +100,17 @@ class AntaresSlackFilter(SlackNotifier):
             n = 0
             host_str = "\nThe three most likely host galaxies are:\n"
             for galaxy in json.loads(target_extra.value):
-                host_str += f"\t{n+1}. {galaxy['Offset']:.3f}\" from {galaxy['ID']} at {galaxy['Dist']:.1f} Mpc\n"
+                if galaxy['Dist'] is None:
+                    print_dist = "Unknown Dist."
+                else:
+                    print_dist = f"{galaxy['Dist']:.1f}"
+                
+                if galaxy['Offset'] is None:
+                    print_offset = "Unknown Offset"
+                else:
+                    print_offset = f"{galaxy['Offset']:.3f}"
+                    
+                host_str += f"\t{n+1}. {print_offset}\" from {galaxy['ID']} ({galaxy['Source']}) at {print_dist} Mpc\n"
                 n += 1
                 if n > 2:
                     break
@@ -128,7 +140,8 @@ class DistanceLimitedSlackFilter(SlackNotifier):
         if target_extra is None:
             return
         for galaxy in json.loads(target_extra.value):
-            if galaxy['Source'] in ['GLADE', 'GWGC', 'HECATE'] and galaxy['Dist'] <= self.max_dist:  # catalogs that have dist
+            if (galaxy['Source'].upper() in ['GLADE', 'GLADEPLUS', 'GWGC', 'HECATE']
+                    and galaxy['Dist'] is not None and galaxy['Dist'] <= self.max_dist):  # catalogs that have dist
                 slack_alert = (f'{target.name} ({deg_to_sexigesimal(target.ra, "hms")} {deg_to_sexigesimal(target.dec, "dms")}) '
                                f'is {galaxy["Offset"]:.1f}" from galaxy {galaxy["ID"]} at {galaxy["Dist"]:.1f} Mpc.')
                 break
