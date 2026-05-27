@@ -371,7 +371,7 @@ def host_association(target_id:int, radius=50, pcc_threshold=PCC_THRESHOLD):
     catalog_coord = SkyCoord(df.ra, df.dec, unit="deg")
     seps = coord.separation(catalog_coord).arcsec
     df["offset"] = seps
-    df["pcc"] = pcc(df["default_mag"], seps)
+    df["pcc"] = pcc(seps,df["default_mag"])
 
     # TODO: We will need to put some deduplication code for the galaxy dataframe
     #       here at some point. For now it seems to work without it though!
