@@ -204,11 +204,11 @@ class Command(BaseCommand):
 
         for targets in [new_targets, updated_targets]:
             for target in targets:
-                vet_or_post_error(target, created=True, tns_time_limit=np.inf, slack_client=slack_tns)
+                vet_or_post_error(target, created=True, tns_time_limit=np.inf, run_mpc=True, slack_client=slack_tns)
                 slack_tns50.send_slack_message(target=target)
 
         for target in updated_targets_coords:
-            vet_or_post_error(target, created=True, tns_time_limit=np.inf, slack_client=slack_tns)
+            vet_or_post_error(target, created=True, tns_time_limit=np.inf, run_mpc=True, slack_client=slack_tns)
 
         # automatically associate with nonlocalized events
         for nle in get_active_nonlocalizedevents(lookback_days=lookback_days_nle):

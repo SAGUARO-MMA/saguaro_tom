@@ -93,7 +93,7 @@ def target_run_mpc(latest_det_id, _verbose=False):
         logger.info(f"{latest_det.target.name} is not a minor planet!")
 
 
-def vet_or_post_error(target, created=True, tns_time_limit: float=5., run_mpc=True, run_atlas=True, slack_client=None):
+def vet_or_post_error(target, created=True, tns_time_limit: float=5., run_mpc=False, run_atlas=True, slack_client=None):
     """This hook runs following update of a target."""
     messages = []
     errors = []
