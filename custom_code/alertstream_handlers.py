@@ -1,8 +1,14 @@
 import os
 import uuid
 import json
-from tom_nonlocalizedevents.models import NonLocalizedEvent, EventSequence, EventCandidate
-from tom_nonlocalizedevents.alertstream_handlers.igwn_event_handler import handle_igwn_message
+from tom_nonlocalizedevents.models import (
+    NonLocalizedEvent,
+    EventSequence,
+    EventCandidate,
+)
+from tom_nonlocalizedevents.alertstream_handlers.igwn_event_handler import (
+    handle_igwn_message,
+)
 from django.contrib.auth.models import Group
 from django.contrib.sites.models import Site
 from django.conf import settings
@@ -13,8 +19,16 @@ from email.mime.text import MIMEText
 import smtplib
 import logging
 from .hooks import vet_or_post_error
-from .templatetags.nonlocalizedevent_extras import format_inverse_far, format_distance, format_area, get_most_likely_class
-from .healpix_utils import update_all_credible_region_percents_for_survey_fields, create_elliptical_localization
+from .templatetags.nonlocalizedevent_extras import (
+    format_inverse_far,
+    format_distance,
+    format_area,
+    get_most_likely_class,
+)
+from .healpix_utils import (
+    update_all_credible_region_percents_for_survey_fields,
+    create_elliptical_localization,
+)
 from .cssfield_selection import calculate_footprint_probabilities, rank_css_fields
 from .models import CredibleRegionContour
 from slack_notifier.slack_notifier import SlackNotifier
@@ -30,6 +44,7 @@ from tom_targets.models import Target, TargetName
 from tom_targets.utils import cone_search_filter
 import time
 from tom_antares.antares import ANTARESBroker
+
 logger = logging.getLogger(__name__)
 
 # for einstein probe
@@ -69,27 +84,44 @@ Terrestrial = {{Terrestrial:.0%}}
 """
 
 # links for Slack
-ALERT_LINKS = ('<{nle_link}|{service}> <{{nle.hermes_url}}|Hermes> '
-               '<{{nle.gracedb_url}}|GraceDB> <{{nle.treasuremap_url}}|Treasure Map>')
+ALERT_LINKS = (
+    "<{nle_link}|{service}> <{{nle.hermes_url}}|Hermes> "
+    "<{{nle.gracedb_url}}|GraceDB> <{{nle.treasuremap_url}}|Treasure Map>"
+)
 
 ALERT_TEXT_RETRACTION = "{{most_likely_class}} {{nle.event_id}} {{nle.state}}"
 
-ALERT_TEXT_BURST = ALERT_TEXT_INTRO + """50% Area = {{seq.localization.area_50:.0f}} deg²
+ALERT_TEXT_BURST = (
+    ALERT_TEXT_INTRO
+    + """50% Area = {{seq.localization.area_50:.0f}} deg²
 90% Area = {{seq.localization.area_90:.0f}} deg²
 Duration = {{duration_ms:.0f}} ms
 Frequency = {{central_frequency:.0f}} Hz
-""" + ALERT_LINKS
+"""
+    + ALERT_LINKS
+)
 
-ALERT_TEXT_SSM = ALERT_TEXT_INTRO + ALERT_TEXT_LOCALIZATION + """Has NS = {{HasNS:.0%}}
+ALERT_TEXT_SSM = (
+    ALERT_TEXT_INTRO
+    + ALERT_TEXT_LOCALIZATION
+    + """Has NS = {{HasNS:.0%}}
 Has Mass Gap = {{HasMassGap:.0%}}
 Has SSM = {{HasSSM:.0%}}
-""" + ALERT_LINKS
+"""
+    + ALERT_LINKS
+)
 
 ALERT_TEXT = [  # index = number of localizations available
     ALERT_TEXT_INTRO + ALERT_TEXT_CLASSIFICATION + ALERT_LINKS,
-    ALERT_TEXT_INTRO + ALERT_TEXT_LOCALIZATION + ALERT_TEXT_CLASSIFICATION + ALERT_LINKS,
-    ALERT_TEXT_INTRO + ALERT_TEXT_LOCALIZATION + ALERT_TEXT_CLASSIFICATION + ALERT_TEXT_EXTERNAL_COINCIDENCE +
-    ALERT_LINKS,
+    ALERT_TEXT_INTRO
+    + ALERT_TEXT_LOCALIZATION
+    + ALERT_TEXT_CLASSIFICATION
+    + ALERT_LINKS,
+    ALERT_TEXT_INTRO
+    + ALERT_TEXT_LOCALIZATION
+    + ALERT_TEXT_CLASSIFICATION
+    + ALERT_TEXT_EXTERNAL_COINCIDENCE
+    + ALERT_LINKS,
 ]
 
 slack_ep = SlackNotifier(slack_channel="alerts-ep", token=settings.SLACK_TOKEN_EP)
@@ -99,11 +131,15 @@ slack_lsstddf = AntaresSlackFilter(token=settings.SLACK_TOKEN_TNS50)
 def send_email(subject, body, is_test_alert=False):
     """This doesn't currently work"""
     msg = MIMEText(body)
-    msg['Subject'] = subject
-    msg['From'] = settings.SERVER_EMAIL
-    group = Group.objects.get(name='Test Email Alerts') if is_test_alert else Group.objects.get(name='Email Alerts')
-    msg['To'] = ','.join([u.email.split(',')[0] for u in group.user_set.all()])
-    if not msg['To']:
+    msg["Subject"] = subject
+    msg["From"] = settings.SERVER_EMAIL
+    group = (
+        Group.objects.get(name="Test Email Alerts")
+        if is_test_alert
+        else Group.objects.get(name="Email Alerts")
+    )
+    msg["To"] = ",".join([u.email.split(",")[0] for u in group.user_set.all()])
+    if not msg["To"]:
         logger.info(f'Email "{subject}" not sent. No one is subscribed.')
         return
     email_text = msg.as_string()
@@ -111,7 +147,7 @@ def send_email(subject, body, is_test_alert=False):
     try:
         server = smtplib.SMTP()
         server.connect()
-        server.sendmail(msg['From'], msg['To'], email_text)
+        server.sendmail(msg["From"], msg["To"], email_text)
         server.close()
         logger.info(f'Email "{subject}" sent!')
     except Exception as e:
@@ -122,25 +158,33 @@ def calculate_credible_region(skymap, localization, probability=0.9):
     t0 = time.time()
     """store the credible region contour for skymap plotting"""
     # Sort the pixels of the sky map by descending probability density
-    skymap.sort('PROBDENSITY', reverse=True)
+    skymap.sort("PROBDENSITY", reverse=True)
     # Find the area of each pixel
-    skymap['level'], skymap['ipix'] = ah.uniq_to_level_ipix(skymap['UNIQ'])
-    pixel_area = ah.nside_to_pixel_area(ah.level_to_nside(skymap['level']))
+    skymap["level"], skymap["ipix"] = ah.uniq_to_level_ipix(skymap["UNIQ"])
+    pixel_area = ah.nside_to_pixel_area(ah.level_to_nside(skymap["level"]))
     # Calculate the probability within each pixel: the pixel area times the probability density
-    prob = pixel_area * skymap['PROBDENSITY']
+    prob = pixel_area * skymap["PROBDENSITY"]
     # Calculate the cumulative sum of the probability
     cumprob = np.cumsum(prob)
     # Find the pixel for which the probability sums to 0.9
     index_90 = cumprob.searchsorted(probability)
     # Find the pixels included in this sum
-    skymap90 = skymap[:index_90].group_by('level')
-    credible_region_90 = {str(group['level'][0]): [ipix.item() for ipix in group['ipix']] for group in skymap90.groups}
-    if 'MOCORDER' in skymap.meta:
-        credible_region_90.setdefault(str(skymap.meta['MOCORDER']), [])  # must include the highest order
+    skymap90 = skymap[:index_90].group_by("level")
+    credible_region_90 = {
+        str(group["level"][0]): [ipix.item() for ipix in group["ipix"]]
+        for group in skymap90.groups
+    }
+    if "MOCORDER" in skymap.meta:
+        credible_region_90.setdefault(
+            str(skymap.meta["MOCORDER"]), []
+        )  # must include the highest order
     # Create the CredibleRegionContour object
-    CredibleRegionContour(localization=localization, probability=probability, pixels=credible_region_90).save()
+    CredibleRegionContour(
+        localization=localization, probability=probability, pixels=credible_region_90
+    ).save()
     dt = time.time() - t0
-    logger.info(f'Calculated skymap contours in {dt:.0f} s')
+    logger.info(f"Calculated skymap contours in {dt:.0f} s")
+
 
 def prepare_and_send_alerts(nle, seq):
     localizations = []
@@ -150,54 +194,72 @@ def prepare_and_send_alerts(nle, seq):
         else:
             if seq.localization is not None:
                 localizations.append(seq.localization)
-            if seq.external_coincidence is not None and seq.external_coincidence.localization is not None:
+            if (
+                seq.external_coincidence is not None
+                and seq.external_coincidence.localization is not None
+            ):
                 localizations.append(seq.external_coincidence.localization)
         is_test_alert, is_significant, is_burst, has_ns = pick_slack_channel(seq)
         format_kwargs = {
-            'nle': nle,
-            'seq': seq,
-            'most_likely_class': get_most_likely_class(seq.details),
-            'inverse_far': format_inverse_far(seq.details['far']),
-            'significance': 'significant' if is_significant else 'subthreshold',
+            "nle": nle,
+            "seq": seq,
+            "most_likely_class": get_most_likely_class(seq.details),
+            "inverse_far": format_inverse_far(seq.details["far"]),
+            "significance": "significant" if is_significant else "subthreshold",
         }
-        format_kwargs.update(seq.details['properties'])
-        format_kwargs.update(seq.details['classification'])
+        format_kwargs.update(seq.details["properties"])
+        format_kwargs.update(seq.details["classification"])
         format_kwargs.update(seq.details)
-        if nle.state == 'RETRACTED':
+        if nle.state == "RETRACTED":
             alert_text = ALERT_TEXT_RETRACTION
         elif is_burst:
             alert_text = ALERT_TEXT_BURST
-            format_kwargs['duration_ms'] = seq.details['duration'] * 1000.
+            format_kwargs["duration_ms"] = seq.details["duration"] * 1000.0
         else:
-            if seq.details['search'] == 'SSM':
+            if seq.details["search"] == "SSM":
                 alert_text = ALERT_TEXT_SSM
             else:
                 alert_text = ALERT_TEXT[len(localizations)]
             if localizations:
-                format_kwargs['distance'] = format_distance(localizations[0])
-                format_kwargs['area_50'] = format_area(localizations[0].area_50)
-                format_kwargs['area_90'] = format_area(localizations[0].area_90)
+                format_kwargs["distance"] = format_distance(localizations[0])
+                format_kwargs["area_50"] = format_area(localizations[0].area_50)
+                format_kwargs["area_90"] = format_area(localizations[0].area_90)
             if len(localizations) > 1:
                 format_kwargs.update(seq.external_coincidence.details)
-                format_kwargs['inverse_far_time'] = format_inverse_far(format_kwargs['time_coincidence_far'])
-                format_kwargs['inverse_far_time_pos'] = format_inverse_far(format_kwargs['time_sky_position_coincidence_far'])
-                format_kwargs['distance_external'] = format_distance(localizations[1])
-                format_kwargs['area_50_external'] = format_area(localizations[1].area_50)
-                format_kwargs['area_90_external'] = format_area(localizations[1].area_90)
+                format_kwargs["inverse_far_time"] = format_inverse_far(
+                    format_kwargs["time_coincidence_far"]
+                )
+                format_kwargs["inverse_far_time_pos"] = format_inverse_far(
+                    format_kwargs["time_sky_position_coincidence_far"]
+                )
+                format_kwargs["distance_external"] = format_distance(localizations[1])
+                format_kwargs["area_50_external"] = format_area(
+                    localizations[1].area_50
+                )
+                format_kwargs["area_90_external"] = format_area(
+                    localizations[1].area_90
+                )
     except Exception as e:
-        logger.error(f'Could not parse GW alert: {e}')
-        alert_text = f'Received a GW alert that could not be parsed. Check GraceDB: {nle.gracedb_url}'
+        logger.error(f"Could not parse GW alert: {e}")
+        alert_text = f"Received a GW alert that could not be parsed. Check GraceDB: {nle.gracedb_url}"
         format_kwargs = {}
-        is_test_alert = nle.event_id.startswith('M')
+        is_test_alert = nle.event_id.startswith("M")
         is_significant = False
         is_burst = False
         has_ns = False
     if is_significant and not is_burst and has_ns:
-        at = 'here' if nle.state == 'RETRACTED' else 'channel'
+        at = "here" if nle.state == "RETRACTED" else "channel"
     else:
         at = None
-    send_slack_gw(alert_text, format_kwargs,
-               is_test_alert=is_test_alert, is_significant=is_significant, is_burst=is_burst, has_ns=has_ns, at=at)
+    send_slack_gw(
+        alert_text,
+        format_kwargs,
+        is_test_alert=is_test_alert,
+        is_significant=is_significant,
+        is_burst=is_burst,
+        has_ns=has_ns,
+        at=at,
+    )
     return localizations
 
 
@@ -206,27 +268,29 @@ def handle_message_and_send_alerts(message, metadata):
     skymaps = []
     try:
         alert = message.content[0]
-        event = alert.get('event')
+        event = alert.get("event")
         if event is not None:
-            skymaps.append(event.get('skymap'))
-        external_coinc = alert.get('external_coinc')
+            skymaps.append(event.get("skymap"))
+        external_coinc = alert.get("external_coinc")
         if external_coinc is not None:
-            skymaps.append(external_coinc.get('combined_skymap'))
-    except Exception as e:  # no matter what, do not crash the listener before ingesting the alert
-        logger.error(f'Could not extract skymap from alert: {e}')
+            skymaps.append(external_coinc.get("combined_skymap"))
+    except (
+        Exception
+    ) as e:  # no matter what, do not crash the listener before ingesting the alert
+        logger.error(f"Could not extract skymap from alert: {e}")
 
     # ingest NonLocalizedEvent into the TOM database
     nle, seq = handle_igwn_message(message, metadata)
 
     if nle is None:  # test event and SAVE_TEST_ALERTS = False
-        logger.info('Test alert not saved')
+        logger.info("Test alert not saved")
         return
 
     localizations = prepare_and_send_alerts(nle, seq)
 
     for skymap_bytes, localization in zip(skymaps, localizations):
         if CredibleRegionContour.objects.filter(localization=localization).exists():
-            logger.info(f'Localization {localization.id} already exists')
+            logger.info(f"Localization {localization.id} already exists")
         else:
             update_all_credible_region_percents_for_survey_fields(localization)
             if skymap_bytes is not None:
@@ -235,7 +299,7 @@ def handle_message_and_send_alerts(message, metadata):
                 calculate_footprint_probabilities(skymap, localization)
                 rank_css_fields(localization.surveyfieldcredibleregions)
 
-    logger.info(f'Finished processing alert for {nle.event_id}')
+    logger.info(f"Finished processing alert for {nle.event_id}")
 
 
 def handle_einstein_probe_alert(message, metadata):
@@ -243,30 +307,43 @@ def handle_einstein_probe_alert(message, metadata):
     logger.warning(f"Handling Einstein Probe alert: {alert}")
 
     nonlocalizedevent, nle_created = NonLocalizedEvent.objects.get_or_create(
-        event_id=alert['id'][0],
+        event_id=alert["id"][0],
         event_type=NonLocalizedEvent.NonLocalizedEventType.UNKNOWN,
     )
     if nle_created:
-        logger.info(f"Ingested a new x-ray event with id {nonlocalizedevent.event_id} from EP alert stream")
+        logger.info(
+            f"Ingested a new x-ray event with id {nonlocalizedevent.event_id} from EP alert stream"
+        )
 
     # create the localization from ra, dec, radius
     try:
         localization, skymap = create_elliptical_localization(
             nonlocalizedevent=nonlocalizedevent,
-            center=[alert.get('ra'), alert.get('dec')], radius=alert.get('ra_dec_error'),
+            center=[alert.get("ra"), alert.get("dec")],
+            radius=alert.get("ra_dec_error"),
         )
     except Exception as e:
         localization = None
         skymap = None
-        logger.error(f'Could not create EventLocalization for event: {nonlocalizedevent.event_id}. Exception: {e}')
+        logger.error(
+            f"Could not create EventLocalization for event: {nonlocalizedevent.event_id}. Exception: {e}"
+        )
         logger.error(traceback.format_exc())
 
     logger.debug(f"Storing EP alert: {alert}")
 
     # Now ingest the sequence for that event
-    details = {key: alert.get(key) for key in
-               ['instrument', 'image_energy_range', 'net_count_rate', 'image_snr', 'additional_info']}
-    details['time'] = alert.get('trigger_time')  # to match IGWN alerts
+    details = {
+        key: alert.get(key)
+        for key in [
+            "instrument",
+            "image_energy_range",
+            "net_count_rate",
+            "image_snr",
+            "additional_info",
+        ]
+    }
+    details["time"] = alert.get("trigger_time")  # to match IGWN alerts
     event_sequence, es_created = EventSequence.objects.update_or_create(
         nonlocalizedevent=nonlocalizedevent,
         localization=localization,
@@ -275,35 +352,42 @@ def handle_einstein_probe_alert(message, metadata):
     )
     if es_created and localization is None:
         warning_msg = (
-            f'{"Creating" if es_created else "Updating"} EventSequence without EventLocalization:'
-            f'{event_sequence} for NonLocalizedEvent: {nonlocalizedevent}'
+            f"{'Creating' if es_created else 'Updating'} EventSequence without EventLocalization:"
+            f"{event_sequence} for NonLocalizedEvent: {nonlocalizedevent}"
         )
         logger.warning(warning_msg)
 
     if CredibleRegionContour.objects.filter(localization=localization).exists():
-        logger.info(f'Localization {localization.id} already exists')
+        logger.info(f"Localization {localization.id} already exists")
     else:
         update_all_credible_region_percents_for_survey_fields(localization)
         if skymap is not None:
-            skymap['PROBDENSITY'].unit = '1 / sr'
+            skymap["PROBDENSITY"].unit = "1 / sr"
             calculate_credible_region(skymap, localization)
             calculate_footprint_probabilities(skymap, localization)
             rank_css_fields(localization.surveyfieldcredibleregions)
 
-    ep_ra = alert.get('ra')
-    ep_dec = alert.get('dec')
-    ep_name = alert['id'][0]
-    t_ep = Target.objects.create(name=ep_name, type='SIDEREAL', ra=ep_ra, dec=ep_dec, permissions='PUBLIC')
+    ep_ra = alert.get("ra")
+    ep_dec = alert.get("dec")
+    ep_name = alert["id"][0]
+    t_ep = Target.objects.create(
+        name=ep_name, type="SIDEREAL", ra=ep_ra, dec=ep_dec, permissions="PUBLIC"
+    )
     EventCandidate.objects.create(target=t_ep, nonlocalizedevent=nonlocalizedevent)
     vet_or_post_error(t_ep, created=True, tns_time_limit=np.inf, slack_client=slack_ep)
-    query = {'localization_event': nonlocalizedevent.event_id, 'localization_prob': 95, 'localization_dt': 3}
+    query = {
+        "localization_event": nonlocalizedevent.event_id,
+        "localization_prob": 95,
+        "localization_dt": 3,
+    }
     survey_obs_link = f"https://{Site.objects.get_current().domain}{reverse('surveys:observations')}?{urllib.parse.urlencode(query)}"
-    alert_text = ALERT_TEXT_EP.format(survey_obs_link=survey_obs_link, target_link=settings.TARGET_LINKS[0][0]
-                                     ).format(target=t_ep)
-    logger.info(f'Sending EP alert: {alert_text}')
+    alert_text = ALERT_TEXT_EP.format(
+        survey_obs_link=survey_obs_link, target_link=settings.TARGET_LINKS[0][0]
+    ).format(target=t_ep)
+    logger.info(f"Sending EP alert: {alert_text}")
     slack_ep.send_slack_message_from_text(text=alert_text)
 
-    logger.info(f'Finished processing alert for {nonlocalizedevent.event_id}')
+    logger.info(f"Finished processing alert for {nonlocalizedevent.event_id}")
 
 
 def nan2str(obj):
@@ -321,47 +405,60 @@ def nan2str(obj):
 
 def serialize_antares_alert(locus):
     return {
-            'locus_id': locus.locus_id,
-            'ra': locus.ra,
-            'dec': locus.dec,
-            'properties': locus.properties,
-            'tags': locus.tags,
-            # 'lightcurve': locus.lightcurve.to_json(),
-            'catalogs': locus.catalogs,
-            'alerts': [
-                {
-                    'alert_id': alert.alert_id,
-                    'mjd': alert.mjd,
-                    'properties': {key: val for key, val in alert.properties.items() if key.startswith('ant')},
-                }
-                for alert in locus.alerts
-            ],
-        }
+        "locus_id": locus.locus_id,
+        "ra": locus.ra,
+        "dec": locus.dec,
+        "properties": locus.properties,
+        "tags": locus.tags,
+        # 'lightcurve': locus.lightcurve.to_json(),
+        "catalogs": locus.catalogs,
+        "alerts": [
+            {
+                "alert_id": alert.alert_id,
+                "mjd": alert.mjd,
+                "properties": {
+                    key: val
+                    for key, val in alert.properties.items()
+                    if key.startswith("ant")
+                },
+            }
+            for alert in locus.alerts
+        ],
+    }
 
 
 def handle_antares_stream_async(locus):
     # temporarily skip old alerts TODO: decide if we want this
-    #if locus.properties['newest_alert_observation_time'] < np.floor(Time.now().mjd):
+    # if locus.properties['newest_alert_observation_time'] < np.floor(Time.now().mjd):
     #    logger.debug(f'skipping old alert {locus.locus_id}')
     #    return
     alert_small = serialize_antares_alert(locus)
     alert_finite = nan2str(alert_small)
     try:
         handle_antares_stream.enqueue(alert_finite)
-        logger.debug(f'sent {locus.locus_id} to queue')
+        logger.debug(f"sent {locus.locus_id} to queue")
     except Exception:
         exc = traceback.format_exc()
         dump_alert_and_send_error(alert_finite, exc)
 
 
 @task(queue_name="antares", priority=settings.PRIORITY_HIGH)
-def handle_antares_stream(alert, cone_search_radius_arcsec=2.):
+def handle_antares_stream(alert, cone_search_radius_arcsec=2.0):
     try:
         broker = ANTARESBroker()
 
         # check for existing targets within 2"
-        target_matches = list(cone_search_filter(Target.objects.all(), alert['ra'], alert['dec'], cone_search_radius_arcsec / 3600.).order_by("separation"))
-        logger.info(f"Targets within {cone_search_radius_arcsec:.1f} arcsec: {target_matches}")
+        target_matches = list(
+            cone_search_filter(
+                Target.objects.all(),
+                alert["ra"],
+                alert["dec"],
+                cone_search_radius_arcsec / 3600.0,
+            ).order_by("separation")
+        )
+        logger.info(
+            f"Targets within {cone_search_radius_arcsec:.1f} arcsec: {target_matches}"
+        )
 
         if target_matches:
             # then this target already exists in the Targets table
@@ -369,8 +466,23 @@ def handle_antares_stream(alert, cone_search_radius_arcsec=2.):
             logger.info(f"Found existing target matching this alert: {target.name}")
 
             # only take the time to run the vetting if we need to get host galaxies
-            if not target.targetextra_set.filter(key='Host Galaxies').exists():
-                vet_or_post_error(target, created=True, tns_time_limit=np.inf, slack_client=slack_lsstddf)
+            if not target.targetextra_set.filter(key="Host Galaxies").exists():
+                run_atlas = _should_run_atlas(alert)
+
+                if run_atlas:
+                    logger.debug("Submitting ATLAS FP to the queue!")
+                else:
+                    logger.debug(
+                        "The most recent magnitude reported in this alert is too faint for ATLAS FP!"
+                    )
+
+                vet_or_post_error(
+                    target,
+                    created=True,
+                    tns_time_limit=np.inf,
+                    run_atlas=run_atlas,
+                    slack_client=slack_lsstddf,
+                )
 
             # update the TargetName objects returned to instead point to the existing target
             aliases = broker.aliases_from_locus(alert, target)
@@ -401,17 +513,23 @@ def handle_antares_stream(alert, cone_search_radius_arcsec=2.):
                 )
 
         # then parse the returned values to send relevant messages
-        telescope_id = alert['alerts'][-1]['properties']['ant_survey']
+        telescope_id = alert["alerts"][-1]["properties"]["ant_survey"]
         telescope = ANTARESBroker.surveys.get(telescope_id, "ZTF")
-        slack_lsstddf.send_slack_message(target=target, created=bool(target_matches), aliases_added=aliases_added,
-                                         telescope_stream=telescope)
+        slack_lsstddf.send_slack_message(
+            target=target,
+            created=bool(target_matches),
+            aliases_added=aliases_added,
+            telescope_stream=telescope,
+        )
 
     except Exception:
         exc = traceback.format_exc()
         dump_alert_and_send_error(alert, exc)
 
 
-def dump_alert_and_send_error(alert, exc, dump_dir="antares-alert-errors", slack_client=slack_lsstddf):
+def dump_alert_and_send_error(
+    alert, exc, dump_dir="antares-alert-errors", slack_client=slack_lsstddf
+):
     """
     we don't want this *ever* to crash, just log the error, send it as a slack message, and dump the alert to a json file
     """
@@ -421,3 +539,14 @@ def dump_alert_and_send_error(alert, exc, dump_dir="antares-alert-errors", slack
         json.dump(alert, f, indent=4)
     msg = f"ANTARES stream ingestion failed! Failing alert dumped to saguaro@sand:~/{dump_path}.\n{exc}"
     slack_client.send_slack_message_from_text(msg)
+
+
+def _should_run_atlas(alert, limit=19.7):
+    """
+    Check if this alert is bright enough to make running ATLAS FP worth it
+
+    The limiting magnitude of ATLAS c and o filters is 19.7
+    (https://fallingstar.com/specifications.php)
+    """
+    mag = alert["properties"]["newest_alert_magnitude"]
+    return mag < limit
