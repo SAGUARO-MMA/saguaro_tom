@@ -476,10 +476,20 @@ def handle_antares_stream(alert, cone_search_radius_arcsec=2.0):
 
             # only take the time to run the vetting if we need to get host galaxies
             if not target.targetextra_set.filter(key="Host Galaxies").exists():
+                run_atlas = _should_run_atlas(alert)
+
+                if run_atlas:
+                    logger.debug("Submitting ATLAS FP to the queue!")
+                else:
+                    logger.debug(
+                        "The most recent magnitude reported in this alert is too faint for ATLAS FP!"
+                    )
+
                 vet_or_post_error(
                     target,
                     created=True,
                     tns_time_limit=np.inf,
+                    run_atlas=run_atlas,
                     slack_client=slack_lsstddf,
                 )
 
@@ -542,3 +552,14 @@ def dump_alert_and_send_error(
     with open(dump_path, "w") as f:
         json.dump(alert, f, indent=4)
     send_error(exc)
+
+
+def _should_run_atlas(alert, limit=19.7):
+    """
+    Check if this alert is bright enough to make running ATLAS FP worth it
+
+    The limiting magnitude of ATLAS c and o filters is 19.7
+    (https://fallingstar.com/specifications.php)
+    """
+    mag = alert["properties"]["newest_alert_magnitude"]
+    return mag < limit
