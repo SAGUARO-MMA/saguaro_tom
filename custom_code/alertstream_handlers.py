@@ -1,4 +1,5 @@
 import os
+import requests
 import uuid
 import json
 from tom_nonlocalizedevents.models import (
@@ -432,8 +433,16 @@ def handle_antares_stream_async(locus):
     # if locus.properties['newest_alert_observation_time'] < np.floor(Time.now().mjd):
     #    logger.debug(f'skipping old alert {locus.locus_id}')
     #    return
-    alert_small = serialize_antares_alert(locus)
+
+    try:
+        alert_small = serialize_antares_alert(locus)
+    except requests.exceptions.ReadTimeout:
+        exc = traceback.format_exc()
+        send_error(exc)
+        return  # and don't continue
+
     alert_finite = nan2str(alert_small)
+
     try:
         handle_antares_stream.enqueue(alert_finite)
         logger.debug(f"sent {locus.locus_id} to queue")
@@ -527,6 +536,11 @@ def handle_antares_stream(alert, cone_search_radius_arcsec=2.0):
         dump_alert_and_send_error(alert, exc)
 
 
+def send_error(exc):
+    msg = f"ANTARES stream ingestion failed with\n{exc}"
+    slack_client.send_slack_message_from_text(msg)
+
+
 def dump_alert_and_send_error(
     alert, exc, dump_dir="antares-alert-errors", slack_client=slack_lsstddf
 ):
@@ -537,8 +551,7 @@ def dump_alert_and_send_error(
     dump_path = f"{dump_dir}/{uuid.uuid4()}.json"
     with open(dump_path, "w") as f:
         json.dump(alert, f, indent=4)
-    msg = f"ANTARES stream ingestion failed! Failing alert dumped to saguaro@sand:~/{dump_path}.\n{exc}"
-    slack_client.send_slack_message_from_text(msg)
+    send_error(exc)
 
 
 def _should_run_atlas(alert, limit=19.7):
