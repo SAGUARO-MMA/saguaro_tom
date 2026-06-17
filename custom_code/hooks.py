@@ -304,9 +304,6 @@ TNS Request for <https://wis-tns.org/object/{tns_objname}|{target.name}> respond
                 if detections.exists():
                     target_run_mpc.enqueue(detections.latest().id)
             if run_atlas:
-                import pdb
-
-                pdb.set_trace()
                 mjd_now = Time.now().mjd
                 last_atlas_point_mjd = _get_last_atlas_point_date(target)
 
