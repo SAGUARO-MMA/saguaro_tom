@@ -19,7 +19,7 @@ tom-alertstreams==1.2.1
 tom-antares==2.0.1
 tom-mmt @ git+https://github.com/griffin-h/tom_mmt
 tom-nonlocalizedevents @ git+https://github.com/TOMToolkit/tom_nonlocalizedevents.git
-tom-registration
+tom-registration @ git+https://github.com/TOMToolkit/tom_registration.git@dev
 tom-swift==0.2.0
 paramiko
 plotly
