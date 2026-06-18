@@ -1,5 +1,5 @@
 {% extends 'tom_common/base.html' %}
-{% load bootstrap4 targets_extras dataproduct_extras %}
+{% load django_bootstrap5 targets_extras dataproduct_extras %}
 {% block title %}Targets{% endblock %}
 {% block content %}
 <div class="row">
@@ -8,7 +8,7 @@
       <div class="col-md-12">
         <span class="float-right">
         {{ target_count }} Targets &nbsp;
-        <button class="btn btn-primary dropdown-toggle" type="button" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+        <button class="btn btn-primary dropdown-toggle" type="button" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
           Create Targets
         </button>
         <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
