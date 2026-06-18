@@ -1,6 +1,7 @@
 astroplan
 astropy
 astroquery
+candidate_vetting @ git+https://github.com/astro-trove/candidate_vetting.git
 django
 django-crispy-forms
 django-extensions
@@ -13,11 +14,11 @@ lightcurve-fitting
 ligo.skymap
 matplotlib
 numpy
-tomtoolkit @ git+https://github.com/griffin-h/tom_base.git@bugfix/runbrokerquery
+tomtoolkit<3
 tom-alertstreams==1.2.1
 tom-antares @ git+https://github.com/SAGUARO-MMA/tom_antares.git@tom-alertstreams-tmp
-tom-mmt @ git+https://github.com/griffin-h/tom_mmt
-tom-nonlocalizedevents @ git+https://github.com/TOMToolkit/tom_nonlocalizedevents.git
+tom-mmt @ git+https://github.com/griffin-h/tom_mmt.git
+tom-nonlocalizedevents @ git+https://github.com/TOMToolkit/tom_nonlocalizedevents.git@dev
 trove-mpc @ git+https://github.com/astro-trove/trove-mpc.git
 tom-registration
 tom-swift==0.2.0

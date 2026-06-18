@@ -27,11 +27,6 @@ CREDIBLE_REGION_PROBABILITIES = sorted(json.loads(settings.CREDIBLE_REGION_PROBA
 
 Base = declarative_base()
 
-class SaTarget(Base):
-    __tablename__ = 'tom_targets_basetarget'
-    basetarget_ptr_id = sa.Column(sa.Integer, primary_key=True)
-    healpix = sa.Column(sa.BigInteger)
-
 class SaSurveyField(Base):
     __tablename__ = 'tom_surveys_surveyfield'
     name = sa.Column(sa.String, primary_key=True)

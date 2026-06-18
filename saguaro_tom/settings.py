@@ -128,9 +128,18 @@ DATABASES = {
         'USER': os.getenv('POSTGRES_USER', POSTGRES_USER),
         'PASSWORD': os.getenv('POSTGRES_PASSWORD', POSTGRES_PASSWORD),
         'HOST': os.getenv('POSTGRES_HOST', POSTGRES_HOST),
-        'PORT': os.getenv('POSTGRES_PORT', int(POSTGRES_PORT)),
+        'PORT': os.getenv('POSTGRES_PORT', POSTGRES_PORT),
+    },
+    'catalogs': {
+        'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        'NAME': os.getenv('POSTGRES_DB2', POSTGRES_DB2),
+        'USER': os.getenv('POSTGRES_USER2', POSTGRES_USER2),
+        'PASSWORD': os.getenv('POSTGRES_PASSWORD2', POSTGRES_PASSWORD2),
+        'HOST': os.getenv('POSTGRES_HOST2', POSTGRES_HOST2),
+        'PORT': os.getenv('POSTGRES_PORT2', POSTGRES_PORT2),
     }
 }
+DATABASE_ROUTERS = ['candidate_vetting.routers.CatalogRouter']
 
 DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 

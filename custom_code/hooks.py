@@ -124,44 +124,8 @@ def vet_or_post_error(
         tns_objname = split_name(target.name)["tns_objname"]
         if tns_objname is not None:
             # check TNS for new photometry
-            _, response, time_to_wait = TNS_Phot("tns").query(
-                target, timelimit=tns_time_limit
-            )
-
-            if response is not None and response.status_code == 200:
-                tns_reply = response.json()["data"]
-
-                # update the coordinates if needed; round to same number of sig figs as CSV files to avoid infinite loop
-                tns_ra = float(f"{tns_reply['radeg']:.14g}")
-                tns_dec = float(f"{tns_reply['decdeg']:.14g}")
-                if target.ra != tns_ra or target.dec != tns_dec:
-                    target.ra = tns_ra
-                    target.dec = tns_dec
-                    messages.append(
-                        f"Updated coordinates to {target.ra:.6f}, {target.dec:.6f} based on TNS"
-                    )
-
-                # ingest any photometry
-                n_new_phot = 0
-                for candidate in tns_reply.get("photometry", []):
-                    jd = Time(candidate["jd"], format="jd", scale="utc")
-                    value = {"filter": candidate["filters"]["name"]}
-                    if candidate["flux"]:  # detection
-                        value["magnitude"] = float(candidate["flux"])
-                    elif candidate["limflux"]:  # nondetection
-                        value["limit"] = float(candidate["limflux"])
-                    else:  # something else, maybe an FRB; don't ingest it
-                        continue
-                    if candidate["fluxerr"]:  # not empty or zero
-                        value["error"] = float(candidate["fluxerr"])
-                    rd, created = ReducedDatum.objects.get_or_create(
-                        timestamp=jd.to_datetime(timezone=TimezoneInfo()),
-                        value=value,
-                        source_name=candidate["telescope"]["name"] + " (TNS)",
-                        data_type="photometry",
-                        target=target,
-                    )
-                    n_new_phot += created
+            n_new_phot, tns_reply = TNS_Phot("tns").query(target, timelimit=tns_time_limit)
+            if tns_reply:
                 if n_new_phot:
                     messages.append(
                         f"Added {n_new_phot:d} photometry points from the TNS"
@@ -201,18 +165,6 @@ def vet_or_post_error(
                     ):
                         tn = TargetName.objects.create(target=target, name=alias)
                         messages.append(f"Added alias {tn.name} from TNS")
-
-            else:
-                if isinstance(response, Response):
-                    tns_query_status = f"""
-TNS Request for <https://wis-tns.org/object/{tns_objname}|{target.name}> responded with code {response.status_code}: {response.reason}
-"""
-                else:
-                    tns_query_status = f"We ran out of API calls to the TNS with {time_to_wait}s left! This exceeded the {tns_time_limit}s limit!"
-                logger.error(tns_query_status)
-                errors.append(tns_query_status)
-                if slack_client is not None:
-                    slack_client.send_slack_message_from_text(text=tns_query_status)
 
         # always keep the galactic coordinates, healpix, and MW extinction up to date with updated coordinates
         coord = SkyCoord(target.ra, target.dec, unit="deg")
