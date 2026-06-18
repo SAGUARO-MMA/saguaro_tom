@@ -14,6 +14,7 @@ https://docs.djangoproject.com/en/2.1/ref/settings/
 from .settings_local import *
 import os
 import tempfile
+from tom_common.default_settings import *
 
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
@@ -30,60 +31,21 @@ ALLOWED_HOSTS = [ALLOWED_HOST, 'localhost', '127.0.0.1']
 
 TOM_NAME = 'SAGUARO'
 
-INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'whitenoise.runserver_nostatic',
-    'django.contrib.staticfiles',
-    'django.contrib.sites',
-    'django_extensions',
-    'guardian',
-    'tom_common',
-    'django_comments',
-    'bootstrap4',
-    'crispy_forms',
-    'crispy_bootstrap4',
-    'rest_framework',
-    'rest_framework.authtoken',
-    'django_filters',
-    'django_gravatar',
-    'tom_targets',
-    'tom_alerts',
-    'tom_antares',
-    'tom_catalogs',
-    'tom_observations',
-    'tom_dataproducts',
-    'tom_dataservices',
+INSTALLED_APPS = TOMTOOKIT_INSTALLED_APPS + [
+    'custom_code',
     'tom_alertstreams',
+    'tom_antares',
     'tom_nonlocalizedevents',
     'tom_registration',
-    'webpack_loader',
-    'custom_code',
     'tom_surveys',
     'tom_treasuremap',
-    'django_tasks',
-    'django_tasks.backends.database',
-    'django_tables2',
+    'webpack_loader',  # required for tom_nonlocalizedevents
 ]
 
-MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'django_htmx.middleware.HtmxMiddleware',
-    'tom_common.middleware.Raise403Middleware',
-    'tom_common.middleware.ExternalServiceMiddleware',
-    'tom_common.middleware.AuthStrategyMiddleware',
+MIDDLEWARE = TOMTOOKIT_MIDDLEWARE + [
     'tom_registration.middleware.RedirectAuthenticatedUsersFromRegisterMiddleware',
 ]
+MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')  # must be directly after SecurityMiddleware
 
 ROOT_URLCONF = 'saguaro_tom.urls'
 
@@ -103,8 +65,8 @@ TEMPLATES = [
     },
 ]
 
-CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap4"
-CRISPY_TEMPLATE_PACK = 'bootstrap4'
+CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
+CRISPY_TEMPLATE_PACK = 'bootstrap5'
 
 WSGI_APPLICATION = 'saguaro_tom.wsgi.application'
 
