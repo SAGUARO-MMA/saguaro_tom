@@ -306,7 +306,7 @@ TOM_ALERT_CLASSES = [
     'tom_alerts.brokers.fink.FinkBroker',
 ]
 
-DATA_Services = BROKERS = {
+DATA_SERVICES = BROKERS = {
     'TNS': {
         'api_key': TNS_API_KEY,
         'bot_id': '60911',

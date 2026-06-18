@@ -39,7 +39,7 @@ import paramiko
 import os
 import re
 
-TNS = settings.DATA_Services['TNS']  # includes the API credentials
+TNS = settings.DATA_SERVICES['TNS']  # includes the API credentials
 TNS_URL = TNS['base_url']
 TNS_MARKER = 'tns_marker' + json.dumps({'tns_id': TNS['bot_id'], 'type': 'bot', 'name': TNS['bot_name']})
 TNS_FILTER_IDS = {name: fid for fid, name in TNS_FILTER_CHOICES}
