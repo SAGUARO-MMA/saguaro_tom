@@ -39,8 +39,8 @@ import paramiko
 import os
 import re
 
-from tom_catalogs.harvesters.tns import TNS_URL
-TNS = settings.BROKERS['TNS']  # includes the API credentials
+TNS = settings.DATA_Services['TNS']  # includes the API credentials
+TNS_URL = TNS['base_url']
 TNS_MARKER = 'tns_marker' + json.dumps({'tns_id': TNS['bot_id'], 'type': 'bot', 'name': TNS['bot_name']})
 TNS_FILTER_IDS = {name: fid for fid, name in TNS_FILTER_CHOICES}
 TNS_INSTRUMENT_IDS = {name: iid for iid, name in TNS_INSTRUMENT_CHOICES}

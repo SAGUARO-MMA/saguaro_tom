@@ -306,12 +306,13 @@ TOM_ALERT_CLASSES = [
     'tom_alerts.brokers.fink.FinkBroker',
 ]
 
-BROKERS = {
+DATA_Services = BROKERS = {
     'TNS': {
         'api_key': TNS_API_KEY,
         'bot_id': '60911',
         'bot_name': 'SAGUARO_Bot1',
-    }
+        'base_url': 'https://www.wis-tns.org/',
+    },
 }
 
 CONE_SEARCH_RADIUS = 2.
