@@ -195,7 +195,8 @@ class Command(BaseCommand):
             --STEP 4: add all other unmatched TNS transients to the targets table (removing duplicate names)
             INSERT INTO tom_targets_basetarget (name, type, created, modified, permissions, ra, dec, epoch, scheme)
             SELECT CONCAT(name_prefix, name), 'SIDEREAL', NOW(), NOW(), 'PUBLIC', ra, declination, 2000, ''
-            FROM tns_q3c WHERE name_prefix != 'FRB' AND name != '2023hzc' -- this is a duplicate of AT2016jlf in the TNS
+            FROM tns_q3c WHERE name_prefix != 'FRB'
+            AND name != '2023hzc' AND name != '2026pmf' -- skip duplicates in the TNS: AT2016jlf, AT2026pme
             ON CONFLICT (name) DO NOTHING
             RETURNING *;
             """
@@ -233,3 +234,5 @@ class Command(BaseCommand):
                     body = ALERT_CANDIDATE.format(nle_link=settings.NLE_LINKS[0][0],
                                                   target_link=settings.TARGET_LINKS[0][0])
                     slack_ep.send_slack_message(text=body.format(**format_kwargs))
+
+        logger.info(f'Finished ingesting TNS at {datetime.now()}')
