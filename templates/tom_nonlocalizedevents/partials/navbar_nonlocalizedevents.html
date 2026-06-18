@@ -1,0 +1,17 @@
+<li class="nav-item dropdown">
+    <a class="nav-link dropdown-toggle" data-bs-toggle="dropdown">Nonlocalized Events</a>
+    <ul class="dropdown-menu">
+        <li class="{% if 'nonlocalizedevents' in request.resolver_match.route %}active{% endif %}">
+            <a class="dropdown-item" href="{% url 'custom_code:gw-list' %}?prefix=S&state=ACTIVE&inv_far_min=0.5">Gravitational Waves</a>
+        </li>
+        <li class="{% if 'nonlocalizedevents' in request.resolver_match.route %}active{% endif %}">
+            <a class="dropdown-item" href="{% url 'custom_code:grb-list' %}">&gamma;-ray Bursts</a>
+        </li>
+        <li class="{% if 'nonlocalizedevents' in request.resolver_match.route %}active{% endif %}">
+            <a class="dropdown-item" href="{% url 'custom_code:neutrino-list' %}">Neutrinos</a>
+        </li>
+        <li class="{% if 'nonlocalizedevents' in request.resolver_match.route %}active{% endif %}">
+            <a class="dropdown-item" href="{% url 'custom_code:unknown-list' %}">X-ray Transients</a>
+        </li>
+    </ul>
+</li>
