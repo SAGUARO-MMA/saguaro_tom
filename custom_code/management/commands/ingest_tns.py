@@ -71,7 +71,7 @@ class Command(BaseCommand):
                         tns.declination as dec
                     FROM tns_q3c AS tns
                     WHERE q3c_join(target.ra, target.dec, tns.ra, tns.declination, 2. / 3600) AND name_prefix != 'FRB'
-                    ORDER BY sep, discoverydate LIMIT 1 -- if there are duplicates in the TNS, use the earlier one
+                    ORDER BY sep, discoverydate, tns.name LIMIT 1 -- if there are duplicates in the TNS, use the earlier one
                 ) AS t ON true
                 WHERE t.tns_name IS NOT NULL;
                 
