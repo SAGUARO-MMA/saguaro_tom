@@ -26,6 +26,8 @@ from .forms import TargetListExtraFormset, TargetReportForm, TargetClassifyForm
 from .forms import NonLocalizedEventFormHelper, CandidateFormHelper
 from .forms import TNS_FILTER_CHOICES, TNS_INSTRUMENT_CHOICES, TNS_CLASSIFICATION_CHOICES
 from .forms import TNS_GROUP_CHOICES, TNS_DATA_SOURCE_GROUP_CHOICES
+from .forms import TNS_REPORTER_GROUPS, build_reporter
+
 from .hooks import vet_or_post_error, update_or_create_target_extra, target_run_mpc
 from .templatetags.skymap_extras import get_preferred_localization
 from .templatetags.target_extras import split_name
@@ -260,9 +262,16 @@ class TargetReportView(PermissionListMixin, TemplateResponseMixin, FormMixin, Pr
     form_class = TargetReportForm
     template_name = 'tom_targets/targetreport_form.html'
 
+    #def get_context_data(self, **kwargs):
+     #   context = super().get_context_data(**kwargs)
+      #  context['target'] = Target.objects.get(pk=self.kwargs['pk'])
+       # return context
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['target'] = Target.objects.get(pk=self.kwargs['pk'])
+        # data for the JS that refills the Reporter field when the reporting group changes
+        context['reporter_groups'] = TNS_REPORTER_GROUPS
+        context['user_full_name'] = self.request.user.get_full_name()
         return context
 
     def get_initial(self):
@@ -270,7 +279,8 @@ class TargetReportView(PermissionListMixin, TemplateResponseMixin, FormMixin, Pr
         initial = {
             'ra': target.ra,
             'dec': target.dec,
-            'reporter': f'{self.request.user.get_full_name()}',
+            #'reporter': f'{self.request.user.get_full_name()}',
+            'reporter': build_reporter(self.request.user.get_full_name()),
         }
         alias = target.aliases.first()
         if alias:
@@ -297,6 +307,15 @@ class TargetReportView(PermissionListMixin, TemplateResponseMixin, FormMixin, Pr
                 initial['nondetection_instrument'] = TNS_INSTRUMENT_IDS.get(instrument_name)
             else:
                 initial['archive'] = 0
+        # pre-fill Host name + Host redshift from the galaxy the user picked on the Host Galaxies tab
+        preferred = target.targetextra_set.filter(key='Preferred Host Galaxy').first()
+        if preferred is not None:
+            galaxy = json.loads(preferred.value)
+            if galaxy.get('ID'):
+                initial['host_name'] = galaxy['ID']
+            z = galaxy.get('z')
+            if isinstance(z, (int, float)) and 0. < z < 20.:  # skip the -999 "no redshift" values
+                initial['host_redshift'] = z
         return initial
 
     def form_valid(self, form):
@@ -322,6 +341,43 @@ class TargetReportView(PermissionListMixin, TemplateResponseMixin, FormMixin, Pr
         return reverse_lazy('targets:detail', kwargs=self.kwargs)
 
 
+
+class SelectHostGalaxyView(LoginRequiredMixin, RedirectView):
+    """
+    Records which host galaxy the user picked on the Host Galaxies tab.
+    Stores it as a 'Preferred Host Galaxy' TargetExtra so the report form can use it later.
+    """
+    def get(self, request, *args, **kwargs):
+        target = Target.objects.get(pk=kwargs['pk'])
+        index = kwargs['index']
+
+        te = target.targetextra_set.filter(key='Host Galaxies').first()
+        galaxies = json.loads(te.value) if te is not None else None
+
+        if not galaxies or index < 0 or index >= len(galaxies):
+            messages.error(request, 'Could not find the selected host galaxy.')
+        else:
+            galaxy = galaxies[index]
+            update_or_create_target_extra(target, 'Preferred Host Galaxy', json.dumps(galaxy))
+            messages.success(request, f"Selected {galaxy.get('ID')} as the preferred host galaxy.")
+
+        referer = request.META.get('HTTP_REFERER')
+        if referer:
+            return HttpResponseRedirect(referer)
+        return HttpResponseRedirect(reverse_lazy('targets:detail', kwargs={'pk': kwargs['pk']}) + '?tab=host-galaxy')
+
+
+class ClearHostGalaxyView(LoginRequiredMixin, RedirectView):
+    """Removes the user's preferred host galaxy so the report form host fields stay blank."""
+    def get(self, request, *args, **kwargs):
+        target = Target.objects.get(pk=kwargs['pk'])
+        target.targetextra_set.filter(key='Preferred Host Galaxy').delete()
+        messages.success(request, 'Cleared the preferred host galaxy.')
+        referer = request.META.get('HTTP_REFERER')
+        if referer:
+            return HttpResponseRedirect(referer)
+        return HttpResponseRedirect(reverse_lazy('targets:detail', kwargs={'pk': kwargs['pk']}) + '?tab=host-galaxy')
+
 class TargetClassifyView(PermissionListMixin, TemplateResponseMixin, FormMixin, ProcessFormView):
     """
     View that handles classifying a target on the TNS.
@@ -329,9 +385,17 @@ class TargetClassifyView(PermissionListMixin, TemplateResponseMixin, FormMixin, 
     form_class = TargetClassifyForm
     template_name = 'tom_targets/targetclassify_form.html'
 
+    #def get_context_data(self, **kwargs):
+     #   context = super().get_context_data(**kwargs)
+      #  context['target'] = Target.objects.get(pk=self.kwargs['pk'])
+       # return context
+    
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['target'] = Target.objects.get(pk=self.kwargs['pk'])
+        # data for the JS that refills the Reporter field when the reporting group changes
+        context['reporter_groups'] = TNS_REPORTER_GROUPS
+        context['user_full_name'] = self.request.user.get_full_name()
         return context
 
     def get_form_kwargs(self):
@@ -343,7 +407,8 @@ class TargetClassifyView(PermissionListMixin, TemplateResponseMixin, FormMixin, 
         target = Target.objects.get(pk=self.kwargs['pk'])
         initial = {
             'name': split_name(target.name)['basename'],
-            'classifier': f'{self.request.user.get_full_name()}',
+        # 'classifier': f'{self.request.user.get_full_name()}',
+          'classifier': build_reporter(self.request.user.get_full_name()),
         }
         classifications = target.targetextra_set.filter(key='Classification')
         if classifications.exists():

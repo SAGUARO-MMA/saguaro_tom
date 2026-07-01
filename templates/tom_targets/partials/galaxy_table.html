@@ -1,5 +1,22 @@
 {% load tom_common_extras target_list_extras %}
 
+
+<a href="{% url 'custom_code:clear-host' pk=target.id %}" id="clear-preferred-host"
+   class="btn btn-sm btn-outline-secondary mb-2"
+   title="Remove the preferred host so the report form host fields stay blank">Clear preferred host</a>
+<script>
+  document.getElementById('clear-preferred-host').addEventListener('click', function (e) {
+    e.preventDefault();
+    var btn = this;
+    fetch(btn.getAttribute('href')).then(function () {
+      btn.style.display = 'none';
+      document.querySelectorAll('input[name="preferred_host"]').forEach(function (r) { r.checked = false; });
+      document.querySelectorAll('tr.table-primary').forEach(function (tr) { tr.classList.remove('table-primary'); });
+    });
+  });
+</script>
+
+
 <table class="galaxies table table-hover">
     <tr>
       <th scope="col">ID</th>
@@ -10,6 +27,7 @@
       <th scope="col">Redshift</th>
       <th scope="col">Mag.  <br/> (AB)</th>
       <th scope="col">Source</th>
+      <th scope="col">User Preferred Host</th>
     </tr>
   {% for galaxy in galaxies %}
     <tr>
@@ -47,6 +65,11 @@
       {% endif %}
       <td><i>{{ galaxy.Filter }}</i>&nbsp;=&nbsp;{{ galaxy.Mags|floatformat:1 }}</td>
       <td>{{ galaxy.Source }}</td>
+      <td>
+        <input type="radio" name="preferred_host"
+               {% if galaxy.is_preferred %}checked{% endif %}
+               onclick="window.location.href='{% url 'custom_code:select-host' pk=target.id index=forloop.counter0 %}';">
+      </td>
     </tr>
   {% empty %}
     <tr><td colspan=9>No host galaxies stored</td></tr>
