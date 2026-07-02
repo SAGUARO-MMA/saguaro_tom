@@ -194,15 +194,43 @@ def vet_or_post_error(
             agn_df = agn_association_2d(target.id)
             ps_matches = point_source_association(target.id)
 
-	# geometric association with nearby Virgo (EVCC) galaxies
-        try:
-            evcc_matches = evcc_galaxy_check(target.id)
-        except Exception as e:
-            logger.error(f"EVCC check failed for {target.name}: {e}")
-            evcc_matches = []
-        if evcc_matches:
-            names = ", ".join(m["name"] for m in evcc_matches)
-            messages.append(f"Within Kron radius of EVCC galaxy: {names}")
+
+            # geometric association with nearby Virgo (EVCC) galaxies.
+            # read prior state BEFORE evcc_galaxy_check overwrites the TargetExtra,
+            # so we only Slack-alert on a newly discovered association, not re-vets.
+            prior = TargetExtra.objects.filter(
+                target_id=target.id, key="EVCC Within Galaxy"
+            ).first()
+            prior_had_match = prior is not None and prior.value not in (None, "None", "")
+
+            try:
+                evcc_matches = evcc_galaxy_check(target.id)
+            except Exception as e:
+                logger.error(f"EVCC check failed for {target.name}: {e}")
+                evcc_matches = []
+
+            if evcc_matches:
+                names = ", ".join(m["name"] for m in evcc_matches)
+                messages.append(f"Within Kron radius of EVCC galaxy: {names}")
+
+                if not prior_had_match:
+                    g = evcc_matches[0]  # closest
+                    target_url = settings.TARGET_LINKS[0][0].format(target=target)
+                    try:
+                        evcc_slack = SlackNotifier(
+                            slack_channel="nearby-galaxy-alerts",
+                            token=settings.SLACK_TOKEN_TNS50,
+                        )
+                        evcc_slack.send_slack_message_from_text(
+                            f":telescope: *{target.name}* is {g['offset_kron']}x Kron from Virgo "
+                            f"galaxy *{g['name']}* (offset {g['offset_arcsec']}\", r={g['rmag']}, "
+                            f"type {g['morphology']}, cz={g['cz_kms']} km/s). "
+                            f"Nearby-galaxy transient — please inspect here. "
+                            f"<{target_url}|SAGUARO>"
+                        )
+                    except Exception as e:
+                        logger.error(f"EVCC Slack alert failed for {target.name}: {e}")
+
 
         if "AsassnQ3C" in ps_matches:
             asassn = ps_matches["AsassnQ3C"][0]
