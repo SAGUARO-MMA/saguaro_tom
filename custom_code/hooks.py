@@ -6,7 +6,9 @@ from candidate_vetting.vet import (
     host_association,
     point_source_association,
     agn_association_2d,
-)
+    evcc_galaxy_check,)
+
+
 from candidate_vetting.public_catalogs.phot_catalogs import TNS_Phot
 from trove_mpc import Transient
 
@@ -191,6 +193,16 @@ def vet_or_post_error(
             host_df = host_association(target.id)
             agn_df = agn_association_2d(target.id)
             ps_matches = point_source_association(target.id)
+
+	# geometric association with nearby Virgo (EVCC) galaxies
+        try:
+            evcc_matches = evcc_galaxy_check(target.id)
+        except Exception as e:
+            logger.error(f"EVCC check failed for {target.name}: {e}")
+            evcc_matches = []
+        if evcc_matches:
+            names = ", ".join(m["name"] for m in evcc_matches)
+            messages.append(f"Within Kron radius of EVCC galaxy: {names}")
 
         if "AsassnQ3C" in ps_matches:
             asassn = ps_matches["AsassnQ3C"][0]
