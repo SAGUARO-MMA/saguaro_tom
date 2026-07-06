@@ -28,14 +28,43 @@ def islist(value):
 @register.inclusion_tag('tom_targets/partials/galaxy_table.html')
 def galaxy_table(target):
     """
-    Displays the most likely host galaxy matches.
+    Displays the most likely host galaxy matches, with a radio button to pick a preferred host.
     """
     te = TargetExtra.objects.filter(target=target, key='Host Galaxies')
     if te.exists():
         galaxies = json.loads(te.first().value)
     else:
         galaxies = None
-    return {'galaxies': galaxies}
+
+    # which galaxy did the user already pick? (matched by ID + Source so it survives re-vetting)
+    preferred = TargetExtra.objects.filter(target=target, key='Preferred Host Galaxy').first()
+    preferred_key = None
+    if preferred is not None:
+        pref = json.loads(preferred.value)
+        preferred_key = (pref.get('ID'), pref.get('Source'))
+
+    if galaxies:
+        for galaxy in galaxies:
+            galaxy['is_preferred'] = (galaxy.get('ID'), galaxy.get('Source')) == preferred_key
+    any_preferred = bool(galaxies) and any(g.get('is_preferred') for g in galaxies)
+    return {'galaxies': galaxies, 'target': target, 'any_preferred': any_preferred}
+    #return {'galaxies': galaxies, 'target': target}
+
+
+
+
+
+#@register.inclusion_tag('tom_targets/partials/galaxy_table.html')
+#def galaxy_table(target):
+ #   """
+  #  Displays the most likely host galaxy matches.
+   # """
+    #te = TargetExtra.objects.filter(target=target, key='Host Galaxies')
+    #if te.exists():
+     #   galaxies = json.loads(te.first().value)
+    #else:
+     #   galaxies = None
+    #return {'galaxies': galaxies}
 
 
 FIELDS = SurveyField.objects.order_by('name')

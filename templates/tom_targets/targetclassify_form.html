@@ -11,4 +11,55 @@
         </form>
     </div>
 </div>
+{{ reporter_groups|json_script:"reporter-groups-data" }}
+{{ user_full_name|json_script:"reporter-user-name" }}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var groups = JSON.parse(document.getElementById('reporter-groups-data').textContent);
+    var userName = JSON.parse(document.getElementById('reporter-user-name').textContent);
+    var groupField = document.getElementById('id_group');
+    var reporterField = document.getElementById('id_classifier');
+    if (!groupField || !reporterField) { return; }
+    groupField.addEventListener('change', function () {
+      var members = (groups[this.value] || []).slice();
+      var userEntry = userName || '';
+      if (userName) {
+        for (var i = 0; i < members.length; i++) {
+          var m = members[i];
+          if (m === userName || m.indexOf(userName + ' (') === 0) {
+            userEntry = m;
+            members.splice(i, 1);
+            break;
+          }
+        }
+      }
+      var names = [];
+      if (userEntry) { names.push(userEntry); }
+      names = names.concat(members);
+      reporterField.value = names.join(', ');
+    });
+  });
+</script>
+<style>
+  label[for="id_classifier"]     { color: red; font-weight: bold; }
+  label[for="id_group"]          { color: red; font-weight: bold; }
+label[for="id_name"]          { color: red; font-weight: bold; }  
+label[for="id_group"]          { color: red; font-weight: bold; }
+label[for="id_classification"] { color: red; font-weight: bold; }
+label[for="id_redshift"]       { color: red; font-weight: bold; }
+label[for="id_classification_remarks"]          { color: red; font-weight: bold; }
+label[for="id_observation_date"]          { color: red; font-weight: bold; }
+label[for="id_observer"]          { color: red; font-weight: bold; }
+label[for="id_reducer"]          { color: red; font-weight: bold; }
+label[for="id_instrument"]          { color: red; font-weight: bold; }
+label[for="id_exposure_time"]          { color: red; font-weight: bold; }
+label[for="id_spectrum_type"]          { color: red; font-weight: bold; }
+label[for="id_ascii_file"]          { color: red; font-weight: bold; }
+label[for="id_fits_file"]          { color: red; font-weight: bold; }
+label[for="id_spectrum_remarks"]          { color: red; font-weight: bold; }
+</style>
+
+
+
+
 {% endblock %}

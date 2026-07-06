@@ -191,6 +191,120 @@ TNS_GROUP_CHOICES.insert(0, (0, "None"))
 TNS_DATA_SOURCE_GROUP_CHOICES.sort(key=lambda x: x[1])
 TNS_DATA_SOURCE_GROUP_CHOICES.insert(0, (0, "None"))
 
+TNS_REPORTER_GROUPS = {
+    0: [],    # None
+    30: [],   # DLT40
+    38: [],   # Global SN Project
+    52: [     # AZTEC
+        "Brian Hsu (U. Arizona)",
+        "Noah Franz (U. Arizona)",
+        "Jeniveve Pearson (U. Arizona)",
+        "Bhagya Subrayan (U. Arizona)",
+        "Conor Ransome (U. Arizona)",
+        "Neev Shah (U. Arizona)",
+        "David Sand (U. Arizona)",
+        "Nathan Smith (U. Arizona)",
+        "Kate D. Alexander (U. Arizona)",
+        "on behalf of AZTEC",
+    ],
+    66: [     # SAGUARO
+        "Griffin Hosseinzadeh (UCSD)",
+        "Noah Franz (UofA)",
+        "David J. Sand (UofA)",
+        "Wen-fai Fong (NU)",
+        "Charles D. Kilpatrick (NU)",
+        "Bhagya Subrayan (UofA)",
+        "Conor Ransome (UofA)",
+        "Phillip Noel (UofA)",
+        "Manisha Shrestha (Monash)",
+        "Sergiy Vasylyev (UCSD)",
+        "Jennifer E. Andrews (NOIRLab)",
+        "on behalf of SAGUARO collaboration",
+    ],
+    176: [
+         "Griffin Hosseinzadeh (UCSD)",
+         "Nicholas Veira (NU)",
+         "Noah Franz (UofA)",
+         "Charles D. Kilpatrick (NU)",
+         "Bhagya Subrayan (UofA)",
+         "David J. Sand (UofA)",
+         "Wen-fai Fong (NU)",
+         "Phillip Noel (UofA)",
+         "Conor Ransome (UofA)",
+         "Manisha Shrestha (Monash)",
+         "Sergiy Vasylyev (UCSD)",
+         "Jennifer E. Andrews (NOIRLab)",
+         "on behalf of TROVE collaboration",],  # TROVE
+    177: [
+         "Griffin Hosseinzadeh (UCSD)",
+         "Brian Hsu (U. Arizona)",
+         "Sergiy Vasylyev (UCSD)",
+         "Aravind P. Ravi (UCDavis)",
+         "Jennifer E. Andrews (NOIRLab)",
+         "Bhagya Subrayan (UofA)",
+         "Conor Ransome (UofA)",
+         "Azalee Bostroem (UofA)",
+         "Manisha Shrestha (Monash)",
+         "Raphael Baer-Way (UV)",
+         "Jeniveve Pearson (UofA)",
+         "Jozsef Vinko (Szeged)",
+         "David J. Sand (UofA)", 
+         "Maryam Modjaz (UV)",
+         "Saurabh Jha (Rutgers)",
+         "on behalf of PASSTA collaboration"
+         ],  # PASSTA
+    178: [ 
+        "Conor Ransome (UofA)",
+        "Bhagya Subrayan (UofA)",
+        "David Sand (UofA)",
+        "Azalee Bostroem (UofA)",
+        "Jeniveve Pearson (UofA)",
+        "Brian Hsu (UofA)",
+        "Noah Franz (UofA)",
+        "Phillip Noel (UofA)",
+        "Griffin Hosseinzadeh (UCSD)",
+        "Jennifer Andrews (NOIRLab)",
+        "Manisha Shrestha (Monash)",
+        "Samuel Wyatt (Goddard)",
+        "Xander Hall (CMU)",
+        "Lei Hu (CMU)",
+        "Tomás Cabrera (CMU)",
+        "Antonella Palmese (CMU)",
+        "Frank Valdes (NOIRLab)",
+        "Kathy Vivas (NOIRLab)",
+        "Monika Soraisam (NOIRLab)",
+        "on behalf of Shadow collaboration",
+    ],#Shadow
+}
+def build_reporter(user_full_name, group_id=0):
+    """
+    Build the 'Reporter' field value. The logged-in user is listed first; if they also appear
+    in the chosen group's list, their full entry (with affiliation) is used instead of the bare
+    name, and they are not listed twice.
+    """
+    try:
+        members = list(TNS_REPORTER_GROUPS.get(int(group_id), []))
+    except (TypeError, ValueError):
+        members = []
+
+    user_entry = user_full_name or ''
+    if user_full_name:
+        for member in members:
+            # a list entry like "Jane Doe (University of Arizona)" starts with the person's full name
+            if member == user_full_name or member.startswith(user_full_name + ' ('):
+                user_entry = member
+                members.remove(member)
+                break
+
+    names = []
+    if user_entry:
+        names.append(user_entry)
+    names += members
+    return ', '.join(names)
+
+
+
+
 TNS_UNIT_CHOICES = [
     (0, "Other"),
     (1, "ABMag"),
@@ -424,7 +538,8 @@ class TargetClassifyForm(forms.Form):
     classification = forms.ChoiceField(choices=TNS_CLASSIFICATION_CHOICES, initial=(1, "SN"))
     redshift = forms.FloatField(required=False)
     group = forms.ChoiceField(choices=TNS_GROUP_CHOICES)
-    classification_remarks = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 1}))
+    classification_remarks = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 1}),
+initial="We report the classification of SN XXXX as a young SN XXX based on optical spectra obtained on XXXX using the XXXX spectrograph on the XXXX telescope from XXXX prgram (PID: XXXX). This target was classified using GELATO (Harutyunyan et al. 2008)/SNID-SAGE (Stoppa et al. 2026) and provided a best match to SN XXXX and SN XXXX at z=XXXX. We encourage follow-up spectroscopy.")
     observation_date = forms.DateTimeField()
     instrument = forms.ChoiceField(choices=TNS_INSTRUMENT_CHOICES)
     exposure_time = forms.FloatField(required=False)

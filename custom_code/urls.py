@@ -6,6 +6,9 @@ from .views import ObservationCreateView, TargetNameSearchView, TargetListView
 from .views import CSSFieldListView, GWListView, GRBListView, NeutrinoListView, UnknownListView
 from .views import CSSFieldExportView, CSSFieldSubmitView, EventCandidateCreateView
 from tom_nonlocalizedevents.views import SupereventIdView
+from .views import SelectHostGalaxyView, ClearHostGalaxyView
+
+
 
 # NEW: Import DECam thumbnail view
 from .decam_views import DecamCandidateView, DecamCandidateListView
@@ -22,6 +25,8 @@ urlpatterns = [
     path('candidates/', CandidateListView.as_view(), name='candidates'),
     path('targets/<int:pk>/report/', TargetReportView.as_view(), name='report'),
     path('targets/<int:pk>/classify/', TargetClassifyView.as_view(), name='classify'),
+    path('targets/<int:pk>/select-host/<int:index>/', SelectHostGalaxyView.as_view(), name='select-host'),
+    path('targets/<int:pk>/clear-host/', ClearHostGalaxyView.as_view(), name='clear-host'),
     path('targets/<int:pk>/vet/', TargetVettingView.as_view(), name='vet'),
     path('targets/<int:pk>/mpc/', TargetMPCView.as_view(), name='mpc'),
     path('targets/search/', TargetNameSearchView.as_view(), name='search'),

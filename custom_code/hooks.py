@@ -6,7 +6,9 @@ from candidate_vetting.vet import (
     host_association,
     point_source_association,
     agn_association_2d,
-)
+    evcc_galaxy_check,)
+
+
 from candidate_vetting.public_catalogs.phot_catalogs import TNS_Phot
 from trove_mpc import Transient
 
@@ -191,6 +193,40 @@ def vet_or_post_error(
             host_df = host_association(target.id)
             agn_df = agn_association_2d(target.id)
             ps_matches = point_source_association(target.id)
+
+            # geometric association with nearby Virgo (EVCC) galaxies.
+            prior = TargetExtra.objects.filter(
+                target_id=target.id, key="EVCC Within Galaxy"
+            ).first()
+            prior_had_match = prior is not None and prior.value not in (None, "None", "")
+
+            try:
+                evcc_matches = json.loads(evcc_galaxy_check(target.id))
+            except Exception as e:
+                logger.error(f"EVCC check failed for {target.name}: {e}")
+                evcc_matches = []
+
+            if evcc_matches:
+                names = ", ".join(m["ID"] for m in evcc_matches)
+                messages.append(f"Within Kron radius of EVCC galaxy: {names}")
+
+                if not prior_had_match:
+                    g = evcc_matches[0]  # closest
+                    try:
+                        target_url = settings.TARGET_LINKS[0][0].format(target=target)
+                        evcc_slack = SlackNotifier(
+                            slack_channel="nearby-galaxy-alerts",
+                            token=settings.SLACK_TOKEN_TNS50,
+                        )
+                        evcc_slack.send_slack_message_from_text(
+                            f":telescope: *{target.name}* is {g['OffsetKron']}x Kron from Virgo "
+                            f"galaxy *{g['ID']}* (offset {g['Offset']}\", r={g['rMag']}, "
+                            f"type {g['Type']}, cz={g['cz']} km/s). "
+                            f"Nearby-galaxy transient — please inspect. "
+                            f"<{target_url}|SAGUARO>"
+                        )
+                    except Exception as e:
+                        logger.error(f"EVCC Slack alert failed for {target.name}: {e}")
 
         if "AsassnQ3C" in ps_matches:
             asassn = ps_matches["AsassnQ3C"][0]
