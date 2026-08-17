@@ -11,4 +11,65 @@
         </form>
     </div>
 </div>
+{{ reporter_groups|json_script:"reporter-groups-data" }}
+{{ user_full_name|json_script:"reporter-user-name" }}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var groups = JSON.parse(document.getElementById('reporter-groups-data').textContent);
+    var userName = JSON.parse(document.getElementById('reporter-user-name').textContent);
+    var groupField = document.getElementById('id_reporting_group');
+    var reporterField = document.getElementById('id_reporter');
+    if (!groupField || !reporterField) { return; }
+    groupField.addEventListener('change', function () {
+      var members = (groups[this.value] || []).slice();
+      var userEntry = userName || '';
+      if (userName) {
+        for (var i = 0; i < members.length; i++) {
+          var m = members[i];
+          if (m === userName || m.indexOf(userName + ' (') === 0) {
+            userEntry = m;
+            members.splice(i, 1);
+            break;
+          }
+        }
+      }
+      var names = [];
+      if (userEntry) { names.push(userEntry); }
+      names = names.concat(members);
+      reporterField.value = names.join(', ');
+    });
+  });
+</script>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var reportingGroup = document.getElementById('id_reporting_group');
+    var dataSourceGroup = document.getElementById('id_data_source_group');
+    if (!reportingGroup || !dataSourceGroup) { return; }
+    reportingGroup.addEventListener('change', function () {
+      var val = this.value;
+      if (val === '0') { return; }   // "None" picked -> leave data source alone
+      var exists = Array.from(dataSourceGroup.options).some(function (o) { return o.value === val; });
+      if (exists) { dataSourceGroup.value = val; }   // match it (you can still change it manually)
+    });
+  });
+</script>
+
+
+<style>
+  label[for="id_reporter"]        { color: red; font-weight: bold; }
+  label[for="id_reporting_group"] { color: red; font-weight: bold; }
+  label[for="id_ra"]         { color: red; font-weight: bold; }
+  label[for="id_dec"]       { color: red; font-weight: bold; }
+  label[for="id_discovery_date"]   { color: red; font-weight: bold; }
+label[for="id_at_type"]   { color: red; font-weight: bold; }
+label[for="id_observation_date"]   { color: red; font-weight: bold; }
+label[for="id_instrument"]   { color: red; font-weight: bold; }
+label[for="id_flux"]   { color: red; font-weight: bold; }
+label[for="id_flux_error"]   { color: red; font-weight: bold; }
+label[for="id_flux_units"]   { color: red; font-weight: bold; }
+label[for="id_filter"]   { color: red; font-weight: bold; }
+label[for="id_data_source_group"]   { color: red; font-weight: bold; }
+</style>
+
 {% endblock %}

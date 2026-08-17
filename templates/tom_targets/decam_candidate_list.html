@@ -199,21 +199,21 @@
             </td>
             <td>
               {% if candidate.thumb_template %}
-                <img src="{{ candidate|decam_thumbnail_url:'science' }}" height="150" title="Science">
+                <img src="{{ candidate|decam_thumbnail_url:'science' }}?orient={{ orient }}" height="150" title="Science">
               {% else %}
                 <span class="text-muted">—</span>
               {% endif %}
             </td>
             <td>
               {% if candidate.thumb_science %}
-                <img src="{{ candidate|decam_thumbnail_url:'template' }}" height="150" title="Template">
+                <img src="{{ candidate|decam_thumbnail_url:'template' }}?orient={{ orient }}" height="150" title="Template">
               {% else %}
                 <span class="text-muted">—</span>
               {% endif %}
             </td>
             <td>
               {% if candidate.thumb_difference %}
-                <img src="{{ candidate|decam_thumbnail_url:'difference' }}" height="150" title="Difference">
+                <img src="{{ candidate|decam_thumbnail_url:'difference' }}?orient={{ orient }}" height="150" title="Difference">
               {% else %}
                 <span class="text-muted">—</span>
               {% endif %}

@@ -14,7 +14,8 @@ from django.db.models import Count
 from django.db.models.functions import Floor
 from .filters import CandidateFilter
 from .models import DecamCandidate
-
+from PIL import Image
+from io import BytesIO
 
 class DecamCandidateView(View):
     """
@@ -67,6 +68,11 @@ class DecamCandidateView(View):
         if not image_data:
             raise Http404(f"No {thumb_type} thumbnail available")
         
+
+        # Test orientation with ?orient=none/flipv/fliph/flipboth/rot90/rot180/rot270
+        orient_mode = request.GET.get('orient', 'rot180')
+        image_data = self.orient_thumbnail(image_data, orient_mode)
+
         # Return the image
         response = HttpResponse(image_data, content_type='image/png')
         response['Content-Disposition'] = f'inline; filename="decam_{candidate_id}_{thumb_type}.png"'
@@ -76,6 +82,35 @@ class DecamCandidateView(View):
         
         return response
 
+
+    def orient_thumbnail(self, png_bytes, mode='none'):
+        """Rotate/flip thumbnail. Modes: none, flipv, fliph, flipboth, rot90, rot180, rot270"""
+        if mode == 'none':
+            return png_bytes
+        
+        try:
+            img = Image.open(BytesIO(png_bytes))
+            
+            if mode == 'flipv':
+                img = img.transpose(Image.FLIP_TOP_BOTTOM)
+            elif mode == 'fliph':
+                img = img.transpose(Image.FLIP_LEFT_RIGHT)
+            elif mode == 'flipboth':
+                img = img.transpose(Image.FLIP_TOP_BOTTOM)
+                img = img.transpose(Image.FLIP_LEFT_RIGHT)
+            elif mode == 'rot90':
+                img = img.rotate(90, expand=True)
+            elif mode == 'rot180':
+                img = img.rotate(180)
+            elif mode == 'rot270':
+                img = img.rotate(270, expand=True)
+            
+            buffer = BytesIO()
+            img.save(buffer, format='PNG')
+            return buffer.getvalue()
+            
+        except Exception:
+            return png_bytes
 
 class DecamCandidateListView(ListView):
     """
@@ -161,9 +196,9 @@ class DecamCandidateListView(ListView):
         # NULLs will be at the end
         from django.db.models import F
         return queryset.order_by(
- 	    'target_id',
-	     F('cnnscore').desc(nulls_last=True),
-	     F('snr_fphot').desc(nulls_last=True),
+             'target_id',
+             F('cnnscore').desc(nulls_last=True),
+             F('snr_fphot').desc(nulls_last=True),
             'filter_name'      # g, i, r, z within each target
         )
     
@@ -204,9 +239,10 @@ class DecamCandidateListView(ListView):
         context['snr_min'] = self.request.GET.get('snr_min', '')
         context['not_in_gaia'] = self.request.GET.get('not_in_gaia', 'false')
         context['has_host'] = self.request.GET.get('has_host', 'false')
+        context['orient'] = self.request.GET.get('orient', 'rot180')        
         
         # Stats
         context['total_candidates'] = all_candidates.count()
         context['filtered_count'] = self.get_queryset().count()
-        
+
         return context

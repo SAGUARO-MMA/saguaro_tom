@@ -27,7 +27,6 @@ CREDIBLE_REGION_PROBABILITIES = sorted(json.loads(settings.CREDIBLE_REGION_PROBA
 
 Base = declarative_base()
 
-
 class SaSurveyField(Base):
     __tablename__ = 'tom_surveys_surveyfield'
     name = sa.Column(sa.String, primary_key=True)

@@ -15,6 +15,8 @@ from .settings_local import *
 import os
 import tempfile
 from tom_common.default_settings import *
+from astropy.cosmology import FlatLambdaCDM
+from astropy import units as _u
 
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
@@ -32,6 +34,7 @@ ALLOWED_HOSTS = [ALLOWED_HOST, 'localhost', '127.0.0.1']
 TOM_NAME = 'SAGUARO'
 
 INSTALLED_APPS = TOMTOOKIT_INSTALLED_APPS + [
+    'candidate_vetting',
     'custom_code',
     'tom_alertstreams',
     'tom_antares',
@@ -87,9 +90,18 @@ DATABASES = {
         'USER': os.getenv('POSTGRES_USER', POSTGRES_USER),
         'PASSWORD': os.getenv('POSTGRES_PASSWORD', POSTGRES_PASSWORD),
         'HOST': os.getenv('POSTGRES_HOST', POSTGRES_HOST),
-        'PORT': os.getenv('POSTGRES_PORT', int(POSTGRES_PORT)),
+        'PORT': os.getenv('POSTGRES_PORT', POSTGRES_PORT),
+    },
+    'catalogs': {
+        'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        'NAME': os.getenv('POSTGRES_DB2', POSTGRES_DB2),
+        'USER': os.getenv('POSTGRES_USER2', POSTGRES_USER2),
+        'PASSWORD': os.getenv('POSTGRES_PASSWORD2', POSTGRES_PASSWORD2),
+        'HOST': os.getenv('POSTGRES_HOST2', POSTGRES_HOST2),
+        'PORT': os.getenv('POSTGRES_PORT2', POSTGRES_PORT2),
     }
 }
+DATABASE_ROUTERS = ['candidate_vetting.routers.CatalogRouter']
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -146,6 +158,16 @@ MEDIA_URL = FORCE_SCRIPT_NAME + '/data/'
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+    "formatters": {
+        "verbose": {
+            "format": "{levelname} {asctime} {module} {process:d} {thread:d} {message}",
+            "style": "{",
+        },
+        "simple": {
+            "format": "{levelname} {message}",
+            "style": "{",
+        },
+    },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
@@ -378,9 +400,8 @@ ALERT_STREAMS = [
             'API_SECRET': ANTARES_API_SECRET,
             'GROUP': ANTARES_GROUP_ID,
             'TOPIC_HANDLERS': {
-                'in_shadow_virgo': 'custom_code.alertstream_handlers.handle_antares_stream_async',
-                #'in_lsst_ddf': 'custom_code.alertstream_handlers.handle_antares_stream_async',
-                #'extragalactic_staging': 'custom_code.alertstream_handlers.handle_antares_stream_async',
+                'in_decam_shadow': 'custom_code.alertstream_handlers.handle_antares_stream_async',
+                'in_passta_nearby_transients': 'custom_code.alertstream_handlers.handle_antares_stream_async',
             }
         },
     }
@@ -411,3 +432,15 @@ TOM_REGISTRATION = {
 EMAIL_SUBJECT_PREFIX = ''
 EMAIL_USE_TLS = True
 SERVER_EMAIL = f'Salsa Saguaro <{EMAIL_HOST_USER}>'
+
+
+COSMO = FlatLambdaCDM(
+    H0 = 69.6 * _u.km / _u.s / _u.Mpc,
+    Tcmb0 = 2.725 * _u.K,
+    Om0 = 0.3
+)
+
+# set some priority level variables for queue prioritization
+PRIORITY_HIGH = 100
+PRIORITY_MID = 10
+PRIORITY_LOW = 0
