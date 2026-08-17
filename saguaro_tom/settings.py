@@ -129,13 +129,9 @@ TIME_ZONE = 'UTC'
 
 USE_I18N = True
 
-USE_L10N = False
-
 USE_TZ = True
 
-DATETIME_FORMAT = 'Y-m-d H:i:s'
-DATE_FORMAT = 'Y-m-d'
-
+FORMAT_MODULE_PATH = 'saguaro_tom.formats'
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/2.1/howto/static-files/
