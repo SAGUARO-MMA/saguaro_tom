@@ -90,37 +90,9 @@ class ClippedStackedAtlasProcessor(AtlasProcessor):
         :returns: python list containing the photometric data from the DataProduct
         :rtype: list
         """
-        photometry = []
-        signal_to_noise_cutoff = 3.0  # cutoff to turn magnitudes into non-detection limits
-
         with open(data_product.data.path) as f:
             filecontent = f.read()
-
-        data = ATLAS_Forced_Phot(name="ATLAS FP")._ATLAS_stack(filecontent)
-        if len(data) < 1:
-            raise InvalidFileFormatException('Empty table or invalid file type')
-
-        try:
-            for datum in data:
-                time = Time(datum['mjd'], format='mjd')
-                utc = TimezoneInfo(utc_offset=0*units.hour)
-                time.format = 'datetime'
-                value = {
-                    'timestamp': time.to_datetime(timezone=utc),
-                    'filter': str(datum['F']),
-                    'telescope': 'ATLAS',
-                }
-                # If the signal is in the noise, calculate the non-detection limit from the reported flux uncertainty.
-                # see https://fallingstar-data.com/forcedphot/resultdesc/
-                signal_to_noise = datum['uJy'] / datum['duJy']
-                if signal_to_noise <= signal_to_noise_cutoff:
-                    value['limit'] = 23.9 - 2.5 * np.log10(signal_to_noise_cutoff * datum['duJy'])
-                else:
-                    value['magnitude'] = 23.9 - 2.5 * np.log10(datum['uJy'])
-                    value['error'] = 2.5 / np.log(10.) / signal_to_noise
-
-                photometry.append(value)
-        except Exception as e:
-            raise InvalidFileFormatException(e)
-
+        atlas_fp = ATLAS_Forced_Phot(name="ATLAS FP")
+        data = atlas_fp._ATLAS_stack(filecontent)
+        photometry = atlas_fp._to_magnitudes(data)
         return photometry
