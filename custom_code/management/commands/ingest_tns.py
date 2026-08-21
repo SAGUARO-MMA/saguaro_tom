@@ -219,8 +219,8 @@ class Command(BaseCommand):
             target_ids = []
             for targets in [new_targets, updated_targets, updated_targets_coords]:
                 for target in targets:
-                    first_det = target.reduceddatum_set.filter(data_type='photometry', value__magnitude__isnull=False
-                                                               ).order_by('timestamp').first()
+                    first_det = target.photometryreduceddatum_set.filter(brightness__isnull=False
+                                                                         ).order_by('timestamp').first()
                     if first_det and nle_time < first_det.timestamp < nle_time + timedelta(days=lookback_days_obs):
                         target_ids.append(target.id)
             candidates = create_candidates_from_targets(seq, target_ids=target_ids)

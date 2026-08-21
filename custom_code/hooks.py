@@ -1,6 +1,5 @@
 import logging
 import warnings
-from requests import Response
 
 from candidate_vetting.vet import (
     host_association,
@@ -13,14 +12,13 @@ from candidate_vetting.public_catalogs.phot_catalogs import TNS_Phot
 from trove_mpc import Transient
 
 from tom_targets.models import TargetExtra, TargetName
-from tom_dataproducts.models import ReducedDatum
+from tom_dataproducts.models import PhotometryReducedDatum
 from tom_dataproducts.tasks import atlas_query
 from tom_antares.antares import AntaresDataService
 from .templatetags.target_extras import split_name
 import json
 import numpy as np
-from astropy.cosmology import FlatLambdaCDM
-from astropy.time import Time, TimezoneInfo
+from astropy.time import Time
 from astropy.coordinates import SkyCoord
 from astroquery.ipac.irsa.irsa_dust import IrsaDust
 from healpix_alchemy.constants import HPX
@@ -32,40 +30,6 @@ logger = logging.getLogger(__name__)
 # new_format = logging.Formatter('[%(asctime)s] %(levelname)s : s%(message)s')
 # for handler in logger.handlers:
 #    handler.setFormatter(new_format)
-
-
-def process_reduced_ztf_data(target, candidates):
-    """Ingest data from the ZTF JSON format into ``ReducedDatum`` objects. Mostly copied from tom_base v2.13.0."""
-    for candidate in candidates:
-        if all(
-            [
-                key in candidate["candidate"]
-                for key in ["jd", "magpsf", "fid", "sigmapsf"]
-            ]
-        ):
-            nondetection = False
-        elif all(key in candidate["candidate"] for key in ["jd", "diffmaglim", "fid"]):
-            nondetection = True
-        else:
-            continue
-        jd = Time(candidate["candidate"]["jd"], format="jd", scale="utc")
-        jd.to_datetime(timezone=TimezoneInfo())
-        value = {"filter": {1: "g", 2: "r", 3: "i"}[candidate["candidate"]["fid"]]}
-        if nondetection:
-            value["limit"] = candidate["candidate"]["diffmaglim"]
-        else:
-            value["magnitude"] = candidate["candidate"]["magpsf"]
-            value["error"] = candidate["candidate"]["sigmapsf"]
-        rd, created = ReducedDatum.objects.get_or_create(
-            timestamp=jd.to_datetime(timezone=TimezoneInfo()),
-            value=value,
-            source_name="ZTF (SASSy)",
-            data_type="photometry",
-            target=target,
-        )
-        if created:  # do this afterward, in case there are duplicate candidates with distinct ZIDs
-            rd.source_location = candidate["zid"]
-            rd.save()
 
 
 def update_or_create_target_extra(target, key, value):
@@ -81,7 +45,7 @@ def update_or_create_target_extra(target, key, value):
 @task(queue_name="mpc", priority=settings.PRIORITY_MID)
 def target_run_mpc(latest_det_id, _verbose=False):
     """check if a given photometric detection is a minor planet"""
-    latest_det = ReducedDatum.objects.get(id=latest_det_id)
+    latest_det = PhotometryReducedDatum.objects.get(id=latest_det_id)
 
     date = Time(latest_det.timestamp).mjd
     t = Transient(latest_det.target.ra, latest_det.target.dec)
@@ -287,9 +251,7 @@ def vet_or_post_error(
 
         try:
             if run_mpc:
-                detections = target.reduceddatum_set.filter(
-                    data_type="photometry", value__magnitude__isnull=False
-                )
+                detections = target.photometryreduceddatum_set.filter(brightness__isnull=False)
                 if detections.exists():
                     target_run_mpc.enqueue(detections.latest().id)
             if run_atlas:
@@ -331,9 +293,7 @@ def vet_or_post_error(
 
 
 def _get_last_atlas_point_date(target):
-    atlas_data = target.reduceddatum_set.filter(
-        data_type="photometry", source_name="ATLAS"
-    )
+    atlas_data = target.photometryreduceddatum_set.filter(source_name="ATLAS")
 
     if atlas_data.count():
         last_atlas_point = atlas_data.order_by("timestamp").last()

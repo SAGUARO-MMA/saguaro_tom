@@ -330,9 +330,9 @@ EXTRA_FIELDS = [
 AUTH_STRATEGY = 'READ_ONLY'
 
 # Row-level data permissions restrict users from viewing certain objects unless they are a member of the group to which
-# the object belongs. Setting this value to True will allow all `ObservationRecord`, `DataProduct`, and `ReducedDatum`
+# the object belongs. Setting this value to True will allow all `ObservationRecord`, `DataProduct`, and `*ReducedDatum`
 # objects to be seen by everyone. Setting it to False will allow users to specify which groups can access
-# `ObservationRecord`, `DataProduct`, and `ReducedDatum` objects.
+# `ObservationRecord`, `DataProduct`, and `*ReducedDatum` objects.
 TARGET_PERMISSIONS_ONLY = True
 
 # URLs that should be allowed access even with AUTH_STRATEGY = LOCKED
