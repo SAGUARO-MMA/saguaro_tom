@@ -7,12 +7,12 @@ from django.db.models import Count
 from django.urls import reverse_lazy
 from django.http import HttpResponseRedirect, StreamingHttpResponse
 from django.views.generic.base import RedirectView
-from django.views.generic.edit import CreateView, TemplateResponseMixin, FormMixin, ProcessFormView, UpdateView
+from django.views.generic.edit import TemplateResponseMixin, FormMixin, ProcessFormView
 from django_filters.views import FilterView
 from django.shortcuts import redirect
 from guardian.mixins import PermissionListMixin
 
-from tom_targets.models import Target, TargetList
+from tom_targets.models import Target
 from tom_targets.permissions import targets_for_user
 from tom_dataproducts.models import PhotometryReducedDatum
 from tom_targets.views import TargetNameSearchView as OldTargetNameSearchView, TargetListView as OldTargetListView
@@ -22,7 +22,7 @@ from tom_surveys.models import SurveyObservationRecord
 from tom_treasuremap.reporting import report_to_treasure_map
 from .models import Candidate, SurveyFieldCredibleRegion
 from .filters import CandidateFilter, CSSFieldCredibleRegionFilter, NonLocalizedEventFilter
-from .forms import TargetListExtraFormset, TargetReportForm, TargetClassifyForm
+from .forms import TargetReportForm, TargetClassifyForm
 from .forms import NonLocalizedEventFormHelper, CandidateFormHelper
 from .forms import TNS_FILTER_CHOICES, TNS_INSTRUMENT_CHOICES, TNS_CLASSIFICATION_CHOICES
 from .forms import TNS_GROUP_CHOICES, TNS_DATA_SOURCE_GROUP_CHOICES
@@ -113,50 +113,6 @@ def guess_tns_instrument_id(reduced_datum):
     else:
         iid = TNS_INSTRUMENT_IDS.get(reduced_datum.value['telescope'])
     return iid
-
-
-class TargetGroupingCreateView(LoginRequiredMixin, CreateView):
-    """
-    View that handles the creation of ``TargetList`` objects, also known as target groups. Requires authentication.
-    """
-    model = TargetList
-    fields = ['name']
-    success_url = reverse_lazy('targets:targetgrouping')
-    template_name = 'tom_targets/targetlist_form.html'
-
-    def form_valid(self, form):
-        """
-        Runs after form validation. Creates the ``TargetList``, and creates any ``TargetListExtra`` objects,
-        then redirects to the success URL.
-
-        :param form: Form data for target creation
-        :type form: subclass of TargetCreateForm
-        """
-        super().form_valid(form)
-        extra = TargetListExtraFormset(self.request.POST)
-        if extra.is_valid():
-            extra.instance = self.object
-            extra.save()
-        else:
-            form.add_error(None, extra.errors)
-            form.add_error(None, extra.non_form_errors())
-            return super().form_invalid(form)
-        return redirect(self.get_success_url())
-
-    def get_context_data(self, **kwargs):
-        """
-        Inserts certain form data into the context dict.
-
-        :returns: Dictionary with the following keys:
-
-                  `type_choices`: ``tuple``: Tuple of 2-tuples of strings containing available target types in the TOM
-
-                  `extra_form`: ``FormSet``: Django formset with fields for arbitrary key/value pairs
-        :rtype: dict
-        """
-        context = super(TargetGroupingCreateView, self).get_context_data(**kwargs)
-        context['extra_form'] = TargetListExtraFormset()
-        return context
 
 
 class CandidateListView(FilterView):

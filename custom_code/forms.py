@@ -1,20 +1,14 @@
 from django import forms
-from django.forms import inlineformset_factory
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Layout, Row, Column, Submit, HTML
 from crispy_forms.bootstrap import AppendedText, PrependedAppendedText
-from tom_targets.models import TargetList
 from tom_dataproducts.models import SpectroscopyReducedDatum
-from .models import TargetListExtra
 from datetime import datetime, timezone
 from io import StringIO
 import numpy as np
 import json
 import os
 
-
-TargetListExtraFormset = inlineformset_factory(TargetList, TargetListExtra, fields=('key', 'value'),
-                                               widgets={'value': forms.TextInput()})
 
 TNS_FILTER_CHOICES = [
     ('', ''),
