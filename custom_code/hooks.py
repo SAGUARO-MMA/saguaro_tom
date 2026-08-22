@@ -25,11 +25,41 @@ from healpix_alchemy.constants import HPX
 from django.conf import settings
 from django_tasks import task
 import traceback
+import re
 
 logger = logging.getLogger(__name__)
 # new_format = logging.Formatter('[%(asctime)s] %(levelname)s : s%(message)s')
 # for handler in logger.handlers:
 #    handler.setFormatter(new_format)
+
+
+EVCC_DISTANCE_MPC = 18.0
+EVCC_DISTANCE_MODULUS = 5.0 * np.log10(EVCC_DISTANCE_MPC * 1e6) - 5.0   # 31.28
+
+
+def _evcc_detection_info(target):
+    """From the target's latest detection: apparent mag, absolute mag (@18 Mpc),
+    cleaned source/stream name, and filter. Any field is None if unavailable."""
+    det = target.reduceddatum_set.filter(
+        data_type="photometry", value__magnitude__isnull=False
+    ).order_by("timestamp").last()
+    if det is None:
+        return {"app_mag": None, "abs_mag": None, "source": None, "filt": None}
+
+    app_mag = det.value.get("magnitude")
+    abs_mag = None if app_mag is None else app_mag - EVCC_DISTANCE_MODULUS
+
+    # clean source_name the same way the target page does (views.py:75)
+    source = None
+    if det.source_name:
+        source = re.sub(r' \(.*\)', '', re.sub(r'[-_ ].*', '', det.source_name))
+
+    return {
+        "app_mag": app_mag,
+        "abs_mag": abs_mag,
+        "source":  source,
+        "filt":    det.value.get("filter"),
+    }
 
 
 def update_or_create_target_extra(target, key, value):
@@ -169,6 +199,18 @@ def vet_or_post_error(
                 messages.append(f"Within Kron radius of EVCC galaxy: {names}")
 
                 g = evcc_matches[0]  # closest
+                info = _evcc_detection_info(target)
+
+
+                if info["app_mag"] is not None:
+                    det_bits = f"m={info['app_mag']:.1f}, M≈{info['abs_mag']:.1f} (at 18 Mpc)"
+                    if info["filt"]:
+                        det_bits += f" in filter - {info['filt']}"
+                    if info["source"]:
+                        det_bits += f" from *{info['source']}*"
+                else:
+                    det_bits = "no apparent mag available"
+
                 try:
                     target_url = settings.TARGET_LINKS[0][0].format(target=target)
                     evcc_slack = SlackNotifier(
@@ -176,11 +218,9 @@ def vet_or_post_error(
                         token=settings.SLACK_TOKEN_TNS50,
                     )
                     evcc_slack.send_slack_message_from_text(
-                        f":telescope: *{target.name}* is {g['OffsetKron']}x Kron from Virgo "
-                        f"galaxy *{g['ID']}* (offset {g['Offset']}\", r (galaxy mag) ={g['rMag']}, "
-                        f"type {g['Type']}, cz={g['cz']} km/s). "
-                        f"Nearby-galaxy transient — please inspect. "
-                        f"<{target_url}|View target>"
+                        f":telescope: *{target.name}* — {det_bits}· "
+                        f"{g['OffsetKron']}x Kron from candidate host *{g['ID']}* "
+                        f"<{target_url}|SAGUARO>"
                     )
                 except Exception as e:
                     logger.error(f"EVCC Slack alert failed for {target.name}: {e}")
