@@ -1,5 +1,4 @@
 import os
-import requests
 import uuid
 import json
 from tom_nonlocalizedevents.models import (
@@ -385,7 +384,7 @@ def handle_einstein_probe_alert(message, metadata):
         survey_obs_link=survey_obs_link, target_link=settings.TARGET_LINKS[0][0]
     ).format(target=t_ep)
     logger.info(f"Sending EP alert: {alert_text}")
-    slack_ep.send_slack_message_from_text(text=alert_text)
+    slack_ep.send_slack_message_from_text(alert_text)
 
     logger.info(f"Finished processing alert for {nonlocalizedevent.event_id}")
 
@@ -393,7 +392,7 @@ def handle_einstein_probe_alert(message, metadata):
 def handle_antares_stream_async(locus):
     data_service = AntaresDataService()
     try:
-        alert_finite = data_service.serialize_locus(locus)
+        alert_finite = data_service.serialize_locus(None, locus)
         handle_antares_stream.enqueue(alert_finite)
         logger.debug(f"sent {locus.locus_id} to queue")
     except Exception:
