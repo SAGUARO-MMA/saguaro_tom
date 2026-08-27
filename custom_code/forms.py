@@ -494,7 +494,7 @@ def _get_spectrum_choices(target):
     reduceddatums = target.spectroscopyreduceddatum_set.order_by('timestamp')
     choices = [(None, '-------')]
     for rd in reduceddatums:
-        description = f'{rd.source_name} {rd.data_type} @ {rd.timestamp.isoformat(sep=" ", timespec="milliseconds")[:-6]} <SpectroscopyReducedDatum {rd.pk}>'
+        description = f'{rd.source_name} @ {rd.timestamp.isoformat(sep=" ", timespec="milliseconds")[:-6]} <SpectroscopyReducedDatum {rd.pk}>'
         choices.append((rd.pk, description))
     return choices
 
@@ -509,7 +509,9 @@ def reduced_datum_to_ascii_file(rd):
         f"# OBJECT  = '{rd.target.name}'\n"
         f"# DATE-OBS= '{timestring}'\n"
     )
-    if rd.source_name:
+    if rd.telescope:
+        header += f"# TELESCOP= '{rd.telescope}'\n"
+    elif rd.source_name:
         header += f"# TELESCOP= '{rd.source_name}'\n"
     if rd.flux_unit:
         header += f"# BUNIT   = '{rd.flux_unit}'\n"

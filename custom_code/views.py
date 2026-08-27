@@ -72,7 +72,7 @@ def guess_tns_filter_id(reduceddatum):
     if filter_name in TNS_FILTER_IDS:
         return TNS_FILTER_IDS[filter_name]
 
-    source = re.sub(' \(.*\)', '', re.sub('[-_ ].*', '', reduceddatum.source_name))
+    source = re.sub(' \(.*\)', '', re.sub('[-_ ].*', '', reduceddatum.telescope or reduceddatum.source_name))
     if filter_name == 'o':
         full_filter_name = 'orange'
     elif filter_name == 'c':
@@ -292,7 +292,7 @@ class TargetReportView(PermissionListMixin, TemplateResponseMixin, FormMixin, Pr
             initial['flux_error'] = first_det.brightness_error
             initial['limiting_flux'] = first_det.limit
             initial['filter'] = guess_tns_filter_id(first_det)
-            instrument_name = re.sub(' \(.*\)', '', re.sub('[-_ ].*', '', first_det.source_name))
+            instrument_name = re.sub(' \(.*\)', '', re.sub('[-_ ].*', '', first_det.telescope or first_det.source_name))
             initial['instrument'] = TNS_INSTRUMENT_IDS.get(instrument_name)
             initial['data_source_group'] = TNS_DATA_SOURCE_GROUP_IDS.get(instrument_name)
 
@@ -302,7 +302,7 @@ class TargetReportView(PermissionListMixin, TemplateResponseMixin, FormMixin, Pr
                 initial['nondetection_date'] = last_nondet.timestamp.isoformat(sep=' ', timespec='milliseconds')[:-6]
                 initial['nondetection_limit'] = last_nondet.limit
                 initial['nondetection_filter'] = guess_tns_filter_id(last_nondet)
-                instrument_name = re.sub(' \(.*\)', '', re.sub('[-_ ].*', '', last_nondet.source_name))
+                instrument_name = re.sub(' \(.*\)', '', re.sub('[-_ ].*', '', last_nondet.telescope or last_nondet.source_name))
                 initial['nondetection_instrument'] = TNS_INSTRUMENT_IDS.get(instrument_name)
             else:
                 initial['archive'] = 0
