@@ -104,7 +104,7 @@ class Command(BaseCommand):
         with connection.cursor() as cursor:
             cursor.execute(
                 """
-                --STEP 2.5: save the old target name as an alias, unless it is a temporary "J" name
+                --STEP 2.5: save the existing non-TNS target name as an alias, unless it is a temporary "J" name
                 INSERT INTO tom_targets_targetname (name, created, target_id, modified)
                 SELECT tm.name, NOW(), tm.id, NOW()
                 FROM top_tns_matches AS tm
@@ -122,12 +122,32 @@ class Command(BaseCommand):
                 FROM targets_to_merge
                 WHERE targetid=old_id;
                 
+                UPDATE decam_candidates
+                SET targetid=new_id
+                FROM targets_to_merge
+                WHERE targetid=old_id;
+                
                 UPDATE tom_dataproducts_dataproduct
                 SET target_id=new_id
                 FROM targets_to_merge
                 WHERE target_id=old_id;
                 
                 UPDATE tom_dataproducts_reduceddatum
+                SET target_id=new_id
+                FROM targets_to_merge
+                WHERE target_id=old_id;
+                
+                UPDATE tom_dataproducts_photometryreduceddatum
+                SET target_id=new_id
+                FROM targets_to_merge
+                WHERE target_id=old_id;
+                
+                UPDATE tom_dataproducts_spectroscopyreduceddatum
+                SET target_id=new_id
+                FROM targets_to_merge
+                WHERE target_id=old_id;
+                
+                UPDATE tom_dataproducts_astrometryreduceddatum
                 SET target_id=new_id
                 FROM targets_to_merge
                 WHERE target_id=old_id;
@@ -178,7 +198,7 @@ class Command(BaseCommand):
         with connection.cursor() as cursor:
             cursor.execute(
                 """
-                --STEP 3.5: save the old target name as an alias, unless it is a temporary "J" name
+                --STEP 3.5: save the name of the deleted target as an alias, unless it is a temporary "J" name
                 INSERT INTO tom_targets_targetname (name, created, target_id, modified)
                 SELECT old_name, NOW(), new_id, NOW()
                 FROM targets_to_merge AS tm
