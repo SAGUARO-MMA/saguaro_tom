@@ -45,13 +45,13 @@ from tom_catalogs.harvesters.tns import TNS_URL
 TNS = settings.BROKERS['TNS']  # includes the API credentials
 TNS_MARKER = 'tns_marker' + json.dumps({'tns_id': TNS['bot_id'], 'type': 'bot', 'name': TNS['bot_name']})
 TNS_FILTER_IDS = {name: fid for fid, name in TNS_FILTER_CHOICES}
-TNS_INSTRUMENT_IDS = {name: iid for iid, name in TNS_INSTRUMENT_CHOICES}
+TNS_INSTRUMENT_IDS = {name.upper(): iid for iid, name in TNS_INSTRUMENT_CHOICES}
+TNS_INSTRUMENT_IDS.update({name.split(' - ')[0].upper(): iid for iid, name in TNS_INSTRUMENT_CHOICES[2:]})
+TNS_INSTRUMENT_IDS.update({name.split(' - ')[1].upper(): iid for iid, name in TNS_INSTRUMENT_CHOICES[2:]})
 TNS_CLASSIFICATION_IDS = {name: cid for cid, name in TNS_CLASSIFICATION_CHOICES}
 TNS_GROUP_IDS = {name: gid for gid, name in TNS_GROUP_CHOICES}
 TNS_DATA_SOURCE_GROUP_IDS = {name: gid for gid, name in TNS_DATA_SOURCE_GROUP_CHOICES}
 
-# Stop-gap solution for translating TOM source names to TNS instrument and group names. TODO: improve this
-TNS_INSTRUMENT_IDS['DECam'] = 172
 TNS_INSTRUMENT_IDS['ZTF'] = 196
 TNS_GROUP_IDS['FTN'] = 38
 TNS_GROUP_IDS['FTS'] = 38
@@ -101,6 +101,18 @@ def guess_tns_filter_id(reduceddatum):
         return TNS_FILTER_IDS[generic_filter_name]
 
     return 0  # Other
+
+
+def guess_tns_instrument_id(reduced_datum):
+    """
+    Stop-gap solution for translating TOM source names to TNS instrument and group names. TODO: improve this
+    """
+    instrument_name = re.sub(' \(.*\)', '', re.sub('[-_ ].*', '', reduced_datum.source_name))
+    if instrument_name in TNS_INSTRUMENT_IDS:
+        iid = TNS_INSTRUMENT_IDS[instrument_name]
+    else:
+        iid = TNS_INSTRUMENT_IDS.get(reduced_datum.value['telescope'])
+    return iid
 
 
 class TargetGroupingCreateView(LoginRequiredMixin, CreateView):
@@ -294,7 +306,7 @@ class TargetReportView(PermissionListMixin, TemplateResponseMixin, FormMixin, Pr
             initial['limiting_flux'] = first_det.value.get('limit')
             initial['filter'] = guess_tns_filter_id(first_det)
             instrument_name = re.sub(' \(.*\)', '', re.sub('[-_ ].*', '', first_det.source_name))
-            initial['instrument'] = TNS_INSTRUMENT_IDS.get(instrument_name)
+            initial['instrument'] = guess_tns_instrument_id(first_det)
             initial['data_source_group'] = TNS_DATA_SOURCE_GROUP_IDS.get(instrument_name)
 
             last_nondet = photometry.filter(value__magnitude__isnull=True,
@@ -303,8 +315,7 @@ class TargetReportView(PermissionListMixin, TemplateResponseMixin, FormMixin, Pr
                 initial['nondetection_date'] = last_nondet.timestamp.isoformat(sep=' ', timespec='milliseconds')[:-6]
                 initial['nondetection_limit'] = last_nondet.value.get('limit')
                 initial['nondetection_filter'] = guess_tns_filter_id(last_nondet)
-                instrument_name = re.sub(' \(.*\)', '', re.sub('[-_ ].*', '', last_nondet.source_name))
-                initial['nondetection_instrument'] = TNS_INSTRUMENT_IDS.get(instrument_name)
+                initial['nondetection_instrument'] = guess_tns_instrument_id(last_nondet)
             else:
                 initial['archive'] = 0
         # pre-fill Host name + Host redshift from the galaxy the user picked on the Host Galaxies tab
@@ -424,7 +435,7 @@ class TargetClassifyView(PermissionListMixin, TemplateResponseMixin, FormMixin, 
             initial['observation_date'] = spectrum.timestamp.isoformat(sep=' ', timespec='milliseconds')[:-6]
             initial['spectrum'] = spectrum.pk
             initial['group'] = TNS_GROUP_IDS.get(spectrum.source_name)
-            initial['instrument'] = TNS_INSTRUMENT_IDS.get(spectrum.source_name)
+            initial['instrument'] = guess_tns_instrument_id(spectrum)
         return initial
 
     def form_valid(self, form):
