@@ -125,7 +125,7 @@ class Command(BaseCommand):
                 UPDATE decam_candidates
                 SET targetid=new_id
                 FROM targets_to_merge
-                WHERE targetid=old_id;
+                WHERE target_id=old_id;
                 
                 UPDATE tom_dataproducts_dataproduct
                 SET target_id=new_id
