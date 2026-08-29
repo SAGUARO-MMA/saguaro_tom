@@ -123,7 +123,7 @@ class Command(BaseCommand):
                 WHERE targetid=old_id;
                 
                 UPDATE decam_candidates
-                SET targetid=new_id
+                SET target_id=new_id
                 FROM targets_to_merge
                 WHERE target_id=old_id;
                 
