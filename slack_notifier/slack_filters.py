@@ -22,7 +22,7 @@ class AntaresSlackFilter(SlackNotifier):
             token = token
         )
 
-    def filter_alert_stream(self, target, created, aliases_added, telescope_stream = "ZTF"):
+    def filter_alert_stream(self, target, created, telescope_stream = "ZTF"):
         target_extra = target.targetextra_set.filter(key='Host Galaxies').first()
         vs_matches = target.targetextra_set.filter(key__in=[
             "Gaia Match", "PS1 Match", "ASASSN Match"
@@ -71,16 +71,15 @@ class AntaresSlackFilter(SlackNotifier):
         #if not new, look for rapidly rising
         elif rise_rate<-0.5: 
             base_str = f"Rapidly rising object {target.name} in the {telescope_stream} alert stream at {rise_rate:0.2f} mag/day"
-            if len(aliases_added):
-                base_str += f" aliases: {', '.join(aliases_added)}"
         # Even if sparsely spaced, catch things that significantly change
         elif delta_mag < -0.5:
             base_str = f"Rapidly rising object {target.name} in the {telescope_stream} alert stream, changing by {delta_mag:1.2f} mag since last detection {delta_t:1.2f} days ago)"
-            if len(aliases_added):
-                base_str += f" aliases: {', '.join(aliases_added)}"
         else:
             # don't send this message!
             return
+
+        if len(target.names) > 1:
+            base_str += f"\nAliases: {', '.join(target.names[1:])}"
 
         if np.isfinite(peak_mag):
             base_str += f"\nBrightest at {peak_mag:.1f} mag"

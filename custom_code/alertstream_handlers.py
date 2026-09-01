@@ -434,8 +434,7 @@ def handle_antares_stream(alert, cone_search_radius_arcsec=2.0):
         # then parse the returned values to send relevant messages
         telescope_id = alert['alerts'][-1]['properties']['ant_survey']
         telescope = data_service.surveys.get(telescope_id)
-        slack_lsstddf.send_slack_message(target=target, created=bool(target_matches), aliases_added=aliases_added,
-                                         telescope_stream=telescope)
+        slack_lsstddf.send_slack_message(target=target, created=bool(target_matches), telescope_stream=telescope)
 
     except Exception:
         exc = traceback.format_exc()
