@@ -422,6 +422,9 @@ def handle_antares_stream(alert, cone_search_radius_arcsec=2.0):
             # then this target already exists in the Targets table
             target = target_matches[0]
             logger.info(f"Found existing target matching this alert: {target.name}")
+            if target.name.startswith('J'):
+                target.name = alert['name']
+                logger.info(f" - replacing temporary name with {target.name}")
 
             # vetting includes updating ANTARES photometry/aliases and adding host galaxies needed for Slack
             vet_or_post_error(target, created=True, tns_time_limit=np.inf, slack_client=slack_lsstddf)
