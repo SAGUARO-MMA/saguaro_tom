@@ -104,7 +104,7 @@ class Command(BaseCommand):
         with connection.cursor() as cursor:
             cursor.execute(
                 """
-                --STEP 2.5: save the old target name as an alias, unless it is a temporary "J" name
+                --STEP 2.5: save the existing non-TNS target name as an alias, unless it is a temporary "J" name
                 INSERT INTO tom_targets_targetname (name, created, target_id, modified)
                 SELECT tm.name, NOW(), tm.id, NOW()
                 FROM top_tns_matches AS tm
@@ -122,12 +122,32 @@ class Command(BaseCommand):
                 FROM targets_to_merge
                 WHERE targetid=old_id;
                 
+                UPDATE decam_candidates
+                SET target_id=new_id
+                FROM targets_to_merge
+                WHERE target_id=old_id;
+                
                 UPDATE tom_dataproducts_dataproduct
                 SET target_id=new_id
                 FROM targets_to_merge
                 WHERE target_id=old_id;
                 
                 UPDATE tom_dataproducts_reduceddatum
+                SET target_id=new_id
+                FROM targets_to_merge
+                WHERE target_id=old_id;
+                
+                UPDATE tom_dataproducts_photometryreduceddatum
+                SET target_id=new_id
+                FROM targets_to_merge
+                WHERE target_id=old_id;
+                
+                UPDATE tom_dataproducts_spectroscopyreduceddatum
+                SET target_id=new_id
+                FROM targets_to_merge
+                WHERE target_id=old_id;
+                
+                UPDATE tom_dataproducts_astrometryreduceddatum
                 SET target_id=new_id
                 FROM targets_to_merge
                 WHERE target_id=old_id;
@@ -178,7 +198,7 @@ class Command(BaseCommand):
         with connection.cursor() as cursor:
             cursor.execute(
                 """
-                --STEP 3.5: save the old target name as an alias, unless it is a temporary "J" name
+                --STEP 3.5: save the name of the deleted target as an alias, unless it is a temporary "J" name
                 INSERT INTO tom_targets_targetname (name, created, target_id, modified)
                 SELECT old_name, NOW(), new_id, NOW()
                 FROM targets_to_merge AS tm
@@ -193,8 +213,9 @@ class Command(BaseCommand):
         new_targets = Target.objects.raw(
             """
             --STEP 4: add all other unmatched TNS transients to the targets table (removing duplicate names)
-            INSERT INTO tom_targets_basetarget (name, type, created, modified, permissions, ra, dec, epoch, scheme)
-            SELECT CONCAT(name_prefix, name), 'SIDEREAL', NOW(), NOW(), 'PUBLIC', ra, declination, 2000, ''
+            INSERT INTO tom_targets_basetarget (name, type, created, modified, permissions, ra, dec, epoch, scheme,
+                                                shared_by, shared_from)
+            SELECT CONCAT(name_prefix, name), 'SIDEREAL', NOW(), NOW(), 'PUBLIC', ra, declination, 2000, '', '', ''
             FROM tns_q3c WHERE name_prefix != 'FRB'
             AND name != '2023hzc' AND name != '2026pmf' -- skip duplicates in the TNS: AT2016jlf, AT2026pme
             ON CONFLICT (name) DO NOTHING
@@ -219,8 +240,8 @@ class Command(BaseCommand):
             target_ids = []
             for targets in [new_targets, updated_targets, updated_targets_coords]:
                 for target in targets:
-                    first_det = target.reduceddatum_set.filter(data_type='photometry', value__magnitude__isnull=False
-                                                               ).order_by('timestamp').first()
+                    first_det = target.photometryreduceddatum_set.filter(brightness__isnull=False
+                                                                         ).order_by('timestamp').first()
                     if first_det and nle_time < first_det.timestamp < nle_time + timedelta(days=lookback_days_obs):
                         target_ids.append(target.id)
             candidates = create_candidates_from_targets(seq, target_ids=target_ids)

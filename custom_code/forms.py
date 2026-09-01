@@ -4,7 +4,7 @@ from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Layout, Row, Column, Submit, HTML
 from crispy_forms.bootstrap import AppendedText, PrependedAppendedText
 from tom_targets.models import TargetList
-from tom_dataproducts.models import ReducedDatum
+from tom_dataproducts.models import SpectroscopyReducedDatum
 from .models import TargetListExtra
 from datetime import datetime, timezone
 from io import StringIO
@@ -491,17 +491,17 @@ class TargetReportForm(forms.Form):
 
 
 def _get_spectrum_choices(target):
-    reduceddatums = target.reduceddatum_set.filter(data_type='spectroscopy').order_by('timestamp')
+    reduceddatums = target.spectroscopyreduceddatum_set.order_by('timestamp')
     choices = [(None, '-------')]
     for rd in reduceddatums:
-        description = f'{rd.source_name} {rd.data_type} @ {rd.timestamp.isoformat(sep=" ", timespec="milliseconds")[:-6]} <ReducedDatum {rd.pk}>'
+        description = f'{rd.source_name} @ {rd.timestamp.isoformat(sep=" ", timespec="milliseconds")[:-6]} <SpectroscopyReducedDatum {rd.pk}>'
         choices.append((rd.pk, description))
     return choices
 
 
 def reduced_datum_to_ascii_file(rd):
     """
-    Create a virtual ASCII file from a spectrum ReducedDatum for upload to TNS
+    Create a virtual ASCII file from a SpectroscopyReducedDatum for upload to TNS
     """
     file_buffer = StringIO()
     timestring = rd.timestamp.isoformat(timespec="milliseconds")[:-6]
@@ -509,16 +509,16 @@ def reduced_datum_to_ascii_file(rd):
         f"# OBJECT  = '{rd.target.name}'\n"
         f"# DATE-OBS= '{timestring}'\n"
     )
-    if rd.source_name:
+    if rd.telescope:
+        header += f"# TELESCOP= '{rd.telescope}'\n"
+    elif rd.source_name:
         header += f"# TELESCOP= '{rd.source_name}'\n"
-    if 'flux_units' in rd.value:
-        bunit = rd.value['flux_units']
-        header += f"# BUNIT   = '{bunit}'\n"
-    if 'wavelength_units' in rd.value:
-        cunit = rd.value['wavelength_units']
-        header += f"# CUNIT1  = '{cunit}'\n"
+    if rd.flux_unit:
+        header += f"# BUNIT   = '{rd.flux_unit}'\n"
+    if rd.wavelength_unit:
+        header += f"# CUNIT1  = '{rd.wavelength_unit}'\n"
     file_buffer.write(header)
-    output_spectrum = np.transpose([rd.value['wavelength'], rd.value['flux']])
+    output_spectrum = np.transpose([rd.wavelength, rd.flux])
     np.savetxt(file_buffer, output_spectrum, fmt=('%f', '%e'))
     file_buffer.seek(0)  # return to the beginning of the buffer
     if rd.data_product is not None:
@@ -553,7 +553,7 @@ initial="We report the classification of SN XXXX as a young SN XXX based on opti
         (5, 'Synthetic'),
     ])
     spectrum = forms.TypedChoiceField(required=False,
-                                      coerce=lambda pk: ReducedDatum.objects.get(pk=pk))
+                                      coerce=lambda pk: SpectroscopyReducedDatum.objects.get(pk=pk))
     ascii_file = forms.FileField(label='ASCII file', required=False,
                                  help_text='Uploading a file here overrides the ASCII file from the spectrum field')
     fits_file = forms.FileField(label='FITS file', required=False,

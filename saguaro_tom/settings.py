@@ -14,6 +14,7 @@ https://docs.djangoproject.com/en/2.1/ref/settings/
 from .settings_local import *
 import os
 import tempfile
+from tom_common.default_settings import *
 from astropy.cosmology import FlatLambdaCDM
 from astropy import units as _u
 
@@ -32,61 +33,22 @@ ALLOWED_HOSTS = [ALLOWED_HOST, 'localhost', '127.0.0.1']
 
 TOM_NAME = 'SAGUARO'
 
-INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'whitenoise.runserver_nostatic',
-    'django.contrib.staticfiles',
-    'django.contrib.sites',
-    'django_extensions',
-    'guardian',
-    'tom_common',
-    'django_comments',
-    'bootstrap4',
-    'crispy_forms',
-    'crispy_bootstrap4',
-    'rest_framework',
-    'rest_framework.authtoken',
-    'django_filters',
-    'django_gravatar',
-    'tom_targets',
-    'tom_alerts',
-    'tom_antares',
-    'tom_catalogs',
-    'tom_observations',
-    'tom_dataproducts',
-    'tom_dataservices',
+INSTALLED_APPS = TOMTOOKIT_INSTALLED_APPS + [
+    'candidate_vetting',
+    'custom_code',
     'tom_alertstreams',
+    'tom_antares',
     'tom_nonlocalizedevents',
     'tom_registration',
-    'webpack_loader',
-    'custom_code',
-    'candidate_vetting',
     'tom_surveys',
     'tom_treasuremap',
-    'django_tasks',
-    'django_tasks.backends.database',
-    'django_tables2',
+    'webpack_loader',  # required for tom_nonlocalizedevents
 ]
 
-MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'django_htmx.middleware.HtmxMiddleware',
-    'tom_common.middleware.Raise403Middleware',
-    'tom_common.middleware.ExternalServiceMiddleware',
-    'tom_common.middleware.AuthStrategyMiddleware',
+MIDDLEWARE = TOMTOOKIT_MIDDLEWARE + [
     'tom_registration.middleware.RedirectAuthenticatedUsersFromRegisterMiddleware',
 ]
+MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')  # must be directly after SecurityMiddleware
 
 ROOT_URLCONF = 'saguaro_tom.urls'
 
@@ -106,8 +68,8 @@ TEMPLATES = [
     },
 ]
 
-CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap4"
-CRISPY_TEMPLATE_PACK = 'bootstrap4'
+CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
+CRISPY_TEMPLATE_PACK = 'bootstrap5'
 
 WSGI_APPLICATION = 'saguaro_tom.wsgi.application'
 
@@ -141,7 +103,7 @@ DATABASES = {
 }
 DATABASE_ROUTERS = ['candidate_vetting.routers.CatalogRouter']
 
-DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Password validation
 # https://docs.djangoproject.com/en/2.1/ref/settings/#auth-password-validators
@@ -179,13 +141,9 @@ TIME_ZONE = 'UTC'
 
 USE_I18N = True
 
-USE_L10N = False
-
 USE_TZ = True
 
-DATETIME_FORMAT = 'Y-m-d H:i:s'
-DATE_FORMAT = 'Y-m-d'
-
+FORMAT_MODULE_PATH = 'saguaro_tom.formats'
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/2.1/howto/static-files/
@@ -328,12 +286,13 @@ TOM_ALERT_CLASSES = [
     'tom_alerts.brokers.fink.FinkBroker',
 ]
 
-BROKERS = {
+DATA_SERVICES = BROKERS = {
     'TNS': {
         'api_key': TNS_API_KEY,
         'bot_id': '60911',
         'bot_name': 'SAGUARO_Bot1',
-    }
+        'base_url': 'https://www.wis-tns.org/',
+    },
 }
 
 CONE_SEARCH_RADIUS = 2.
@@ -371,9 +330,9 @@ EXTRA_FIELDS = [
 AUTH_STRATEGY = 'READ_ONLY'
 
 # Row-level data permissions restrict users from viewing certain objects unless they are a member of the group to which
-# the object belongs. Setting this value to True will allow all `ObservationRecord`, `DataProduct`, and `ReducedDatum`
+# the object belongs. Setting this value to True will allow all `ObservationRecord`, `DataProduct`, and `*ReducedDatum`
 # objects to be seen by everyone. Setting it to False will allow users to specify which groups can access
-# `ObservationRecord`, `DataProduct`, and `ReducedDatum` objects.
+# `ObservationRecord`, `DataProduct`, and `*ReducedDatum` objects.
 TARGET_PERMISSIONS_ONLY = True
 
 # URLs that should be allowed access even with AUTH_STRATEGY = LOCKED

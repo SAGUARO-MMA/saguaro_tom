@@ -1,0 +1,20 @@
+<li class="nav-item dropdown">
+    <a class="nav-link dropdown-toggle" data-bs-toggle="dropdown">Surveys</a>
+    <ul class="dropdown-menu">
+        <li class="{% if request.resolver_match.namespace == 'surveys' or request.resolver_match.url_name == 'candidates' or request.resolver_match.namespace == 'treasuremap' %}active{% endif %}">
+            <a class="dropdown-item" href="{% url 'surveys:observations' %}">Observations</a>
+        </li>
+        <li class="{% if request.resolver_match.namespace == 'surveys' or request.resolver_match.url_name == 'candidates' or request.resolver_match.namespace == 'treasuremap' %}active{% endif %}">
+            <a class="dropdown-item" href="{% url 'custom_code:candidates' %}?obsdate_range_after={% now 'Y-m-d' %}&classification=0&order=-mlscore_real">CSS Candidates</a>
+        </li>
+        <li class="{% if request.resolver_match.namespace == 'surveys' or request.resolver_match.url_name == 'candidates' or request.resolver_match.namespace == 'treasuremap' %}active{% endif %}">
+            <a class="dropdown-item" href="{% url 'custom_code:decam-candidates' %}?date=latest">DECam Candidates</a>
+        </li>
+        <li class="{% if request.resolver_match.namespace == 'surveys' or request.resolver_match.url_name == 'candidates' or request.resolver_match.namespace == 'treasuremap' %}active{% endif %}">
+            <a class="dropdown-item" href="{% url 'custom_code:candidates' %}?target__name__startswith=AT,SN,TDE&order=-observation_record__scheduled_start">TNS Transients</a>
+        </li>
+        <li class="{% if request.resolver_match.namespace == 'surveys' or request.resolver_match.url_name == 'candidates' or request.resolver_match.namespace == 'treasuremap' %}active{% endif %}">
+            <a class="dropdown-item" href="{% url 'treasuremap:list' %}">Treasure Map</a>
+        </li>
+    </ul>
+</li>

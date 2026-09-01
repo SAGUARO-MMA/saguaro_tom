@@ -1,5 +1,5 @@
 {% extends 'tom_common/base.html' %}
-{% load bootstrap4 %}
+{% load django_bootstrap5 %}
 {% block title %}Treasure Map Pointings{% endblock %}
 {% block content %}
 <h1>Treasure Map Pointings</h1>
@@ -51,12 +51,8 @@
   <div class="col-md-2">
     <form action="" method="get" class="form">
       {% bootstrap_form filter.form %}
-      {% buttons %}
-        <button type="submit" class="btn btn-primary">
-          Filter
-        </button>
-        <a href="{% url 'treasuremap:list' %}" class="btn btn-secondary" title="Reset">Reset</a>
-      {% endbuttons %}
+      <button type="submit" class="btn btn-primary">Filter</button>
+      <a href="{% url 'treasuremap:list' %}" class="btn btn-secondary" title="Reset">Reset</a>
     </form>
   </div>
 </div>

@@ -1,5 +1,4 @@
 import os
-import requests
 import uuid
 import json
 from tom_nonlocalizedevents.models import (
@@ -44,8 +43,7 @@ import traceback
 from tom_targets.models import Target, TargetName
 from tom_targets.utils import cone_search_filter
 import time
-from tom_antares.antares import ANTARESBroker
-
+from tom_antares.antares import AntaresDataService
 logger = logging.getLogger(__name__)
 
 # for einstein probe
@@ -386,64 +384,15 @@ def handle_einstein_probe_alert(message, metadata):
         survey_obs_link=survey_obs_link, target_link=settings.TARGET_LINKS[0][0]
     ).format(target=t_ep)
     logger.info(f"Sending EP alert: {alert_text}")
-    slack_ep.send_slack_message_from_text(text=alert_text)
+    slack_ep.send_slack_message_from_text(alert_text)
 
     logger.info(f"Finished processing alert for {nonlocalizedevent.event_id}")
 
 
-def nan2str(obj):
-    """
-    Remove any NaN or Infinity from an object before JSON encoding
-    """
-    if isinstance(obj, dict):
-        return {k: nan2str(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [nan2str(v) for v in obj]
-    elif isinstance(obj, float) and not np.isfinite(obj):
-        return str(obj)
-    return obj
-
-
-def serialize_antares_alert(locus):
-    return {
-        "locus_id": locus.locus_id,
-        "ra": locus.ra,
-        "dec": locus.dec,
-        "properties": locus.properties,
-        "tags": locus.tags,
-        # 'lightcurve': locus.lightcurve.to_json(),
-        "catalogs": locus.catalogs,
-        "alerts": [
-            {
-                "alert_id": alert.alert_id,
-                "mjd": alert.mjd,
-                "properties": {
-                    key: val
-                    for key, val in alert.properties.items()
-                    if key.startswith("ant")
-                },
-            }
-            for alert in locus.alerts
-        ],
-    }
-
-
 def handle_antares_stream_async(locus):
-    # temporarily skip old alerts TODO: decide if we want this
-    # if locus.properties['newest_alert_observation_time'] < np.floor(Time.now().mjd):
-    #    logger.debug(f'skipping old alert {locus.locus_id}')
-    #    return
-
+    data_service = AntaresDataService()
     try:
-        alert_small = serialize_antares_alert(locus)
-    except requests.exceptions.ReadTimeout:
-        exc = traceback.format_exc()
-        send_error(exc)
-        return  # and don't continue
-
-    alert_finite = nan2str(alert_small)
-
-    try:
+        alert_finite = data_service.serialize_locus(None, locus)
         handle_antares_stream.enqueue(alert_finite)
         logger.debug(f"sent {locus.locus_id} to queue")
     except Exception:
@@ -454,7 +403,7 @@ def handle_antares_stream_async(locus):
 @task(queue_name="antares", priority=settings.PRIORITY_HIGH)
 def handle_antares_stream(alert, cone_search_radius_arcsec=2.0):
     try:
-        broker = ANTARESBroker()
+        data_service = AntaresDataService()
 
         # check for existing targets within 2"
         target_matches = list(
@@ -473,70 +422,29 @@ def handle_antares_stream(alert, cone_search_radius_arcsec=2.0):
             # then this target already exists in the Targets table
             target = target_matches[0]
             logger.info(f"Found existing target matching this alert: {target.name}")
+            if target.name.startswith('J'):
+                target.name = alert['name']
+                logger.info(f" - replacing temporary name with {target.name}")
 
-            # only take the time to run the vetting if we need to get host galaxies
-            if not target.targetextra_set.filter(key="Host Galaxies").exists():
-                run_atlas = _should_run_atlas(alert)
-
-                if run_atlas:
-                    logger.debug("Submitting ATLAS FP to the queue!")
-                else:
-                    logger.debug(
-                        "The most recent magnitude reported in this alert is too faint for ATLAS FP!"
-                    )
-
-                vet_or_post_error(
-                    target,
-                    created=True,
-                    tns_time_limit=np.inf,
-                    run_atlas=run_atlas,
-                    slack_client=slack_lsstddf,
-                )
-
-            # update the TargetName objects returned to instead point to the existing target
-            aliases = broker.aliases_from_locus(alert, target)
+            # vetting includes updating ANTARES photometry/aliases and adding host galaxies needed for Slack
+            vet_or_post_error(target, created=True, tns_time_limit=np.inf, slack_client=slack_lsstddf)
 
         else:
             # then this target does not exist, so we create it from scratch
-            target, _, aliases = broker.to_target(alert)
+            target = data_service.to_target(alert)
             logger.info(f"No existing target found, adding {target.name} as new target")
 
-        broker.process_reduced_data(target, alert)
-
-        # save the aliases that we found for this target
-        logger.info(f"Adding {aliases} to {target}")
-        aliases_added = []
-        for alias in aliases:
-            existing_alias = TargetName.objects.filter(name=alias.name)
-            if not existing_alias.exists():
-                alias.save()
-                aliases_added.append(alias.name)
-            elif existing_alias.exclude(target=target).exists():
-                # this will happen if the alias exists under a different target
-                # than the one we are trying to save it with
-                # in which case we should log a warning
-                logger.warning(
-                    f"The name alias {alias.name} exists under the target {existing_alias.first().target}, "
-                    f"which is different from the nearest target in the existing database (which is {target}). "
-                    "We are NOT re-assigning this alias!"
-                )
-
         # then parse the returned values to send relevant messages
-        telescope_id = alert["alerts"][-1]["properties"]["ant_survey"]
-        telescope = ANTARESBroker.surveys.get(telescope_id, "ZTF")
-        slack_lsstddf.send_slack_message(
-            target=target,
-            created=bool(target_matches),
-            aliases_added=aliases_added,
-            telescope_stream=telescope,
-        )
+        telescope_id = alert['reduced_datums']['photometry'][-1]['ant_survey']
+        telescope = data_service.surveys.get(telescope_id)
+        slack_lsstddf.send_slack_message(target=target, created=bool(target_matches), telescope_stream=telescope)
 
     except Exception:
         exc = traceback.format_exc()
         dump_alert_and_send_error(alert, exc)
 
 
-def send_error(exc):
+def send_error(exc, slack_client):
     msg = f"ANTARES stream ingestion failed with\n{exc}"
     slack_client.send_slack_message_from_text(msg)
 
@@ -551,7 +459,7 @@ def dump_alert_and_send_error(
     dump_path = f"{dump_dir}/{uuid.uuid4()}.json"
     with open(dump_path, "w") as f:
         json.dump(alert, f, indent=4)
-    send_error(exc)
+    send_error(exc, slack_client)
 
 
 def _should_run_atlas(alert, limit=19.7):

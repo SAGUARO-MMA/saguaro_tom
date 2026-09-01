@@ -40,7 +40,7 @@ class FiniteSpectrumSerializer(SpectrumSerializer):
 
     def serialize(self, spectrum: Spectrum1D) -> dict:
         """
-        Serializes a Spectrum1D in order to store in a ReducedDatum object. The serialization stores only what's
+        Serializes a Spectrum1D in order to store in a SpectroscopyReducedDatum object. The serialization stores only what's
         necessary to rebuild the Spectrum1D--namely, flux and wavelength, and their respective units.
 
         :param spectrum: Spectrum1D to be serialized

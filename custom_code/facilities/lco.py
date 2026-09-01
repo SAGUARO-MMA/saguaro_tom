@@ -1,6 +1,6 @@
 from tom_observations.facilities.lco import LCOFacility
 from tom_dataproducts.data_processor import run_data_processor, DataProcessor
-from tom_dataproducts.models import DataProduct, ReducedDatum
+from tom_dataproducts.models import DataProduct, PhotometryReducedDatum
 from tom_dataproducts.utils import create_image_dataproduct
 from astropy.coordinates import SkyCoord
 from astropy.io import fits
@@ -83,20 +83,17 @@ class LCODataProcessor(DataProcessor):
         sep = cat_coords.separation(target_coords)
         imin = sep.argmin()
         if sep[imin].arcsec < 2.:
-            rd, created = ReducedDatum.objects.get_or_create(
+            rd, created = PhotometryReducedDatum.objects.get_or_create(
                 target=data_product.target,
                 # data_product=data_product,  # do not make this association so we can delete the FITS file
-                data_type='photometry',
                 source_name='LCO (BANZAI)',
                 source_location=data_product.get_file_name(),
                 timestamp=hdr.get('DATE-OBS'),
-                value={
-                    'filter': hdr.get('FILTER'),
-                    'magnitude': cat[imin]['mag'],
-                    'error': cat[imin]['magerr'],
-                    'telescope': hdr.get('TELESCOP'),
-                    'instrument': hdr.get('INSTRUME'),
-                }
+                bandpass=hdr.get('FILTER'),
+                brightness=cat[imin]['mag'],
+                brightness_error=cat[imin]['magerr'],
+                telescope=hdr.get('TELESCOP'),
+                instrument=hdr.get('INSTRUME'),
             )
             if created:
                 logger.info(f'Extracted BANZAI photometry {rd} from {data_product}')
