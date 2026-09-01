@@ -432,7 +432,7 @@ def handle_antares_stream(alert, cone_search_radius_arcsec=2.0):
             logger.info(f"No existing target found, adding {target.name} as new target")
 
         # then parse the returned values to send relevant messages
-        telescope_id = alert['alerts'][-1]['properties']['ant_survey']
+        telescope_id = alert['reduced_datums']['photometry'][-1]['ant_survey']
         telescope = data_service.surveys.get(telescope_id)
         slack_lsstddf.send_slack_message(target=target, created=bool(target_matches), telescope_stream=telescope)
 
@@ -441,7 +441,7 @@ def handle_antares_stream(alert, cone_search_radius_arcsec=2.0):
         dump_alert_and_send_error(alert, exc)
 
 
-def send_error(exc):
+def send_error(exc, slack_client):
     msg = f"ANTARES stream ingestion failed with\n{exc}"
     slack_client.send_slack_message_from_text(msg)
 
@@ -456,7 +456,7 @@ def dump_alert_and_send_error(
     dump_path = f"{dump_dir}/{uuid.uuid4()}.json"
     with open(dump_path, "w") as f:
         json.dump(alert, f, indent=4)
-    send_error(exc)
+    send_error(exc, slack_client)
 
 
 def _should_run_atlas(alert, limit=19.7):
