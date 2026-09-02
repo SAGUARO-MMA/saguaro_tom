@@ -1,9 +1,12 @@
-from tom_observations.facilities.lco import LCOFacility
+from tom_observations.facilities.lco import LCOFacility, LCOPhotometricSequenceForm, LCOSpectroscopicSequenceForm
 from tom_dataproducts.data_processor import run_data_processor, DataProcessor
 from tom_dataproducts.models import DataProduct, ReducedDatum
 from tom_dataproducts.utils import create_image_dataproduct
+from tom_targets.models import Target
 from astropy.coordinates import SkyCoord
 from astropy.io import fits
+from crispy_forms.layout import Row, Column, Div
+from crispy_forms.bootstrap import PrependedText
 from django.core.files.base import ContentFile
 from django.conf import settings
 import requests
@@ -15,7 +18,79 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def set_default_cadence_and_observing_constraints(kwargs):
+    kwargs['initial']['name'] = Target.objects.get(pk=kwargs['initial']['target_id']).name
+    kwargs['initial']['cadence_strategy'] = 'ResumeCadenceAfterFailureStrategy'
+    kwargs['initial']['cadence_frequency'] = 72.
+
+    kwargs['initial']['max_airmass'] = 1.6
+    kwargs['initial']['min_lunar_distance'] = 20.
+    kwargs['initial']['proposal'] = 'KEY2026B-003'
+    kwargs['initial']['ipp_value'] = 1.
+
+
+class CustomLCOPhotometricSequenceForm(LCOPhotometricSequenceForm):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        set_default_cadence_and_observing_constraints(kwargs)
+        kwargs['initial']['U'] = (300., 2, 1)
+        kwargs['initial']['B'] = (200., 2, 1)
+        kwargs['initial']['V'] = (120., 2, 1)
+        kwargs['initial']['gp'] = (200., 2, 1)
+        kwargs['initial']['rp'] = (120., 2, 1)
+        kwargs['initial']['ip'] = (120., 2, 1)
+
+
+    def all_optical_element_choices(self, use_code_only=False):
+        return sorted(set([
+            (f['code'], f['name']) for ins in self._get_instruments().values() for f in
+            ins['optical_elements'].get('filters', [])
+            if f['code'] in LCOPhotometricSequenceForm.valid_filters]),
+            key=lambda filter_tuple: LCOPhotometricSequenceForm.valid_filters.index(filter_tuple[0]))
+
+
+class CustomLCOSpectroscopicSequenceForm(LCOSpectroscopicSequenceForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        set_default_cadence_and_observing_constraints(kwargs)
+        kwargs['initial']['exposure_count'] = 1
+        kwargs['initial']['exposure_time'] = 1800.
+        kwargs['initial']['filter'] = 'slit_2.0as'
+        kwargs['initial']['guider_exposure_time'] = 10.
+
+    def layout(self):
+        if settings.TARGET_PERMISSIONS_ONLY:
+            groups = Row()
+        else:
+            groups = Row('groups')
+        return Row(
+            Column(
+                Row('exposure_count'),
+                Row('exposure_time'),
+                Row('filter'),
+                Row('guider_mode'),
+                Row('guider_exposure_time'),
+                Row('acquisition_radius'),
+            ),
+            Column(
+                Row('max_airmass'),
+                Row(PrependedText('min_lunar_distance', '>')),
+                Row('site'),
+                Row('proposal'),
+                Row('observation_mode'),
+                Row('ipp_value'),
+                groups,
+            ),
+        )
+
+
 class CustomLCOFacility(LCOFacility):
+    observation_forms = {
+        'PHOTOMETRIC_SEQUENCE': CustomLCOPhotometricSequenceForm,
+        'SPECTROSCOPIC_SEQUENCE': CustomLCOSpectroscopicSequenceForm,
+    }
+
     def save_data_products(self, observation_record, product_id=None):
         final_products = []
         products = self.data_products(observation_record.observation_id, product_id)
