@@ -12,6 +12,7 @@ from django.conf import settings
 import requests
 import mimetypes
 import tarfile
+import copy
 import os
 import logging
 
@@ -83,6 +84,25 @@ class CustomLCOSpectroscopicSequenceForm(LCOSpectroscopicSequenceForm):
                 groups,
             ),
         )
+
+    def observation_payload(self):
+        payload = super().observation_payload()
+        science_config = payload['requests'][0]['configurations'][0]
+
+        # hardcode calibration frames into every spectrum request
+        arc_config = copy.deepcopy(science_config)
+        arc_config['type'] = 'ARC'
+        arc_config['instrument_configs'][0]['exposure_time'] = 80.0
+        arc_config['acquisition_config']['mode'] = 'OFF'
+        arc_config['guiding_config']['optional'] = True
+        payload['requests'][0]['configurations'].append(arc_config)
+
+        flat_config = copy.deepcopy(arc_config)
+        flat_config['type'] = 'LAMP_FLAT'
+        flat_config['instrument_configs'][0]['exposure_time'] = 40.0
+        payload['requests'][0]['configurations'].append(flat_config)
+
+        return payload
 
 
 class CustomLCOFacility(LCOFacility):
