@@ -19,29 +19,26 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def set_default_cadence_and_observing_constraints(kwargs):
-    kwargs['initial']['name'] = Target.objects.get(pk=kwargs['initial']['target_id']).name
-    kwargs['initial']['cadence_strategy'] = 'ResumeCadenceAfterFailureStrategy'
-    kwargs['initial']['cadence_frequency'] = 72.
-
-    kwargs['initial']['max_airmass'] = 1.6
-    kwargs['initial']['min_lunar_distance'] = 20.
-    kwargs['initial']['proposal'] = 'KEY2026B-003'
-    kwargs['initial']['ipp_value'] = 1.
-
-
 class CustomLCOPhotometricSequenceForm(LCOPhotometricSequenceForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        set_default_cadence_and_observing_constraints(kwargs)
-        kwargs['initial']['U'] = (300., 2, 1)
-        kwargs['initial']['B'] = (200., 2, 1)
-        kwargs['initial']['V'] = (120., 2, 1)
-        kwargs['initial']['gp'] = (200., 2, 1)
-        kwargs['initial']['rp'] = (120., 2, 1)
-        kwargs['initial']['ip'] = (120., 2, 1)
 
+        self.initial['name'] = Target.objects.get(pk=self.initial['target_id']).name
+        self.initial['cadence_strategy'] = 'ResumeCadenceAfterFailureStrategy'
+        self.initial['cadence_frequency'] = 72.
+
+        self.initial['U'] = (300., 2, 1)
+        self.initial['B'] = (200., 2, 1)
+        self.initial['V'] = (120., 2, 1)
+        self.initial['gp'] = (200., 2, 1)
+        self.initial['rp'] = (120., 2, 1)
+        self.initial['ip'] = (120., 2, 1)
+
+        self.initial['max_airmass'] = 1.6
+        self.initial['min_lunar_distance'] = 20.
+        self.initial['proposal'] = 'KEY2026B-003'
+        self.initial['ipp_value'] = 1.
 
     def all_optical_element_choices(self, use_code_only=False):
         return sorted(set([
@@ -54,11 +51,20 @@ class CustomLCOPhotometricSequenceForm(LCOPhotometricSequenceForm):
 class CustomLCOSpectroscopicSequenceForm(LCOSpectroscopicSequenceForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        set_default_cadence_and_observing_constraints(kwargs)
-        kwargs['initial']['exposure_count'] = 1
-        kwargs['initial']['exposure_time'] = 1800.
-        kwargs['initial']['filter'] = 'slit_2.0as'
-        kwargs['initial']['guider_exposure_time'] = 10.
+
+        self.initial['name'] = Target.objects.get(pk=self.initial['target_id']).name
+        self.initial['cadence_strategy'] = 'ResumeCadenceAfterFailureStrategy'
+        self.initial['cadence_frequency'] = 72.
+
+        self.initial['exposure_count'] = 1
+        self.initial['exposure_time'] = 1800.
+        self.initial['filter'] = 'slit_2.0as'
+        self.initial['guider_exposure_time'] = 10.
+
+        self.initial['max_airmass'] = 1.6
+        self.initial['min_lunar_distance'] = 20.
+        self.initial['proposal'] = 'KEY2026B-003'
+        self.initial['ipp_value'] = 1.
 
     def layout(self):
         if settings.TARGET_PERMISSIONS_ONLY:
