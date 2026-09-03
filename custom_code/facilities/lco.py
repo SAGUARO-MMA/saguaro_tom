@@ -5,10 +5,13 @@ from tom_dataproducts.utils import create_image_dataproduct
 from tom_targets.models import Target
 from astropy.coordinates import SkyCoord
 from astropy.io import fits
-from crispy_forms.layout import Row, Column, Div
+from crispy_forms.layout import Row, Column
 from crispy_forms.bootstrap import PrependedText
 from django.core.files.base import ContentFile
 from django.conf import settings
+from django import forms
+from datetime import datetime, timedelta
+from dateutil.parser import parse
 import requests
 import mimetypes
 import tarfile
@@ -19,27 +22,57 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class CustomLCOPhotometricSequenceForm(LCOPhotometricSequenceForm):
-
+class CustomLCOSequenceFormMixin(forms.Form):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        self.fields['start'] = forms.DateTimeField()
+        self.fields['end'] = forms.DateTimeField()
 
         if 'target_id' in self.initial:
             self.initial['name'] = Target.objects.get(pk=self.initial['target_id']).name
         self.initial['cadence_strategy'] = 'ResumeCadenceAfterFailureStrategy'
         self.initial['cadence_frequency'] = 72.
 
+        self.initial['max_airmass'] = 1.6
+        self.initial['min_lunar_distance'] = 20.
+        self.initial['proposal'] = 'KEY2026B-003'
+        self.initial['ipp_value'] = 1.
+
+    def clean_start(self):
+        start = self.cleaned_data.get('start')
+        if isinstance(start, datetime):
+            start = start.isoformat()
+        return start
+
+    def clean_end(self):
+        end = self.cleaned_data.get('end')
+        if isinstance(end, datetime):
+            end = end.isoformat()
+        return end
+
+    def clean(self):
+        """
+        Overrides the parent form behavior to use a maximum window of 24 hours
+        """
+        if not self.cleaned_data.get('end') and self.cleaned_data.get('start'):
+            start = parse(self.cleaned_data['start'])
+            window_length = min(self.cleaned_data['cadence_frequency'], 24.)
+            self.cleaned_data['end'] = datetime.strftime(start + timedelta(hours=window_length), '%Y-%m-%dT%H:%M:%S')
+
+        return self.cleaned_data
+
+
+class CustomLCOPhotometricSequenceForm(LCOPhotometricSequenceForm, CustomLCOSequenceFormMixin):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.initial['U'] = (300., 2, 1)
         self.initial['B'] = (200., 2, 1)
         self.initial['V'] = (120., 2, 1)
         self.initial['gp'] = (200., 2, 1)
         self.initial['rp'] = (120., 2, 1)
         self.initial['ip'] = (120., 2, 1)
-
-        self.initial['max_airmass'] = 1.6
-        self.initial['min_lunar_distance'] = 20.
-        self.initial['proposal'] = 'KEY2026B-003'
-        self.initial['ipp_value'] = 1.
 
     def all_optical_element_choices(self, use_code_only=False):
         return sorted(set([
@@ -49,24 +82,13 @@ class CustomLCOPhotometricSequenceForm(LCOPhotometricSequenceForm):
             key=lambda filter_tuple: LCOPhotometricSequenceForm.valid_filters.index(filter_tuple[0]))
 
 
-class CustomLCOSpectroscopicSequenceForm(LCOSpectroscopicSequenceForm):
+class CustomLCOSpectroscopicSequenceForm(LCOSpectroscopicSequenceForm, CustomLCOSequenceFormMixin):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
-        if 'target_id' in self.initial:
-            self.initial['name'] = Target.objects.get(pk=self.initial['target_id']).name
-        self.initial['cadence_strategy'] = 'ResumeCadenceAfterFailureStrategy'
-        self.initial['cadence_frequency'] = 72.
-
         self.initial['exposure_count'] = 1
         self.initial['exposure_time'] = 1800.
         self.initial['filter'] = 'slit_2.0as'
         self.initial['guider_exposure_time'] = 10.
-
-        self.initial['max_airmass'] = 1.6
-        self.initial['min_lunar_distance'] = 20.
-        self.initial['proposal'] = 'KEY2026B-003'
-        self.initial['ipp_value'] = 1.
 
     def layout(self):
         if settings.TARGET_PERMISSIONS_ONLY:
