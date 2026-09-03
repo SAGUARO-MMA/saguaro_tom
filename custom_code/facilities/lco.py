@@ -24,7 +24,8 @@ class CustomLCOPhotometricSequenceForm(LCOPhotometricSequenceForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.initial['name'] = Target.objects.get(pk=self.initial['target_id']).name
+        if 'target_id' in self.initial:
+            self.initial['name'] = Target.objects.get(pk=self.initial['target_id']).name
         self.initial['cadence_strategy'] = 'ResumeCadenceAfterFailureStrategy'
         self.initial['cadence_frequency'] = 72.
 
@@ -52,7 +53,8 @@ class CustomLCOSpectroscopicSequenceForm(LCOSpectroscopicSequenceForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.initial['name'] = Target.objects.get(pk=self.initial['target_id']).name
+        if 'target_id' in self.initial:
+            self.initial['name'] = Target.objects.get(pk=self.initial['target_id']).name
         self.initial['cadence_strategy'] = 'ResumeCadenceAfterFailureStrategy'
         self.initial['cadence_frequency'] = 72.
 
