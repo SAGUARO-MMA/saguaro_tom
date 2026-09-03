@@ -1,15 +1,9 @@
 <table class="table table-striped">
-  <thead><tr><th>Facility</th><th>Obs. Grp.</th><th>Status</th><th>Strategy</th><th>Parameters</th></tr></thead>
+  <thead><tr><th></th><th>Facility</th><th title="observation group">OG</th><th>Strategy</th><th>Parameters</th></tr></thead>
   <tbody>
   {% for sequence in observation_sequences %}
     {% with sequence.observation_group.observation_records.last as observation %}
     <tr>
-      <td>{{ observation.facility }}</td>
-      <td>
-        <a href="{% url 'tom_observations:list' %}?observationgroup={{ sequence.observation_group.id }}">
-          {{ sequence.observation_group.id }}
-        </a>
-      </td>
       <td>
         {% if sequence.active %}
           <span title='active' style="color: green;">&#x25B6;&#xFE0E;</span>
@@ -17,9 +11,15 @@
           <span title='stopped' style="color: red;">&#x25A0;&#xFE0E;</span>
         {% endif %}
       </td>
+      <td>{{ observation.facility }}</td>
+      <td>
+        <a href="{% url 'tom_observations:list' %}?observationgroup={{ sequence.observation_group.id }}">
+          {{ sequence.observation_group.id }}
+        </a>
+      </td>
       <td>
         {% if sequence.cadence_strategy == 'ResumeCadenceAfterFailureStrategy' %}
-          Repeating every {{ sequence.cadence_parameters.cadence_frequency }}&nbsp;h
+          Repeat every {{ sequence.cadence_parameters.cadence_frequency }}&nbsp;h
         {% elif sequence.cadence_strategy == 'RetryFailedObservationsStrategy' %}
           Repeat until obtained
         {% endif %}
