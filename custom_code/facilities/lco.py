@@ -11,7 +11,6 @@ from django.core.files.base import ContentFile
 from django.conf import settings
 from django import forms
 from datetime import datetime, timedelta
-from dateutil.parser import parse
 import requests
 import mimetypes
 import tarfile
@@ -55,14 +54,15 @@ class CustomLCOSequenceFormMixin(forms.Form):
         """
         Overrides the parent form behavior to use a maximum window of 24 hours
         """
+        self.cleaned_data = super().clean()
         if not self.cleaned_data.get('end') and self.cleaned_data.get('start'):
             window_length = min(self.cleaned_data['cadence_frequency'], 24.)
-            self.cleaned_data['end'] = (self.cleaned_data['start'] + timedelta(hours=window_length)).isoformat()
+            self.cleaned_data['end'] = self.cleaned_data['start'] + timedelta(hours=window_length)
 
         return self.cleaned_data
 
 
-class CustomLCOPhotometricSequenceForm(LCOPhotometricSequenceForm, CustomLCOSequenceFormMixin):
+class CustomLCOPhotometricSequenceForm(CustomLCOSequenceFormMixin, LCOPhotometricSequenceForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -81,7 +81,7 @@ class CustomLCOPhotometricSequenceForm(LCOPhotometricSequenceForm, CustomLCOSequ
             key=lambda filter_tuple: LCOPhotometricSequenceForm.valid_filters.index(filter_tuple[0]))
 
 
-class CustomLCOSpectroscopicSequenceForm(LCOSpectroscopicSequenceForm, CustomLCOSequenceFormMixin):
+class CustomLCOSpectroscopicSequenceForm(CustomLCOSequenceFormMixin, LCOSpectroscopicSequenceForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.initial['exposure_count'] = 1
