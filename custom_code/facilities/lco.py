@@ -56,9 +56,8 @@ class CustomLCOSequenceFormMixin(forms.Form):
         Overrides the parent form behavior to use a maximum window of 24 hours
         """
         if not self.cleaned_data.get('end') and self.cleaned_data.get('start'):
-            start = parse(self.cleaned_data['start'])
             window_length = min(self.cleaned_data['cadence_frequency'], 24.)
-            self.cleaned_data['end'] = datetime.strftime(start + timedelta(hours=window_length), '%Y-%m-%dT%H:%M:%S')
+            self.cleaned_data['end'] = (self.cleaned_data['start'] + timedelta(hours=window_length)).isoformat()
 
         return self.cleaned_data
 
