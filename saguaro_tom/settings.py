@@ -232,10 +232,6 @@ FACILITIES = {
             'MMTCam': MMT_MMTCAM_PROGRAMS,
         },
     },
-    'SWIFT': {
-        'SWIFT_USERNAME': SWIFT_USERNAME,
-        'SWIFT_SHARED_SECRET': SWIFT_SHARED_SECRET,
-    },
 }
 
 SINGLE_TARGET_DATA_SERVICES = {
@@ -272,7 +268,6 @@ TOM_FACILITY_CLASSES = [
     'tom_observations.facilities.soar.SOARFacility',
     'tom_observations.facilities.lt.LTFacility',
     'custom_code.facilities.mmt.CustomMMTFacility',
-    'tom_swift.swift.SwiftFacility',
 ]
 
 TOM_ALERT_CLASSES = [

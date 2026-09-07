@@ -20,7 +20,6 @@ tom-antares @ git+https://github.com/SAGUARO-MMA/tom_antares@127_query_service_c
 tom-mmt @ git+https://github.com/griffin-h/tom_mmt
 tom-nonlocalizedevents==1.0.0
 tom-registration==2.0.1
-tom-swift==0.2.0
 paramiko
 plotly
 psycopg2-binary
