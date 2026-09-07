@@ -143,7 +143,7 @@ USE_I18N = True
 
 USE_TZ = True
 
-FORMAT_MODULE_PATH = 'saguaro_tom.formats'
+FORMAT_MODULE_PATH = 'tom_base.formats'
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/2.1/howto/static-files/
