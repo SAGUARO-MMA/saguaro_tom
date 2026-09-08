@@ -10,7 +10,7 @@ django-guardian
 django-tasks
 healpix-alchemy
 healpy
-lightcurve-fitting
+lightcurve-fitting>=0.11.0
 ligo.skymap
 matplotlib
 numpy

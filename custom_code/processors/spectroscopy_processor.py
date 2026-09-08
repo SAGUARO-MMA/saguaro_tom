@@ -26,7 +26,7 @@ class SpectroscopyProcessor(OldSpectroscopyProcessor):
         :returns: python list of 2-tuples, each with a timestamp and corresponding data
         :rtype: list
         """
-        wavelength, flux, obs_date, telescope, instrument = readspec(data_product.data.path)
+        wavelength, flux, flux_err, obs_date, telescope, instrument = readspec(data_product.data.path)
         if len(flux) < 1:
             raise InvalidFileFormatException('Empty table or invalid file type')
         spectrum = Spectrum1D(flux=flux * self.DEFAULT_FLUX_CONSTANT,
