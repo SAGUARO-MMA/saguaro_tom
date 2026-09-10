@@ -108,7 +108,7 @@ class ClippedStackedAtlasProcessor(AtlasProcessor):
                 value = {
                     'timestamp': time.to_datetime(timezone=utc),
                     'filter': str(datum['F']),
-                    'telescope': 'ATLAS',
+                    'telescope': f'ATLAS-{datum["tel"]}',
                 }
                 # If the signal is in the noise, calculate the non-detection limit from the reported flux uncertainty.
                 # see https://fallingstar-data.com/forcedphot/resultdesc/
