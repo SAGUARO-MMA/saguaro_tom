@@ -1,21 +1,145 @@
-from tom_observations.facilities.lco import LCOFacility
+from tom_observations.facilities.lco import LCOFacility, LCOPhotometricSequenceForm, LCOSpectroscopicSequenceForm
 from tom_dataproducts.data_processor import run_data_processor, DataProcessor
 from tom_dataproducts.models import DataProduct, ReducedDatum
 from tom_dataproducts.utils import create_image_dataproduct
+from tom_targets.models import Target
 from astropy.coordinates import SkyCoord
 from astropy.io import fits
+from crispy_forms.layout import Row, Column
+from crispy_forms.bootstrap import PrependedText
 from django.core.files.base import ContentFile
 from django.conf import settings
+from django import forms
+from datetime import datetime, timedelta
 import requests
 import mimetypes
 import tarfile
+import copy
 import os
 import logging
 
 logger = logging.getLogger(__name__)
 
 
+class CustomLCOSequenceFormMixin(forms.Form):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.fields['start'] = forms.DateTimeField()
+        self.fields['end'] = forms.DateTimeField()
+
+        if 'target_id' in self.initial:
+            self.initial['name'] = Target.objects.get(pk=self.initial['target_id']).name
+        self.initial['cadence_strategy'] = 'ResumeCadenceAfterFailureStrategy'
+        self.initial['cadence_frequency'] = 72.
+
+        self.initial['max_airmass'] = 1.6
+        self.initial['min_lunar_distance'] = 20.
+        self.initial['proposal'] = 'KEY2026B-003'
+        self.initial['ipp_value'] = 1.
+
+    def clean_start(self):
+        start = self.cleaned_data.get('start')
+        if isinstance(start, datetime):
+            start = start.isoformat()
+        return start
+
+    def clean_end(self):
+        end = self.cleaned_data.get('end')
+        if isinstance(end, datetime):
+            end = end.isoformat()
+        return end
+
+    def clean(self):
+        """
+        Overrides the parent form behavior to use a maximum window of 24 hours
+        """
+        self.cleaned_data = super().clean()
+        if not self.cleaned_data.get('end') and self.cleaned_data.get('start'):
+            window_length = min(self.cleaned_data['cadence_frequency'], 24.)
+            self.cleaned_data['end'] = self.cleaned_data['start'] + timedelta(hours=window_length)
+
+        return self.cleaned_data
+
+
+class CustomLCOPhotometricSequenceForm(CustomLCOSequenceFormMixin, LCOPhotometricSequenceForm):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.initial['U'] = (300., 2, 1)
+        self.initial['B'] = (200., 2, 1)
+        self.initial['V'] = (120., 2, 1)
+        self.initial['gp'] = (200., 2, 1)
+        self.initial['rp'] = (120., 2, 1)
+        self.initial['ip'] = (120., 2, 1)
+
+    def all_optical_element_choices(self, use_code_only=False):
+        return sorted(set([
+            (f['code'], f['name']) for ins in self._get_instruments().values() for f in
+            ins['optical_elements'].get('filters', [])
+            if f['code'] in LCOPhotometricSequenceForm.valid_filters]),
+            key=lambda filter_tuple: LCOPhotometricSequenceForm.valid_filters.index(filter_tuple[0]))
+
+
+class CustomLCOSpectroscopicSequenceForm(CustomLCOSequenceFormMixin, LCOSpectroscopicSequenceForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.initial['exposure_count'] = 1
+        self.initial['exposure_time'] = 1800.
+        self.initial['filter'] = 'slit_2.0as'
+        self.initial['guider_exposure_time'] = 10.
+
+    def layout(self):
+        if settings.TARGET_PERMISSIONS_ONLY:
+            groups = Row()
+        else:
+            groups = Row('groups')
+        return Row(
+            Column(
+                Row('exposure_count'),
+                Row('exposure_time'),
+                Row('filter'),
+                Row('guider_mode'),
+                Row('guider_exposure_time'),
+                Row('acquisition_radius'),
+            ),
+            Column(
+                Row('max_airmass'),
+                Row(PrependedText('min_lunar_distance', '>')),
+                Row('site'),
+                Row('proposal'),
+                Row('observation_mode'),
+                Row('ipp_value'),
+                groups,
+            ),
+        )
+
+    def observation_payload(self):
+        payload = super().observation_payload()
+        science_config = payload['requests'][0]['configurations'][0]
+
+        # hardcode calibration frames into every spectrum request
+        arc_config = copy.deepcopy(science_config)
+        arc_config['type'] = 'ARC'
+        arc_config['instrument_configs'][0]['exposure_time'] = 80.0
+        arc_config['acquisition_config']['mode'] = 'OFF'
+        arc_config['guiding_config']['optional'] = True
+        payload['requests'][0]['configurations'].append(arc_config)
+
+        flat_config = copy.deepcopy(arc_config)
+        flat_config['type'] = 'LAMP_FLAT'
+        flat_config['instrument_configs'][0]['exposure_time'] = 40.0
+        payload['requests'][0]['configurations'].append(flat_config)
+
+        return payload
+
+
 class CustomLCOFacility(LCOFacility):
+    observation_forms = {
+        'PHOTOMETRIC_SEQUENCE': CustomLCOPhotometricSequenceForm,
+        'SPECTROSCOPIC_SEQUENCE': CustomLCOSpectroscopicSequenceForm,
+    }
+
     def save_data_products(self, observation_record, product_id=None):
         final_products = []
         products = self.data_products(observation_record.observation_id, product_id)

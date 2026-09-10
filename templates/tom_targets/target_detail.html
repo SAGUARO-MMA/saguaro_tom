@@ -1,5 +1,5 @@
 {% extends 'tom_targets/partials/base.html' %}
-{% load comments bootstrap4 tom_common_extras targets_extras observation_extras dataproduct_extras target_list_extras photometry_extras cache target_extras spectroscopy_extras %}
+{% load comments bootstrap4 tom_common_extras targets_extras observation_extras dataproduct_extras target_list_extras photometry_extras cache target_extras spectroscopy_extras obs_extras %}
 {% block title %}Target {{ object.name }}{% endblock %}
 {% block content %}
 <script>
@@ -102,10 +102,18 @@
         {% galaxy_table object %}
       </div>
       <div class="tab-pane" id="observations">
-        {% existing_observation_form object %}
-        <h4>Observations</h4>
-        <a href="{% url 'targets:detail' pk=target.id %}?update_status=True" title="Update status of observations for target" class="btn btn-primary">Update Observations Status</a>
+        <h4>Observation Sequences</h4>
+        {% observation_sequence_list object %}
+        <div class="row">
+          <div class="col-md-7">
+            <h4>Individual Observations</h4>
+          </div>
+          <div class="col-md-5">
+            <a href="{% url 'targets:detail' pk=target.id %}?update_status=True" title="Update status of observations for target" class="btn btn-primary">Update Observations Status</a>
+          </div>
+        </div>
         {% observation_list object %}
+        {% existing_observation_form object %}
       </div>
       <div class="tab-pane" id="manage-data">
         {% if user.is_authenticated %}
