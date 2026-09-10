@@ -7,7 +7,7 @@
 {% if target.type == 'SIDEREAL' %}
 <div class="row">
     <div class="col">
-    {% observation_plan target form.facility.value %}
+    {% observation_plan target form.facility.value airmass_limit=3 %}
     </div>
 </div>
 {% endif %}
