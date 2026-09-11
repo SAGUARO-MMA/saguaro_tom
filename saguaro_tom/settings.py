@@ -226,6 +226,7 @@ FACILITIES = {
         },
     },
     'MMT': {
+        'scheduler_url': 'https://scheduler-proxy.mmto.arizona.edu',
         'programs': {
             'Binospec': MMT_BINOSPEC_PROGRAMS,
             'MMIRS': MMT_MMIRS_PROGRAMS,
