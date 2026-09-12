@@ -17,7 +17,7 @@ numpy
 tomtoolkit @ git+https://github.com/TOMToolkit/tom_base@b6edb22
 tom-alertstreams==1.3.0
 tom-antares @ git+https://github.com/SAGUARO-MMA/tom_antares@127_query_service_can_return_a_Locus_or_a_generator
-tom-mmt @ git+https://github.com/griffin-h/tom_mmt
+tom-mmt @ git+https://github.com/griffin-h/tom_mmt@v0.1.8
 tom-nonlocalizedevents==1.0.0
 tom-registration==2.0.1
 trove-mpc @ git+https://github.com/astro-trove/trove-mpc.git@v0.1.0
