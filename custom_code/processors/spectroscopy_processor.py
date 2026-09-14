@@ -26,7 +26,7 @@ class SpectroscopyProcessor(OldSpectroscopyProcessor):
         :returns: python list of 2-tuples, each with a timestamp and corresponding data
         :rtype: list
         """
-        wavelength, flux, obs_date, telescope, instrument = readspec(data_product.data.path)
+        wavelength, flux, flux_err, obs_date, telescope, instrument = readspec(data_product.data.path)
         if len(flux) < 1:
             raise InvalidFileFormatException('Empty table or invalid file type')
         spectrum = Spectrum1D(flux=flux * self.DEFAULT_FLUX_CONSTANT,
@@ -40,7 +40,7 @@ class FiniteSpectrumSerializer(SpectrumSerializer):
 
     def serialize(self, spectrum: Spectrum1D) -> dict:
         """
-        Serializes a Spectrum1D in order to store in a ReducedDatum object. The serialization stores only what's
+        Serializes a Spectrum1D in order to store in a SpectroscopyReducedDatum object. The serialization stores only what's
         necessary to rebuild the Spectrum1D--namely, flux and wavelength, and their respective units.
 
         :param spectrum: Spectrum1D to be serialized

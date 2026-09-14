@@ -7,14 +7,14 @@ from django.db.models import Count
 from django.urls import reverse_lazy
 from django.http import HttpResponseRedirect, StreamingHttpResponse
 from django.views.generic.base import RedirectView
-from django.views.generic.edit import CreateView, TemplateResponseMixin, FormMixin, ProcessFormView, UpdateView
+from django.views.generic.edit import TemplateResponseMixin, FormMixin, ProcessFormView
 from django_filters.views import FilterView
 from django.shortcuts import redirect
 from guardian.mixins import PermissionListMixin
 
-from tom_targets.models import Target, TargetList
+from tom_targets.models import Target
 from tom_targets.permissions import targets_for_user
-from tom_dataproducts.models import ReducedDatum
+from tom_dataproducts.models import PhotometryReducedDatum
 from tom_targets.views import TargetNameSearchView as OldTargetNameSearchView, TargetListView as OldTargetListView
 from tom_observations.views import ObservationCreateView as OldObservationCreateView
 from tom_nonlocalizedevents.models import NonLocalizedEvent, EventLocalization, EventCandidate
@@ -22,7 +22,7 @@ from tom_surveys.models import SurveyObservationRecord
 from tom_treasuremap.reporting import report_to_treasure_map
 from .models import Candidate, SurveyFieldCredibleRegion
 from .filters import CandidateFilter, CSSFieldCredibleRegionFilter, NonLocalizedEventFilter
-from .forms import TargetListExtraFormset, TargetReportForm, TargetClassifyForm
+from .forms import TargetReportForm, TargetClassifyForm
 from .forms import NonLocalizedEventFormHelper, CandidateFormHelper
 from .forms import TNS_FILTER_CHOICES, TNS_INSTRUMENT_CHOICES, TNS_CLASSIFICATION_CHOICES
 from .forms import TNS_GROUP_CHOICES, TNS_DATA_SOURCE_GROUP_CHOICES
@@ -41,8 +41,8 @@ import paramiko
 import os
 import re
 
-from tom_catalogs.harvesters.tns import TNS_URL
-TNS = settings.BROKERS['TNS']  # includes the API credentials
+TNS = settings.DATA_SERVICES['TNS']  # includes the API credentials
+TNS_URL = TNS['base_url']
 TNS_MARKER = 'tns_marker' + json.dumps({'tns_id': TNS['bot_id'], 'type': 'bot', 'name': TNS['bot_name']})
 TNS_FILTER_IDS = {name: fid for fid, name in TNS_FILTER_CHOICES}
 TNS_INSTRUMENT_IDS = {name.upper(): iid for iid, name in TNS_INSTRUMENT_CHOICES}
@@ -68,11 +68,11 @@ def guess_tns_filter_id(reduceddatum):
     """
     Stop-gap solution for translating TOM filter names to TNS filter names. TODO: improve this
     """
-    filter_name = reduceddatum.value.get('filter')
+    filter_name = reduceddatum.bandpass
     if filter_name in TNS_FILTER_IDS:
         return TNS_FILTER_IDS[filter_name]
 
-    source = re.sub(' \(.*\)', '', re.sub('[-_ ].*', '', reduceddatum.source_name))
+    source = re.sub(' \(.*\)', '', re.sub('[-_ ].*', '', reduceddatum.telescope or reduceddatum.source_name))
     if filter_name == 'o':
         full_filter_name = 'orange'
     elif filter_name == 'c':
@@ -101,62 +101,6 @@ def guess_tns_filter_id(reduceddatum):
         return TNS_FILTER_IDS[generic_filter_name]
 
     return 0  # Other
-
-
-def guess_tns_instrument_id(reduced_datum):
-    """
-    Stop-gap solution for translating TOM source names to TNS instrument and group names. TODO: improve this
-    """
-    instrument_name = re.sub(' \(.*\)', '', re.sub('[-_ ].*', '', reduced_datum.source_name))
-    if instrument_name in TNS_INSTRUMENT_IDS:
-        iid = TNS_INSTRUMENT_IDS[instrument_name]
-    else:
-        iid = TNS_INSTRUMENT_IDS.get(reduced_datum.value['telescope'])
-    return iid
-
-
-class TargetGroupingCreateView(LoginRequiredMixin, CreateView):
-    """
-    View that handles the creation of ``TargetList`` objects, also known as target groups. Requires authentication.
-    """
-    model = TargetList
-    fields = ['name']
-    success_url = reverse_lazy('targets:targetgrouping')
-    template_name = 'tom_targets/targetlist_form.html'
-
-    def form_valid(self, form):
-        """
-        Runs after form validation. Creates the ``TargetList``, and creates any ``TargetListExtra`` objects,
-        then redirects to the success URL.
-
-        :param form: Form data for target creation
-        :type form: subclass of TargetCreateForm
-        """
-        super().form_valid(form)
-        extra = TargetListExtraFormset(self.request.POST)
-        if extra.is_valid():
-            extra.instance = self.object
-            extra.save()
-        else:
-            form.add_error(None, extra.errors)
-            form.add_error(None, extra.non_form_errors())
-            return super().form_invalid(form)
-        return redirect(self.get_success_url())
-
-    def get_context_data(self, **kwargs):
-        """
-        Inserts certain form data into the context dict.
-
-        :returns: Dictionary with the following keys:
-
-                  `type_choices`: ``tuple``: Tuple of 2-tuples of strings containing available target types in the TOM
-
-                  `extra_form`: ``FormSet``: Django formset with fields for arbitrary key/value pairs
-        :rtype: dict
-        """
-        context = super(TargetGroupingCreateView, self).get_context_data(**kwargs)
-        context['extra_form'] = TargetListExtraFormset()
-        return context
 
 
 class CandidateListView(FilterView):
@@ -297,25 +241,23 @@ class TargetReportView(PermissionListMixin, TemplateResponseMixin, FormMixin, Pr
         alias = target.aliases.first()
         if alias:
             initial['internal_name'] = alias.name
-        photometry = target.reduceddatum_set.filter(data_type='photometry')
-        first_det = photometry.filter(value__magnitude__isnull=False).order_by('timestamp').first()
+        first_det = target.photometryreduceddatum_set.filter(brightness__isnull=False).order_by('timestamp').first()
         if first_det:
             initial['observation_date'] = first_det.timestamp.isoformat(sep=' ', timespec='milliseconds')[:-6]
-            initial['flux'] = first_det.value.get('magnitude')
-            initial['flux_error'] = first_det.value.get('error')
-            initial['limiting_flux'] = first_det.value.get('limit')
+            initial['flux'] = first_det.brightness
+            initial['flux_error'] = first_det.brightness_error
+            initial['limiting_flux'] = first_det.limit
             initial['filter'] = guess_tns_filter_id(first_det)
-            instrument_name = re.sub(' \(.*\)', '', re.sub('[-_ ].*', '', first_det.source_name))
-            initial['instrument'] = guess_tns_instrument_id(first_det)
-            initial['data_source_group'] = TNS_DATA_SOURCE_GROUP_IDS.get(instrument_name)
+            initial['instrument'] = TNS_INSTRUMENT_IDS.get(first_det.telescope or first_det.source_name)
+            initial['data_source_group'] = TNS_DATA_SOURCE_GROUP_IDS.get(first_det.telescope or first_det.source_name)
 
-            last_nondet = photometry.filter(value__magnitude__isnull=True,
-                                            timestamp__lt=first_det.timestamp).order_by('timestamp').last()
+            last_nondet = target.photometryreduceddatum_set.filter(
+                brightness__isnull=True, timestamp__lt=first_det.timestamp).order_by('timestamp').last()
             if last_nondet:
                 initial['nondetection_date'] = last_nondet.timestamp.isoformat(sep=' ', timespec='milliseconds')[:-6]
-                initial['nondetection_limit'] = last_nondet.value.get('limit')
+                initial['nondetection_limit'] = last_nondet.limit
                 initial['nondetection_filter'] = guess_tns_filter_id(last_nondet)
-                initial['nondetection_instrument'] = guess_tns_instrument_id(last_nondet)
+                initial['nondetection_instrument'] = TNS_INSTRUMENT_IDS.get(last_nondet.telescope or last_nondet.source_name)
             else:
                 initial['archive'] = 0
         # pre-fill Host name + Host redshift from the galaxy the user picked on the Host Galaxies tab
@@ -429,13 +371,12 @@ class TargetClassifyView(PermissionListMixin, TemplateResponseMixin, FormMixin, 
         redshift = target.targetextra_set.filter(key='Redshift')
         if redshift.exists():
             initial['redshift'] = redshift.first().value
-        spectra = target.reduceddatum_set.filter(data_type='spectroscopy')
-        if spectra.exists():
-            spectrum = spectra.latest()
+        if target.spectroscopyreduceddatum_set.exists():
+            spectrum = target.spectroscopyreduceddatum_set.latest()
             initial['observation_date'] = spectrum.timestamp.isoformat(sep=' ', timespec='milliseconds')[:-6]
             initial['spectrum'] = spectrum.pk
             initial['group'] = TNS_GROUP_IDS.get(spectrum.source_name)
-            initial['instrument'] = guess_tns_instrument_id(spectrum)
+            initial['instrument'] = TNS_INSTRUMENT_IDS.get(spectrum.telescope or spectrum.source_name)
         return initial
 
     def form_valid(self, form):
@@ -476,13 +417,9 @@ class ObservationCreateView(OldObservationCreateView):
     def get_initial(self):
         initial = super().get_initial()
         target = self.get_target()
-        photometry = target.reduceddatum_set.filter(data_type='photometry')
-        if photometry.exists():
-            latest_photometry = photometry.latest().value
-            if 'magnitude' in latest_photometry:
-                initial['magnitude'] = latest_photometry['magnitude']
-            elif 'limit' in latest_photometry:
-                initial['magnitude'] = latest_photometry['limit']
+        if target.photometryreduceddatum_set.exists():
+            latest_photometry = target.photometryreduceddatum_set.latest()
+            initial['magnitude'] = latest_photometry.brightness or latest_photometry.limit
         return initial
 
 
@@ -524,8 +461,7 @@ class TargetMPCView(LoginRequiredMixin, RedirectView):
         Method that handles the GET requests for this view. Calls the kilonova vetting code.
         """
         # get all detections of the target in question
-        phot = ReducedDatum.objects.filter(target_id=kwargs["pk"], data_type="photometry",
-                                           value__magnitude__isnull=False)
+        phot = PhotometryReducedDatum.objects.filter(target_id=kwargs["pk"], brightness__isnull=False)
         if phot.exists():
             messages.info(request, "Running minor planet checker. Refresh after ~1 minute to see matches.")
             target_run_mpc.enqueue(phot.latest().id)  # check the latest detection

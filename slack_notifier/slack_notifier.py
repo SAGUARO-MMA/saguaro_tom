@@ -92,7 +92,7 @@ class SlackNotifier(WebClient):
                 try:
                     thread_id[ii] = self._find_relevant_thread(target=target, chan=channel)
                 except Exception as apierr:
-                    logger.warning("This token may not have the permissions to read the history of {channel}! Skipping!")
+                    logger.warning(f"This token may not have the permissions to read the history of #{channel}! Skipping!")
                     logger.exception(apierr)
 
         self.send_slack_message_from_text(msg, thread_ids=thread_id)

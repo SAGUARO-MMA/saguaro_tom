@@ -1,5 +1,5 @@
 {% extends 'tom_targets/partials/base.html' %}
-{% load bootstrap4 crispy_forms_tags observation_extras targets_extras obs_extras %} {# obs_extras overrides display_obs_type #}
+{% load django_bootstrap5 crispy_forms_tags observation_extras targets_extras obs_extras %} {# obs_extras overrides display_obs_type #}
 {% block title %}Submit Observation{% endblock %}
 {% block content %}
 {{ form|as_crispy_errors }}
@@ -21,7 +21,7 @@
         <ul class="nav nav-tabs" id="tabs">
         {% for observation_type, observation_form in observation_type_choices %}
             <li class="nav-item">
-                <span class="nav-link {% if observation_type == active or not active and forloop.first %}active{% endif %}" data-target="#{{ observation_type }}" data-toggle="tab">
+                <span class="nav-link {% if observation_type == active or not active and forloop.first %}active{% endif %}" data-target="#{{ observation_type }}" data-bs-toggle="tab">
                     {{ observation_type|display_obs_type }}
                 </span>
             </li>

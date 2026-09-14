@@ -22,7 +22,7 @@ class AntaresSlackFilter(SlackNotifier):
             token = token
         )
 
-    def filter_alert_stream(self, target, created, aliases_added, telescope_stream = "ZTF"):
+    def filter_alert_stream(self, target, created, telescope_stream = "ZTF"):
         target_extra = target.targetextra_set.filter(key='Host Galaxies').first()
         vs_matches = target.targetextra_set.filter(key__in=[
             "Gaia Match", "PS1 Match", "ASASSN Match"
@@ -34,37 +34,27 @@ class AntaresSlackFilter(SlackNotifier):
         has_vs_match = any(m.value != 'None' for m in vs_matches)
         has_agn_match = any(m is not None and m.value != 'None' for m in agn_matches) 
 
-        peak = target.reduceddatum_set.order_by('value__magnitude').first()
-        peak_mag = peak.value['magnitude'] if peak else np.nan
-
-        #Check that the first alert is now
-        first_alert_mjd = Time(
-            target.reduceddatum_set.filter(
-                data_type="photometry",
-                value__magnitude__isnull = False
-            ).earliest().timestamp
-        ).mjd
+        peak = target.photometryreduceddatum_set.order_by('brightness').first()
+        peak_mag = peak.brightness if peak else np.nan
 
         # want to ignore non-detections
         # And then also throw out anything with a low SNR before a day
-        latest = target.reduceddatum_set.filter(data_type="photometry", value__magnitude__isnull = False).latest()
-        previous_detections = target.reduceddatum_set.filter(
-            Q(data_type="photometry") &
-            Q(value__magnitude__isnull = False) &
+        latest = target.photometryreduceddatum_set.filter(brightness__isnull=False).latest()
+        previous_detections = target.photometryreduceddatum_set.filter(
+            Q(brightness__isnull = False) &
             Q(timestamp__lt = latest.timestamp-timedelta(1)) &
-            Q(value__error__lt = 0.1)
+            Q(brightness_error__lt = 0.1)
         )
         new_alert = previous_detections.count() == 0
 
         if not new_alert:
-            latest_det_mag = latest.value['magnitude']
+            latest_det_mag = latest.brightness
 
-            second_to_last_det = target.reduceddatum_set.filter(
-                data_type="photometry",
+            second_to_last_det = target.photometryreduceddatum_set.filter(
                 timestamp__lt = latest.timestamp,
-                value__magnitude__isnull = False
+                brightness__isnull = False
             ).latest()
-            second_to_last_det_mag = second_to_last_det.value['magnitude']
+            second_to_last_det_mag = second_to_last_det.brightness
 
             delta_mag = abs(latest_det_mag - second_to_last_det_mag)
             delta_t = Time(latest.timestamp).mjd - Time(second_to_last_det.timestamp).mjd
@@ -81,16 +71,15 @@ class AntaresSlackFilter(SlackNotifier):
         #if not new, look for rapidly rising
         elif rise_rate<-0.5: 
             base_str = f"Rapidly rising object {target.name} in the {telescope_stream} alert stream at {rise_rate:0.2f} mag/day"
-            if len(aliases_added):
-                base_str += f" aliases: {', '.join(aliases_added)}"
         # Even if sparsely spaced, catch things that significantly change
         elif delta_mag < -0.5:
             base_str = f"Rapidly rising object {target.name} in the {telescope_stream} alert stream, changing by {delta_mag:1.2f} mag since last detection {delta_t:1.2f} days ago)"
-            if len(aliases_added):
-                base_str += f" aliases: {', '.join(aliases_added)}"
         else:
             # don't send this message!
             return
+
+        if len(target.names) > 1:
+            base_str += f"\nAliases: {', '.join(target.names[1:])}"
 
         if np.isfinite(peak_mag):
             base_str += f"\nBrightest at {peak_mag:.1f} mag"
@@ -149,20 +138,19 @@ class DistanceLimitedSlackFilter(SlackNotifier):
             return
 
         # if there was nearby host galaxy found, calculate the absolute magnitude at discovery
-        photometry = target.reduceddatum_set.filter(data_type='photometry')
-        first_det = photometry.filter(value__magnitude__isnull=False).order_by('timestamp').first()
+        first_det = target.photometryreduceddatum_set.filter(brightness__isnull=False).order_by('timestamp').first()
         if first_det:
             time_fdet = (datetime.now(tz=first_det.timestamp.tzinfo) - first_det.timestamp).total_seconds() / 3600. / 24.
-            absmag = first_det.value['magnitude'] - 5. * (np.log10(galaxy["Dist"]) + 5.)
+            absmag = first_det.brightness - 5. * (np.log10(galaxy["Dist"]) + 5.)
             slack_alert += (f' If this is the host, the transient was detected {time_fdet:.1f} days ago at '
-                            f'an absolute magnitude of {absmag:.1f} mag in {first_det.value["filter"]}.')
+                            f'an absolute magnitude of {absmag:.1f} mag in {first_det.bandpass}.')
 
             # if there was a nondetection, calculate the rise rate
-            last_nondet = photometry.filter(value__magnitude__isnull=True,
-                                            timestamp__lt=first_det.timestamp).order_by('timestamp').last()
+            last_nondet = target.photometryreduceddatum_set.filter(
+                brightness__isnull=True, timestamp__lt=first_det.timestamp).order_by('timestamp').last()
             if last_nondet:
                 time_lnondet = (first_det.timestamp - last_nondet.timestamp).total_seconds() / 3600. / 24.
-                dmag_lnondet = (last_nondet.value['limit'] - first_det.value['magnitude']) / time_lnondet
+                dmag_lnondet = (last_nondet.limit - first_det.brightness) / time_lnondet
                 slack_alert += f' The last nondetection was {time_lnondet:.1f} days before detection,'
                 if dmag_lnondet > 0:
                     slack_alert += f' during which time it rose &gt;{dmag_lnondet:.1f} mag/day.'
