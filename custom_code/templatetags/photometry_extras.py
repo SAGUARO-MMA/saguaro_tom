@@ -4,7 +4,7 @@ from guardian.shortcuts import get_objects_for_user
 from plotly import offline
 import plotly.graph_objs as go
 from plotly import colors
-from tom_dataproducts.models import ReducedDatum
+from tom_dataproducts.models import PhotometryReducedDatum
 from tom_dataproducts.forms import DataShareForm
 import numpy as np
 from datetime import datetime
@@ -55,19 +55,18 @@ def recent_photometry(context, target, limit=1):
     """
 
     if settings.TARGET_PERMISSIONS_ONLY:
-        datums = ReducedDatum.objects.filter(target=target, data_type=settings.DATA_PRODUCT_TYPES['photometry'][0])
+        datums = PhotometryReducedDatum.objects.filter(target=target)
     else:
         datums = get_objects_for_user(context['request'].user,
-                                      'tom_dataproducts.view_reduceddatum',
-                                      klass=ReducedDatum.objects.filter(
-                                        target=target,
-                                        data_type=settings.DATA_PRODUCT_TYPES['photometry'][0]))
+                                      'tom_dataproducts.view_photometryreduceddatum',
+                                      klass=PhotometryReducedDatum.objects.filter(
+                                        target=target))
     recent_det = {'data': []}
     for datum in datums.order_by('-timestamp')[:limit]:
-        if 'magnitude' in datum.value.keys():
-            phot_point = {'timestamp': datum.timestamp, 'magnitude': datum.value['magnitude']}
-        elif 'limit' in datum.value.keys():
-            phot_point = {'timestamp': datum.timestamp, 'limit': datum.value['limit']}
+        if datum.brightness:
+            phot_point = {'timestamp': datum.timestamp, 'magnitude': datum.brightness}
+        elif datum.limit:
+            phot_point = {'timestamp': datum.timestamp, 'limit': datum.limit}
         else:
             continue
 
@@ -85,9 +84,6 @@ def photometry_for_target(context, target, width=700, height=600, background=Non
     """
     Renders a photometric plot for a target.
 
-    This templatetag requires all ``ReducedDatum`` objects with a data_type of ``photometry`` to be structured with the
-    following keys in the JSON representation: magnitude, error, filter
-
     :param width: Width of generated plot
     :type width: int
 
@@ -104,30 +100,29 @@ def photometry_for_target(context, target, width=700, height=600, background=Non
     :type grid: bool
     """
     if settings.TARGET_PERMISSIONS_ONLY:
-        datums = ReducedDatum.objects.filter(target=target, data_type=settings.DATA_PRODUCT_TYPES['photometry'][0])
+        datums = PhotometryReducedDatum.objects.filter(target=target)
     else:
         datums = get_objects_for_user(context['request'].user,
-                                      'tom_dataproducts.view_reduceddatum',
-                                      klass=ReducedDatum.objects.filter(
-                                        target=target,
-                                        data_type=settings.DATA_PRODUCT_TYPES['photometry'][0]))
+                                      'tom_dataproducts.view_photometryreduceddatum',
+                                      klass=PhotometryReducedDatum.objects.filter(
+                                        target=target))
 
     detections = {}
     limits = {}
     for datum in datums:
-        if 'magnitude' in datum.value:
+        if datum.brightness:
             detections.setdefault(datum.source_name, {})
-            detections[datum.source_name].setdefault(datum.value['filter'], {})
-            filter_data = detections[datum.source_name][datum.value['filter']]
+            detections[datum.source_name].setdefault(datum.bandpass, {})
+            filter_data = detections[datum.source_name][datum.bandpass]
             filter_data.setdefault('time', []).append(datum.timestamp)
-            filter_data.setdefault('magnitude', []).append(datum.value['magnitude'])
-            filter_data.setdefault('error', []).append(datum.value.get('error', 0.))
-        elif 'limit' in datum.value:
+            filter_data.setdefault('magnitude', []).append(datum.brightness)
+            filter_data.setdefault('error', []).append(datum.brightness_error if datum.brightness_error else 0.)
+        elif datum.limit:
             limits.setdefault(datum.source_name, {})
-            limits[datum.source_name].setdefault(datum.value['filter'], {})
-            filter_data = limits[datum.source_name][datum.value['filter']]
+            limits[datum.source_name].setdefault(datum.bandpass, {})
+            filter_data = limits[datum.source_name][datum.bandpass]
             filter_data.setdefault('time', []).append(datum.timestamp)
-            filter_data.setdefault('limit', []).append(datum.value['limit'])
+            filter_data.setdefault('limit', []).append(datum.limit)
 
     plot_data = []
     all_ydata = []
@@ -259,7 +254,7 @@ def get_photometry_data(context, target, target_share=False):
     sharing = getattr(settings, "DATA_SHARING", None)
     hermes_sharing = sharing and sharing.get('hermes', {}).get('HERMES_API_KEY')
 
-    context = {'data': target.reduceddatum_set.filter(data_type='photometry').order_by('-timestamp'),
+    context = {'data': target.photometryreduceddatum_set.order_by('-timestamp'),
                'target': target,
                'target_data_share_form': form,
                'sharing_destinations': form.fields['share_destination'].choices,
@@ -270,18 +265,20 @@ def get_photometry_data(context, target, target_share=False):
 
 @register.filter
 def format_mag(datum, d=2):
-    if datum.get('magnitude'):
-        datum['magnitude'] = float(datum['magnitude'])
-        if datum.get('error'):
-            datum['error'] = float(datum['error'])
+    format_dict = {}
+    if datum.brightness:
+        format_dict['magnitude'] = datum.brightness
+        if datum.brightness_error:
+            format_dict['error'] = datum.brightness_error
             display_str = f'{{magnitude:.{d}f}} ± {{error:.{d}f}}'
         else:
             display_str = f'{{magnitude:.{d}f}}'
-    elif datum.get('limit'):
+    elif datum.limit:
+        format_dict['limit'] = datum.limit
         display_str = f'> {{limit:.{d}f}}'
     else:
         display_str = ''
-    return display_str.format(**datum)
+    return display_str.format(**format_dict)
 
 
 @register.filter

@@ -1,5 +1,5 @@
 from django import template
-from ..models import Candidate, TargetListExtra
+from ..models import Candidate
 from tom_targets.models import Target, TargetExtra
 from tom_targets.permissions import targets_for_user
 from tom_surveys.models import SurveyField, SurveyObservationRecord
@@ -10,16 +10,6 @@ import json
 
 register = template.Library()
 
-
-@register.filter
-def target_list_extra_field(target_list, name):
-    """
-    Returns a ``TargetListExtra`` value of the given name, if one exists.
-    """
-    try:
-        return TargetListExtra.objects.get(target_list=target_list, key=name).value
-    except TargetListExtra.DoesNotExist:
-        return None
 
 @register.filter
 def islist(value):
@@ -48,23 +38,6 @@ def galaxy_table(target):
             galaxy['is_preferred'] = (galaxy.get('ID'), galaxy.get('Source')) == preferred_key
     any_preferred = bool(galaxies) and any(g.get('is_preferred') for g in galaxies)
     return {'galaxies': galaxies, 'target': target, 'any_preferred': any_preferred}
-    #return {'galaxies': galaxies, 'target': target}
-
-
-
-
-
-#@register.inclusion_tag('tom_targets/partials/galaxy_table.html')
-#def galaxy_table(target):
- #   """
-  #  Displays the most likely host galaxy matches.
-   # """
-    #te = TargetExtra.objects.filter(target=target, key='Host Galaxies')
-    #if te.exists():
-     #   galaxies = json.loads(te.first().value)
-    #else:
-     #   galaxies = None
-    #return {'galaxies': galaxies}
 
 
 FIELDS = SurveyField.objects.order_by('name')

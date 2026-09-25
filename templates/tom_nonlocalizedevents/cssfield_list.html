@@ -1,5 +1,5 @@
 {% extends 'tom_common/base.html' %}
-{% load bootstrap4 nonlocalizedevent_extras skymap_extras targets_extras %}
+{% load django_bootstrap5 nonlocalizedevent_extras skymap_extras targets_extras %}
 {% block title %}Survey Plans{% endblock %}
 {% block content %}
 <h1>
@@ -21,11 +21,9 @@
     <form method="POST">
       <input type="hidden" value="False" id="isSelectAll" name="isSelectAll">
       {% csrf_token %}
-      {% buttons %}
       <button type="submit" class="btn btn-info" formaction="{% url 'custom_code:css-fields-export' eventlocalization.id %}">Export</button>
       <button type="submit" class="btn btn-warning" formaction="{% url 'custom_code:css-fields-submit' eventlocalization.id %}">Submit</button>
       CSS only observes fields requested on the same UT date. This page loaded at {% now "M d H:i" %} UT.
-      {% endbuttons %}
       <table class="table table-hover">
       <thead>
         <tr>
@@ -67,10 +65,8 @@
   <div class="col-md-2">
     <form action="" method="get" class="form">
       {% bootstrap_form filter.form %}
-      {% buttons %}
       <button type="submit" class="btn btn-primary">Filter</button>
       <a href="{% url 'custom_code:css-fields' eventlocalization.id %}" class="btn btn-secondary" title="Reset">Reset</a>
-      {% endbuttons %}
     </form>
   </div>
 </div>
