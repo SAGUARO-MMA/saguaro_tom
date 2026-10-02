@@ -36,7 +36,7 @@ def get_marker_for_photometry_point(label, marker_map, others):
     Get marker properties (color or shape) from a dictionary `marker_map` after parsing the photometry `label`.
     If there is no matching label in the dictionary, pick the next item in `others`.
     """
-    base_label = re.sub(' \(.*\)', '', re.sub('[-_].*', '', label))
+    base_label = re.sub(r' \(.*\)', '', re.sub('[-_].*', '', label))
     if label in marker_map:
         return marker_map[label]
     elif base_label in marker_map:

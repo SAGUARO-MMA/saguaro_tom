@@ -39,15 +39,11 @@ INSTALLED_APPS = TOMTOOKIT_INSTALLED_APPS + [
     'tom_alertstreams',
     'tom_antares',
     'tom_nonlocalizedevents',
-    'tom_registration',
     'tom_surveys',
     'tom_treasuremap',
-    'webpack_loader',  # required for tom_nonlocalizedevents
 ]
 
-MIDDLEWARE = TOMTOOKIT_MIDDLEWARE + [
-    'tom_registration.middleware.RedirectAuthenticatedUsersFromRegisterMiddleware',
-]
+MIDDLEWARE = TOMTOOKIT_MIDDLEWARE
 MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')  # must be directly after SecurityMiddleware
 
 ROOT_URLCONF = 'saguaro_tom.urls'
@@ -127,10 +123,7 @@ LOGIN_URL = FORCE_SCRIPT_NAME + '/accounts/login/'
 LOGIN_REDIRECT_URL = FORCE_SCRIPT_NAME + '/'
 LOGOUT_REDIRECT_URL = FORCE_SCRIPT_NAME + '/'
 
-AUTHENTICATION_BACKENDS = (
-    'django.contrib.auth.backends.AllowAllUsersModelBackend',
-    'guardian.backends.ObjectPermissionBackend',
-)
+AUTHENTICATION_BACKENDS = TOMTOOLKIT_AUTHENTICATION_BACKENDS
 
 # Internationalization
 # https://docs.djangoproject.com/en/2.1/topics/i18n/
@@ -333,7 +326,6 @@ TARGET_PERMISSIONS_ONLY = True
 
 # URLs that should be allowed access even with AUTH_STRATEGY = LOCKED
 # for example: OPEN_URLS = ['/', '/about']
-OPEN_URLS = ['/accounts/register/']
 
 MATCH_MANAGERS = {'Target': 'custom_code.managers.StrictTargetMatchManager'}
 
@@ -403,28 +395,12 @@ ALERT_STREAMS = [
     }
 ]
 
-VUE_FRONTEND_DIR_TOM_NONLOCAL = os.path.join(STATIC_ROOT, 'tom_nonlocalizedevents/vue')
-WEBPACK_LOADER = {
-    'TOM_NONLOCALIZEDEVENTS': {
-        'CACHE': not DEBUG,
-        'BUNDLE_DIR_NAME': 'tom_nonlocalizedevents/vue/',  # must end with slash
-        'STATS_FILE': os.path.join(VUE_FRONTEND_DIR_TOM_NONLOCAL, 'webpack-stats.json'),
-        'POLL_INTERVAL': 0.1,
-        'TIMEOUT': None,
-        'IGNORE': [r'.+\.hot-update.js', r'.+\.map']
-    }
-}
 TOM_API_URL = os.getenv('TOM_API_URL', os.path.join(ALLOWED_HOST, FORCE_SCRIPT_NAME))
 HERMES_API_URL = os.getenv('HERMES_API_URL', 'https://hermes.lco.global')
 CREDIBLE_REGION_PROBABILITIES = '[0.25, 0.5, 0.75, 0.9, 0.95]'
 
-TOM_REGISTRATION = {
-    'REGISTRATION_AUTHENTICATION_BACKEND': 'django.contrib.auth.backends.AllowAllUsersModelBackend',
-    'REGISTRATION_REDIRECT_PATTERN': 'home',
-    'REGISTRATION_STRATEGY': 'approval_required',
-    'SEND_APPROVAL_EMAILS': True,
-    'APPROVAL_SUBJECT': f'Congratulations!! Welcome to {TOM_NAME}!',
-}
+TOM_REGISTRATION_STRATEGY = 'approval_required'
+ACCOUNT_SIGNUP_REDIRECT_URL = 'home'
 EMAIL_SUBJECT_PREFIX = ''
 EMAIL_USE_TLS = True
 SERVER_EMAIL = f'Salsa Saguaro <{EMAIL_HOST_USER}>'
