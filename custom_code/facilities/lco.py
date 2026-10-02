@@ -210,13 +210,13 @@ class LCODataProcessor(DataProcessor):
             rd, created = PhotometryReducedDatum.objects.get_or_create(
                 target=data_product.target,
                 # data_product=data_product,  # do not make this association so we can delete the FITS file
-                source_name='LCO (BANZAI)',
+                source_name='BANZAI',
                 source_location=data_product.get_file_name(),
                 timestamp=hdr.get('DATE-OBS'),
                 bandpass=hdr.get('FILTER'),
                 brightness=cat[imin]['mag'],
                 brightness_error=cat[imin]['magerr'],
-                telescope=hdr.get('TELESCOP'),
+                telescope=f"LCO {hdr.get('TELESCOP')}",
                 instrument=hdr.get('INSTRUME'),
             )
             if created:
