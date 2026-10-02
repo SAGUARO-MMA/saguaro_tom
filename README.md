@@ -2,12 +2,6 @@
 
 Welcome to the SAGUARO target and observation manager for GW follow-up.
 
-## Repositories of Interest:
-
-  * https://github.com/SAGUARO-MMA/saguaro_tom.git
-  * https://github.com/SAGUARO-MMA/sassy_q3c_models.git
-  * https://github.com/SAGUARO-MMA/kne-cand-vetting.git
-
 ## Installation (for development)
 
  1. Clone the repository:
