@@ -72,7 +72,7 @@ def guess_tns_filter_id(reduceddatum):
     if filter_name in TNS_FILTER_IDS:
         return TNS_FILTER_IDS[filter_name]
 
-    source = re.sub(' \(.*\)', '', re.sub('[-_ ].*', '', reduceddatum.telescope or reduceddatum.source_name))
+    source = re.sub(r' \(.*\)', '', re.sub('[-_ ].*', '', reduceddatum.telescope or reduceddatum.source_name))
     if filter_name == 'o':
         full_filter_name = 'orange'
     elif filter_name == 'c':
