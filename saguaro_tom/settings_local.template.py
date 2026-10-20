@@ -58,3 +58,5 @@ SLACK_TOKEN_TNS = ''  # Slack API token for TNS transient alerts
 SLACK_TOKEN_TNS50 = ''  # Slack API token for TNS transient alerts up to 50 Mpc
 TNS_API_KEY = ''        # API key for the Transient Name Server
 TREASUREMAP_API_KEY = '' # API key for the Gravitational Wave Treasure Map
+# the callback URL for ATLAS FP
+ATLAS_CALLBACK_URL = "https://sand.as.arizona.edu/saguaro_tom/dataproducts/api/atlas_processor/"
