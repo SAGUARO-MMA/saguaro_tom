@@ -297,7 +297,9 @@ View the built documentation in `docs/_build/html/index.html`
 
 ## Getting Help
 
-Questions? Reach out!
+Questions? Reach out! You can reach current developers at
+1. via [GitHub Issues](https://github.com/saguaro-mma/saguaro_tom/issues/new) for external contributions
+2. via the SAGUARO slack workspace for collaborators
 
 ## Additional Resources
 
