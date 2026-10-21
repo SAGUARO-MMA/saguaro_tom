@@ -279,12 +279,12 @@ def vet_or_post_error(
                     target.distance = dist
                     target.distance_err = np.mean(disterr)
 
-            # ingest any ZTF or LSST photometry and internal names from ANTARES
-            data_service = AntaresDataService()
-            data = data_service.query_reduced_data(target)
-            data_service.to_reduced_datums(target, data)
-            alias_data = data_service.query_aliases(target=target)
-            data_service.to_aliases(target, alias_data)
+        # ingest any ZTF or LSST photometry and internal names from ANTARES
+        data_service = AntaresDataService()
+        data = data_service.query_reduced_data(target)
+        data_service.to_reduced_datums(target, data)
+        alias_data = data_service.query_aliases(target=target)
+        data_service.to_aliases(target, alias_data)
 
         # only save once to avoid too many recursive calls to this function
         target.save()
