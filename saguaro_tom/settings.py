@@ -252,7 +252,7 @@ DATA_PROCESSORS = {
     'photometry': 'tom_dataproducts.processors.photometry_processor.PhotometryProcessor',
     'spectroscopy': 'custom_code.processors.spectroscopy_processor.SpectroscopyProcessor',
     'MMT': 'tom_mmt.mmt.MMTDataProcessor',
-    'atlas_photometry': 'custom_code.atlas.ClippedStackedAtlasProcessor',
+    'atlas_photometry': 'candidate_vetting.atlas.ClippedStackedAtlasProcessor',
     'LCO': 'custom_code.facilities.lco.LCODataProcessor',
 }
 
