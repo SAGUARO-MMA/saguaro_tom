@@ -1,6 +1,10 @@
-<h3>Survey View</h3>
-<div id="aladin-lite-div" style="width: 100%; aspect-ratio: 1;"></div>
-<div id="chart-form-div" style="width: 100%;">
+<!-- include Aladin Lite CSS file in the head section of your page -->
+<!-- media="print" + onload keeps this stylesheet from blocking the rest of the page -->
+<link rel="stylesheet" href="//aladin.u-strasbg.fr/AladinLite/api/v2/latest/aladin.min.css" media="print" onload="this.media='all'" />
+<!-- insert this snippet where you want Aladin Lite viewer to appear and after the loading of jQuery -->
+<!-- <h3>Survey View</h3> -->
+<div id="aladin-lite-div" style="width:300px;height:300px;"></div>
+<div id="chart-form-div" style="width:300px;">
   <form id="chart-form">
     <div class="form-group mt-1 mb-1">
       <div class="input-group">
@@ -38,50 +42,62 @@
     </div>
   </form>
 </div>
-<script type="text/javascript" src="//aladin.u-strasbg.fr/AladinLite/api/v3/latest/aladin.js" charset="utf-8"></script>
 <script type="text/javascript">
 
     let aladin;
-    A.init.then(() => {
-      aladin = A.aladin('#aladin-lite-div', {
-        survey: "P/DSS2/color",
-        fov: getFovAsDegreesFromForm(),
-        showReticle: false,
-        target: "{{ target.ra }} {{ target.dec }}",
-        showProjectionControl: false,
-        showFullscreenControl: false,
-        showFrame: false,
-        showGotoControl: false,
-        showZoomControl: false
-      });
 
-      aladin.on('positionChanged', function () {
-        annotateChart({{ target.ra }}, {{ target.dec }}, {{ galaxy_ras }}, {{galaxy_decs}});
-      });
+    function initAladin() {
+    aladin = A.aladin('#aladin-lite-div', {
+      survey: "P/DSS2/color",
+      fov: getFovAsDegreesFromForm(),
+      showReticle: false,
+      target: "{{ target.ra }} {{ target.dec }}",
+      showGotoControl: false,
+      showZoomControl: false
+    });
 
-      aladin.on('zoomChanged', function () {
-        annotateChart({{ target.ra }}, {{ target.dec }}, {{ galaxy_ras }}, {{galaxy_decs}});
-      });
+    aladin.on('positionChanged', function() {
+      annotateChart({{ target.ra }}, {{ target.dec }}, {{ galaxy_ras }}, {{galaxy_decs}});
+    });
+
+    aladin.on('zoomChanged', function() {
+      annotateChart({{ target.ra }}, {{ target.dec }}, {{ galaxy_ras }}, {{galaxy_decs}});
+    });
+
+    aladin.createImageSurvey(
+	'VLASS-QL-MedianStack-20250131',
+	'VLASS',
+	'https://vlass-dl.nrao.edu/vlass/HiPS/MedianStack/Quicklook',
+	'equatorial',
+	9,
+	{imgFormat: 'png'}
+    );
+    }
+
+    // load Aladin Lite only after everything else on the page, so a slow or
+    // unreachable Aladin server can't hold up the rest of the content
+    window.addEventListener('load', function() {
+      const script = document.createElement('script');
+      script.src = '//aladin.u-strasbg.fr/AladinLite/api/v2/latest/aladin.min.js';
+      script.charset = 'utf-8';
+      script.onload = initAladin;
+      document.head.appendChild(script);
     });
 
     function getScaleBarFromForm() {
-      const scaleBarSizeInput = document.getElementById('scale-bar-size');
-      const scaleBarUnitsSelect = document.getElementById('scale-bar-units-select');
-      let size = Number(scaleBarSizeInput.value);
+      let size = Number($('#scale-bar-size').val());
       if (size < 0) {
         size = 0;
       }
-      const units = scaleBarUnitsSelect.value;
+      const units = $('#scale-bar-units-select option:selected').val();
       const label = String(size) + ' ' + units;
       const sizeAsDegrees = toDegrees(size, units);
       return {size: size, units: units, label: label, sizeAsDegrees: sizeAsDegrees};
     }
 
     function getFovAsDegreesFromForm() {
-      const fovInput = document.getElementById('fov');
-      const fovUnitsSelect = document.getElementById('fov-units-select');
-      const fov = Number(fovInput.value);
-      const units = fovUnitsSelect.value;
+      const fov = Number($('#fov').val());
+      const units = $('#fov-units-select option:selected').val();
       let fovAsDegrees;
       if (fov >= 0) {
         fovAsDegrees = toDegrees(fov, units);
@@ -146,12 +162,18 @@
     }
 
     function downloadImage() {
+      if (!aladin) {
+        return false;  // Aladin Lite hasn't loaded
+      }
       // Update the data that the link that was clicked will download
-      document.getElementById('download-chart').setAttribute('href', aladin.getViewDataURL());
+      $('#download-chart').attr('href', aladin.getViewDataURL());
       return true;
     }
 
     function updateFromForm(ra, dec, galaxyRas, galaxyDecs) {
+      if (!aladin) {
+        return;  // Aladin Lite hasn't loaded
+      }
       const fov = getFovAsDegreesFromForm();
       if (fov !== undefined) {
         aladin.setFov(fov);
