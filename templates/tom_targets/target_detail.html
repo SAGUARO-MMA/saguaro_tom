@@ -74,6 +74,7 @@
       <li class="nav-item">
         <a class="nav-link" id="manage-groups-tab" href="#manage-groups" role="tab" data-bs-toggle="tab">Manage Groups</a>
       </li>
+      {% include_app_tabs %}
     </ul>
     <div class="tab-content">
       <div class="tab-pane" id="observe">
@@ -139,6 +140,7 @@
         {% spectroscopy_for_target target %}
         {% get_spectroscopy_data object %}
       </div>
+      {% include_app_tab_divs %}
 
       {% comments_enabled as comments_are_enabled %}
       <hr/>
