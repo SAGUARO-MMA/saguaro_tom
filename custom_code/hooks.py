@@ -5,7 +5,9 @@ from candidate_vetting.vet import (
     host_association,
     point_source_association,
     agn_association_2d,
-    evcc_galaxy_check,)
+    evcc_galaxy_check,
+    fornax_galaxy_check,
+    dorado_galaxy_check)
 
 
 from candidate_vetting.public_catalogs.phot_catalogs import TNS_Phot
@@ -26,6 +28,7 @@ from django.conf import settings
 from django_tasks import task
 import traceback
 import re
+from slack_notifier.slack_notifier import SlackNotifier
 
 logger = logging.getLogger(__name__)
 # new_format = logging.Formatter('[%(asctime)s] %(levelname)s : s%(message)s')
@@ -35,32 +38,30 @@ logger = logging.getLogger(__name__)
 
 EVCC_DISTANCE_MPC = 18.0
 EVCC_DISTANCE_MODULUS = 5.0 * np.log10(EVCC_DISTANCE_MPC * 1e6) - 5.0   # 31.28
+FORNAX_DISTANCE_MPC = 20.0
+FORNAX_DISTANCE_MODULUS = 5.0 * np.log10(FORNAX_DISTANCE_MPC * 1e6) - 5.0   # 31.51
+DORADO_DISTANCE_MPC = 17.69
+DORADO_DISTANCE_MODULUS = 5.0 * np.log10(DORADO_DISTANCE_MPC * 1e6) - 5.0   # 31.24
 
-
-def _evcc_detection_info(target):
-    """From the target's latest detection: apparent mag, absolute mag (@18 Mpc),
-    cleaned source/stream name, and filter. Any field is None if unavailable."""
-    det = target.reduceddatum_set.filter(
-        data_type="photometry", value__magnitude__isnull=False
-    ).order_by("timestamp").last()
+def _cluster_detection_info(target, dist_mpc):
+    det = (target.photometryreduceddatum_set.filter(brightness__isnull=False).order_by("timestamp").last())
     if det is None:
         return {"app_mag": None, "abs_mag": None, "source": None, "filt": None}
 
-    app_mag = det.value.get("magnitude")
-    abs_mag = None if app_mag is None else app_mag - EVCC_DISTANCE_MODULUS
+    app_mag = det.brightness
+    distance_modulus = 5.0 * np.log10(dist_mpc * 1e6) - 5.0
+    abs_mag = None if app_mag is None else app_mag - distance_modulus
 
-    # clean source_name the same way the target page does (views.py:75)
+# Clean the stream/source name in the same manner as the prior hook.
     source = None
     if det.source_name:
-        source = re.sub(r' \(.*\)', '', re.sub(r'[-_ ].*', '', det.source_name))
+        source = re.sub(r" \(.*\)", "", re.sub(r"[-_ ].*", "", det.source_name))
 
     return {
         "app_mag": app_mag,
         "abs_mag": abs_mag,
-        "source":  source,
-        "filt":    det.value.get("filter"),
-    }
-
+        "source": source,
+        "filt": det.bandpass,}
 
 def update_or_create_target_extra(target, key, value):
     """
@@ -187,23 +188,26 @@ def vet_or_post_error(
             ps_matches = point_source_association(target.id)
 
             # geometric association with nearby Virgo (EVCC) galaxies.
+            for cluster, check_fn, dist_mpc in (
+                ("EVCC",   evcc_galaxy_check,   EVCC_DISTANCE_MPC),
+                ("Fornax", fornax_galaxy_check, FORNAX_DISTANCE_MPC),
+                ("Dorado", dorado_galaxy_check, DORADO_DISTANCE_MPC),
+            ):
+                try:
+                    matches = json.loads(check_fn(target.id))
+                except Exception as e:
+                    logger.error(f"{cluster} check failed for {target.name}: {e}")
+                    matches = []
+                if not matches:
+                    continue
 
-            try:
-                evcc_matches = json.loads(evcc_galaxy_check(target.id))
-            except Exception as e:
-                logger.error(f"EVCC check failed for {target.name}: {e}")
-                evcc_matches = []
+                names = ", ".join(m["ID"] for m in matches)
+                messages.append(f"Within r_kron of {cluster} galaxy: {names}")
 
-            if evcc_matches:
-                names = ", ".join(m["ID"] for m in evcc_matches)
-                messages.append(f"Within Kron radius of EVCC galaxy: {names}")
-
-                g = evcc_matches[0]  # closest
-                info = _evcc_detection_info(target)
-
-
-                if info["app_mag"] is not None:
-                    det_bits = f"m={info['app_mag']:.1f}, M≈{info['abs_mag']:.1f} (at 18 Mpc)"
+                g = matches[0]  # closest match
+                info = _cluster_detection_info(target, dist_mpc)
+                if info["app_mag"] is not None and info["abs_mag"] is not None:
+                    det_bits = f"m={info['app_mag']:.1f}, M≈{info['abs_mag']:.1f} (at {dist_mpc} Mpc)"
                     if info["filt"]:
                         det_bits += f" in filter - {info['filt']}"
                     if info["source"]:
@@ -211,20 +215,20 @@ def vet_or_post_error(
                 else:
                     det_bits = "no apparent mag available"
 
+                slack_token = getattr(settings, "SLACK_TOKEN_TNS50", None)
+                if not slack_token:
+                    logger.info(f"{cluster} Slack alert skipped for {target.name} (no Slack token configured)")
+                    continue
                 try:
                     target_url = settings.TARGET_LINKS[0][0].format(target=target)
-                    evcc_slack = SlackNotifier(
-                        slack_channel="nearby-galaxy-alerts",
-                        token=settings.SLACK_TOKEN_TNS50,
-                    )
-                    evcc_slack.send_slack_message_from_text(
-                        f":telescope: *{target.name}* — {det_bits}· "
-                        f"{g['OffsetKron']}x Kron from candidate host *{g['ID']}* "
+                    cluster_slack = SlackNotifier(slack_channel="nearby-galaxy-alerts", token=slack_token)
+                    cluster_slack.send_slack_message_from_text(
+                        f":telescope: *{target.name}* ({cluster}) — {det_bits} · "
+                        f"{g['OffsetKron']}x r_kron from candidate host *{g['ID']}* "
                         f"<{target_url}|SAGUARO>"
                     )
                 except Exception as e:
-                    logger.error(f"EVCC Slack alert failed for {target.name}: {e}")
-
+                    logger.error(f"{cluster} Slack alert failed for {target.name}: {e}")          
 
         if "AsassnQ3C" in ps_matches:
             asassn = ps_matches["AsassnQ3C"][0]
