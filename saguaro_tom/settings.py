@@ -36,6 +36,7 @@ TOM_NAME = 'SAGUARO'
 INSTALLED_APPS = TOMTOOKIT_INSTALLED_APPS + [
     'candidate_vetting',
     'custom_code',
+    'tom_across',
     'tom_alertstreams',
     'tom_antares',
     'tom_nonlocalizedevents',
