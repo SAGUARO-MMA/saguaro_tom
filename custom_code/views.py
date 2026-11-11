@@ -524,14 +524,18 @@ class TargetListView(OldTargetListView):
     View for listing targets in the TOM. Only shows targets that the user is authorized to view. Requires authorization.
 
     Same as the built-in TargetListView but does not display unconfirmed candidates (names starting with "J"),
-    and adds distance and photometry/spectra count columns.
+    and adds distance, photometry/spectra count, and latest detection columns.
     """
     table_class = TargetTable
 
     def get_queryset(self):
+        latest_det = PhotometryReducedDatum.objects.filter(
+            target=OuterRef('pk'), brightness__isnull=False).order_by('-timestamp')
         return super().get_queryset().exclude(name__startswith='J').annotate(
             n_photometry=_count_for_target(PhotometryReducedDatum),
             n_spectra=_count_for_target(SpectroscopyReducedDatum),
+            latest_det_mag=Subquery(latest_det.values('brightness')[:1]),
+            latest_det_time=Subquery(latest_det.values('timestamp')[:1]),
         )
 
 
