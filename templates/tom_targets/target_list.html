@@ -1,0 +1,38 @@
+{% extends "tom_targets/target_list.html" %}
+{% comment %}
+Extends the upstream tom_targets template: when viewing a single target group, adds a form to add a target to it by name.
+{% endcomment %}
+
+{% block target_table_content %}
+{% if current_group %}
+<hr>
+<form action="{% url 'custom_code:group-add-target' current_group.id %}" method="POST" class="row g-2 align-items-center">
+    {% csrf_token %}
+    <div class="col-auto">
+        <label for="group-add-target-name">Add target to <b>{{ current_group.name }}</b></label>
+    </div>
+    <div class="col-auto position-relative">
+        <input type="text" id="group-add-target-name" name="name" class="form-control" placeholder="Target name"
+               autocomplete="off" required
+               hx-get="{% url 'custom_code:group-suggest-target' current_group.id %}"
+               hx-trigger="input changed delay:300ms" hx-target="#group-add-target-options" hx-swap="innerHTML">
+        {# autocomplete suggestions, filled by HTMX as the user types #}
+        <div id="group-add-target-options" class="list-group position-absolute shadow"
+             style="z-index: 1050; max-height: 300px; overflow-y: auto;"></div>
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-primary" title="Add Target to Group">Add</button>
+    </div>
+</form>
+<script>
+  // Clicking a suggestion fills in the name; clicking anywhere else closes the suggestion list.
+  document.addEventListener('click', function(e) {
+    const options = document.getElementById('group-add-target-options');
+    const item = e.target.closest('#group-add-target-options [data-name]');
+    if (item) document.getElementById('group-add-target-name').value = item.dataset.name;
+    if (e.target.id !== 'group-add-target-name') options.innerHTML = '';
+  });
+</script>
+{% endif %}
+{{ block.super }}
+{% endblock target_table_content %}
