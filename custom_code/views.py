@@ -4,15 +4,16 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Count
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.http import HttpResponseRedirect, StreamingHttpResponse
-from django.views.generic.base import RedirectView
+from django.views.generic.base import RedirectView, View
 from django.views.generic.edit import TemplateResponseMixin, FormMixin, ProcessFormView
 from django_filters.views import FilterView
 from django.shortcuts import redirect
 from guardian.mixins import PermissionListMixin
 
-from tom_targets.models import Target
+from tom_targets.groups import add_selected_to_grouping, remove_selected_from_grouping
+from tom_targets.models import Target, TargetList
 from tom_targets.permissions import targets_for_user
 from tom_dataproducts.models import PhotometryReducedDatum
 from tom_targets.views import TargetNameSearchView as OldTargetNameSearchView, TargetListView as OldTargetListView
@@ -421,6 +422,22 @@ class ObservationCreateView(OldObservationCreateView):
             latest_photometry = target.photometryreduceddatum_set.latest()
             initial['magnitude'] = latest_photometry.brightness or latest_photometry.limit
         return initial
+
+
+class TargetGroupingAddRemoveView(LoginRequiredMixin, View):
+    """
+    Adds a single target to, or removes it from, a target group, then returns to the target's Manage Groups tab.
+    Permission checks and success/error messages are handled by the tom_targets.groups helpers.
+    """
+    def post(self, request, *args, **kwargs):
+        grouping = TargetList.objects.filter(pk=request.POST.get('grouping') or None).first()
+        if grouping is None:
+            messages.error(request, 'Please select a target group.')
+        elif 'add' in request.POST:
+            add_selected_to_grouping([kwargs['pk']], grouping, request)
+        elif 'remove' in request.POST:
+            remove_selected_from_grouping([kwargs['pk']], grouping, request)
+        return redirect(reverse('targets:detail', kwargs={'pk': kwargs['pk']}) + '?tab=manage-groups')
 
 
 class TargetVettingView(LoginRequiredMixin, RedirectView):
