@@ -3,7 +3,8 @@ import logging
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Count
+from django.db.models import Count, OuterRef, Subquery
+from django.db.models.functions import Coalesce
 from django.urls import reverse, reverse_lazy
 from django.http import HttpResponseRedirect, StreamingHttpResponse
 from django.views.generic.base import RedirectView, View
@@ -15,13 +16,14 @@ from guardian.mixins import PermissionListMixin
 from tom_targets.groups import add_selected_to_grouping, remove_selected_from_grouping
 from tom_targets.models import Target, TargetList
 from tom_targets.permissions import targets_for_user
-from tom_dataproducts.models import PhotometryReducedDatum
+from tom_dataproducts.models import PhotometryReducedDatum, SpectroscopyReducedDatum
 from tom_targets.views import TargetNameSearchView as OldTargetNameSearchView, TargetListView as OldTargetListView
 from tom_observations.views import ObservationCreateView as OldObservationCreateView
 from tom_nonlocalizedevents.models import NonLocalizedEvent, EventLocalization, EventCandidate
 from tom_surveys.models import SurveyObservationRecord
 from tom_treasuremap.reporting import report_to_treasure_map
 from .models import Candidate, SurveyFieldCredibleRegion
+from .tables import TargetTable
 from .filters import CandidateFilter, CSSFieldCredibleRegionFilter, NonLocalizedEventFilter
 from .forms import TargetReportForm, TargetClassifyForm
 from .forms import NonLocalizedEventFormHelper, CandidateFormHelper
@@ -509,14 +511,28 @@ class TargetNameSearchView(OldTargetNameSearchView):
         return super().get(request, *args, **kwargs)
 
 
+def _count_for_target(model):
+    """Per-target row count of ``model`` as a correlated subquery, for use in annotate()."""
+    return Coalesce(Subquery(
+        model.objects.filter(target=OuterRef('pk'))
+        .order_by().values('target').annotate(c=Count('pk')).values('c')
+    ), 0)
+
+
 class TargetListView(OldTargetListView):
     """
     View for listing targets in the TOM. Only shows targets that the user is authorized to view. Requires authorization.
 
-    Identical to the built-in TargetListView but does not display unconfirmed candidates (names starting with "J")
+    Same as the built-in TargetListView but does not display unconfirmed candidates (names starting with "J"),
+    and adds distance and photometry/spectra count columns.
     """
+    table_class = TargetTable
+
     def get_queryset(self):
-        return super().get_queryset().exclude(name__startswith='J')
+        return super().get_queryset().exclude(name__startswith='J').annotate(
+            n_photometry=_count_for_target(PhotometryReducedDatum),
+            n_spectra=_count_for_target(SpectroscopyReducedDatum),
+        )
 
 
 class CSSFieldListView(FilterView):
