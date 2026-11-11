@@ -1,7 +1,7 @@
 astroplan
 astropy
 astroquery
-candidate_vetting @ git+https://github.com/astro-trove/candidate_vetting.git@v1.2.0
+candidate_vetting @ git+https://github.com/astro-trove/candidate_vetting.git@v1.2.2
 django
 django-crispy-forms
 django-extensions

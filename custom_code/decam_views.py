@@ -191,17 +191,23 @@ class DecamCandidateListView(ListView):
         # Has host
         if self.request.GET.get('has_host') == 'true':
             queryset = queryset.filter(Q(desi_bgs__isnull=False) & ~Q(desi_bgs=''))
-        
-        # Sort by CNN score (highest first), then target, then filter
-        # NULLs will be at the end
-        from django.db.models import F
-        return queryset.order_by(
-             'target_id',
-             F('cnnscore').desc(nulls_last=True),
-             F('snr_fphot').desc(nulls_last=True),
-            'filter_name'      # g, i, r, z within each target
+
+        # Rows for one target must stay together ({% regroup %} in the template),
+        # so rank each target by the newest ingestion time among its candidates.
+        # Within a target: CNN (highest first), then SNR, then filter.
+        from django.db.models import F, Max, Window
+        queryset = queryset.annotate(
+            latest_ingest=Window(Max('created_at'), partition_by=[F('target_id')])
         )
-    
+        return queryset.order_by(
+            '-latest_ingest',
+            'target_id',
+            F('cnnscore').desc(nulls_last=True),
+            F('snr_fphot').desc(nulls_last=True),
+            'filter_name',
+        )
+
+        
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
