@@ -356,6 +356,12 @@ HINTS_ENABLED = True
 HINT_LEVEL = 20
 
 REST_FRAMEWORK = {
+    # API token (Authorization: Token <key>) or basic auth for scripts; session for the browser.
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'tom_common.accounts.api_auth.TomTokenAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.BasicAuthentication',
+    ],
     'DEFAULT_PERMISSION_CLASSES': [
     ],
     'TEST_REQUEST_DEFAULT_FORMAT': 'json',

@@ -1,26 +1,32 @@
 import logging
+from functools import reduce
+from operator import or_
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Count
-from django.urls import reverse_lazy
-from django.http import HttpResponseRedirect, StreamingHttpResponse
-from django.views.generic.base import RedirectView
+from django.db.models import Count, OuterRef, Q, Subquery
+from django.db.models.functions import Coalesce
+from django.urls import reverse, reverse_lazy
+from django.utils.html import format_html_join
+from django.http import HttpResponse, HttpResponseRedirect, StreamingHttpResponse
+from django.views.generic.base import RedirectView, View
 from django.views.generic.edit import TemplateResponseMixin, FormMixin, ProcessFormView
 from django_filters.views import FilterView
 from django.shortcuts import redirect
 from guardian.mixins import PermissionListMixin
 
-from tom_targets.models import Target
+from tom_targets.groups import add_selected_to_grouping, remove_selected_from_grouping
+from tom_targets.models import Target, TargetList
 from tom_targets.permissions import targets_for_user
-from tom_dataproducts.models import PhotometryReducedDatum
+from tom_dataproducts.models import PhotometryReducedDatum, SpectroscopyReducedDatum
 from tom_targets.views import TargetNameSearchView as OldTargetNameSearchView, TargetListView as OldTargetListView
 from tom_observations.views import ObservationCreateView as OldObservationCreateView
 from tom_nonlocalizedevents.models import NonLocalizedEvent, EventLocalization, EventCandidate
 from tom_surveys.models import SurveyObservationRecord
 from tom_treasuremap.reporting import report_to_treasure_map
 from .models import Candidate, SurveyFieldCredibleRegion
+from .tables import TargetTable
 from .filters import CandidateFilter, CSSFieldCredibleRegionFilter, NonLocalizedEventFilter
 from .forms import TargetReportForm, TargetClassifyForm
 from .forms import NonLocalizedEventFormHelper, CandidateFormHelper
@@ -423,6 +429,69 @@ class ObservationCreateView(OldObservationCreateView):
         return initial
 
 
+class TargetGroupingAddRemoveView(LoginRequiredMixin, View):
+    """
+    Adds a single target to, or removes it from, a target group, then returns to the target's Manage Groups tab.
+    Permission checks and success/error messages are handled by the tom_targets.groups helpers.
+    """
+    def post(self, request, *args, **kwargs):
+        grouping = TargetList.objects.filter(pk=request.POST.get('grouping') or None).first()
+        if grouping is None:
+            messages.error(request, 'Please select a target group.')
+        elif 'add' in request.POST:
+            add_selected_to_grouping([kwargs['pk']], grouping, request)
+        elif 'remove' in request.POST:
+            remove_selected_from_grouping([kwargs['pk']], grouping, request)
+        return redirect(reverse('targets:detail', kwargs={'pk': kwargs['pk']}) + '?tab=manage-groups')
+
+
+# name prefixes users may leave off when typing a target name into the add-to-group form
+OPTIONAL_NAME_PREFIXES = ['', 'AT', 'SN', 'TDE']
+
+
+class TargetGroupAddByNameView(LoginRequiredMixin, View):
+    """
+    Adds a target, looked up by exact name (optionally missing an AT/SN/TDE prefix), to a target group, then returns
+    to that group's target list.
+    Permission checks and success/error messages are handled by the tom_targets.groups helper.
+    """
+    def post(self, request, *args, **kwargs):
+        grouping = TargetList.objects.filter(pk=kwargs['pk']).first()
+        if grouping is None:
+            messages.error(request, 'Target group not found.')
+            return redirect(reverse('targets:list'))
+        name = request.POST.get('name', '').strip()
+        names = [prefix + name for prefix in OPTIONAL_NAME_PREFIXES]
+        targets = targets_for_user(request.user, Target.objects.filter(name__in=names), 'view_target') if name else []
+        if len(targets) == 1:
+            add_selected_to_grouping([targets[0].pk], grouping, request)
+        elif not targets:
+            messages.error(request, f"No target found named '{name}'.")
+        else:
+            messages.error(request, f"Multiple targets match '{name}'. Please add it from the target's page.")
+        return redirect(grouping.get_absolute_url())
+
+
+class TargetGroupNameSuggestView(LoginRequiredMixin, View):
+    """
+    Returns dropdown items for the add-by-name form's autocomplete: viewable targets whose name starts with the typed
+    text (optionally missing an AT/SN/TDE prefix), excluding targets already in the group and unconfirmed candidates (names starting
+    with J). Matching is a case-sensitive prefix so it can use the name index; the target table is far too large
+    for icontains, which forces a full table scan.
+    """
+    def get(self, request, *args, **kwargs):
+        name = request.GET.get('name', '').strip()
+        if len(name) < 2:
+            return HttpResponse('')
+        targets = targets_for_user(request.user, Target.objects.all(), 'view_target') \
+            .filter(reduce(or_, [Q(name__startswith=prefix + name) for prefix in OPTIONAL_NAME_PREFIXES])) \
+            .exclude(name__startswith='J').exclude(targetlist__pk=kwargs['pk']) \
+            .values_list('name', flat=True).order_by('name')[:20]
+        return HttpResponse(format_html_join(
+            '', '<button type="button" class="list-group-item list-group-item-action" data-name="{}">{}</button>',
+            ((n, n) for n in targets)))
+
+
 class TargetVettingView(LoginRequiredMixin, RedirectView):
     """
     View that runs or reruns the kilonova candidate vetting code and stores the results
@@ -492,14 +561,41 @@ class TargetNameSearchView(OldTargetNameSearchView):
         return super().get(request, *args, **kwargs)
 
 
+def _count_for_target(model):
+    """Per-target row count of ``model`` as a correlated subquery, for use in annotate()."""
+    return Coalesce(Subquery(
+        model.objects.filter(target=OuterRef('pk'))
+        .order_by().values('target').annotate(c=Count('pk')).values('c')
+    ), 0)
+
+
 class TargetListView(OldTargetListView):
     """
     View for listing targets in the TOM. Only shows targets that the user is authorized to view. Requires authorization.
 
-    Identical to the built-in TargetListView but does not display unconfirmed candidates (names starting with "J")
+    Same as the built-in TargetListView but does not display unconfirmed candidates (names starting with "J"),
+    and adds distance, photometry/spectra count, and latest detection columns.
     """
+    table_class = TargetTable
+
     def get_queryset(self):
-        return super().get_queryset().exclude(name__startswith='J')
+        latest_det = PhotometryReducedDatum.objects.filter(
+            target=OuterRef('pk'), brightness__isnull=False).order_by('-timestamp')
+        return super().get_queryset().exclude(name__startswith='J').annotate(
+            n_photometry=_count_for_target(PhotometryReducedDatum),
+            n_spectra=_count_for_target(SpectroscopyReducedDatum),
+            latest_det_mag=Subquery(latest_det.values('brightness')[:1]),
+            latest_det_time=Subquery(latest_det.values('timestamp')[:1]),
+        )
+
+    def get_context_data(self, *args, **kwargs):
+        context = super().get_context_data(*args, **kwargs)
+        # when viewing a single group the user can modify, show a form to add targets to it by name
+        group_id = self.request.GET.get('targetlist__name', '')
+        group = TargetList.objects.filter(pk=group_id).first() if group_id.isdigit() else None
+        if group is not None and self.request.user.has_perm('tom_targets.change_targetlist', group):
+            context['current_group'] = group
+        return context
 
 
 class CSSFieldListView(FilterView):

@@ -1,6 +1,8 @@
 from django import template
 from django.template.defaultfilters import stringfilter
 from astropy.coordinates import SkyCoord
+from guardian.shortcuts import get_objects_for_user
+from tom_targets.models import TargetList
 import json
 import re
 
@@ -52,3 +54,16 @@ def aladin_custom(target):
 @register.filter
 def parse_json_str(value):
     return json.loads(value)
+
+
+@register.inclusion_tag('custom_code/partials/target_groups.html', takes_context=True)
+def manage_target_groups(context, target):
+    """
+    Lists the groups this target is in, with a Remove button for each, plus a dropdown and button
+    to add the target to any other group the user can modify.
+    """
+    groups = TargetList.objects.filter(targets=target)
+    available_groups = get_objects_for_user(context['user'], 'tom_targets.change_targetlist') \
+        .exclude(pk__in=groups).order_by('name')
+    return {'target': target, 'groups': groups, 'available_groups': available_groups,
+            'user': context['user'], 'csrf_token': context.get('csrf_token')}

@@ -1,0 +1,53 @@
+<h4>Groups</h4>
+<table class="table table-striped">
+    <thead>
+    <tr>
+        <th>Name</th>
+        <th>Total Targets</th>
+        <th>Remove</th>
+    </tr>
+    </thead>
+    <tbody>
+    {% for group in groups %}
+    <tr>
+        <td><a href="{{ group.get_absolute_url }}" title="View Group">{{ group.name }}</a></td>
+        <td valign="middle">{{ group.targets.count }}</td>
+        <td>
+            <form action="{% url 'custom_code:target-groups' target.id %}" method="POST">
+                {% csrf_token %}
+                <input type="hidden" name="grouping" value="{{ group.id }}"/>
+                <button type="submit" title="Remove Target from Group" class="btn btn-danger" name="remove">Remove</button>
+            </form>
+        </td>
+    </tr>
+    {% empty %}
+    <tr>
+        <td>Not in any groups</td>
+        <td></td>
+        <td></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+{% if user.is_authenticated %}
+<h4>Add to Group</h4>
+{% if available_groups %}
+<form action="{% url 'custom_code:target-groups' target.id %}" method="POST" class="row g-2 align-items-center">
+    {% csrf_token %}
+    <div class="col-auto">
+        <select name="grouping" class="form-select" required>
+            <option value="" selected disabled>Select a group...</option>
+            {% for group in available_groups %}
+            <option value="{{ group.id }}">{{ group.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-auto">
+        <button type="submit" name="add" class="btn btn-primary" title="Add Target to Group">Add</button>
+    </div>
+</form>
+{% else %}
+<p>No other groups available. <a href="{% url 'targets:create-group' %}">Create a new group</a>.</p>
+{% endif %}
+{% endif %}
