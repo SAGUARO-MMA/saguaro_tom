@@ -23,6 +23,10 @@ Extends the upstream tom_targets template: when viewing a single target group, a
     <div class="col-auto">
         <button type="submit" class="btn btn-primary" title="Add Target to Group">Add</button>
     </div>
+    <div class="col-auto">
+        <a href="{% url 'custom_code:group-permissions' current_group.id %}" class="btn btn-outline-secondary"
+           title="Choose which user groups can see or edit this grouping">Manage access</a>
+    </div>
 </form>
 <script>
   // Clicking a suggestion fills in the name; clicking anywhere else closes the suggestion list.
