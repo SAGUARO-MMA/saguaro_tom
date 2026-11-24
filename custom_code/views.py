@@ -13,8 +13,11 @@ from django.http import HttpResponse, HttpResponseRedirect, StreamingHttpRespons
 from django.views.generic.base import RedirectView, View
 from django.views.generic.edit import TemplateResponseMixin, FormMixin, ProcessFormView
 from django_filters.views import FilterView
-from django.shortcuts import redirect
+from django.shortcuts import redirect, render, get_object_or_404
+from django.contrib.auth.models import Group
+from django.core.exceptions import PermissionDenied
 from guardian.mixins import PermissionListMixin
+from guardian.shortcuts import assign_perm, remove_perm, get_groups_with_perms
 
 from tom_targets.groups import add_selected_to_grouping, remove_selected_from_grouping
 from tom_targets.models import Target, TargetList
@@ -490,6 +493,48 @@ class TargetGroupNameSuggestView(LoginRequiredMixin, View):
         return HttpResponse(format_html_join(
             '', '<button type="button" class="list-group-item list-group-item-action" data-name="{}">{}</button>',
             ((n, n) for n in targets)))
+
+
+GROUP_ACCESS_PERMS = {
+    'none': [],
+    'view': ['tom_targets.view_targetlist'],
+    'edit': ['tom_targets.view_targetlist', 'tom_targets.change_targetlist'],
+}
+
+
+class TargetGroupPermissionsView(LoginRequiredMixin, View):
+    """
+    Lets anyone who can modify a target group (its creator, or a superuser) choose which user groups can view it,
+    or view and add/remove targets from it.
+    """
+    def get_grouping(self, request, pk):
+        grouping = get_object_or_404(TargetList, pk=pk)
+        if not request.user.has_perm('tom_targets.change_targetlist', grouping):
+            raise PermissionDenied
+        return grouping
+
+    def get(self, request, *args, **kwargs):
+        grouping = self.get_grouping(request, kwargs['pk'])
+        current = get_groups_with_perms(grouping, attach_perms=True)
+        rows = []
+        for group in Group.objects.order_by('name'):
+            perms = current.get(group, [])
+            access = 'edit' if 'change_targetlist' in perms else 'view' if 'view_targetlist' in perms else 'none'
+            rows.append((group, access))
+        return render(request, 'custom_code/group_permissions.html', {'grouping': grouping, 'rows': rows})
+
+    def post(self, request, *args, **kwargs):
+        grouping = self.get_grouping(request, kwargs['pk'])
+        for group in Group.objects.all():
+            access = request.POST.get(f'group-{group.id}', 'none')
+            wanted = GROUP_ACCESS_PERMS.get(access, [])
+            for perm in GROUP_ACCESS_PERMS['edit']:
+                if perm in wanted:
+                    assign_perm(perm, group, grouping)
+                else:
+                    remove_perm(perm, group, grouping)
+        messages.success(request, f'Updated group access for {grouping.name}.')
+        return redirect(reverse('custom_code:group-permissions', kwargs={'pk': grouping.pk}))
 
 
 class TargetVettingView(LoginRequiredMixin, RedirectView):

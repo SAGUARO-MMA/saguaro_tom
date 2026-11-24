@@ -1,0 +1,32 @@
+{% extends 'tom_common/base.html' %}
+{% block title %}Group Access: {{ grouping.name }}{% endblock %}
+{% block content %}
+<h1>Who can access <a href="{{ grouping.get_absolute_url }}">{{ grouping.name }}</a></h1>
+<p>
+    Choose what each user group can do with this target grouping. <b>View</b> lets members see the grouping;
+    <b>View &amp; edit</b> also lets them add and remove targets. Members still only see targets they have
+    permission to view. Superusers and the grouping's creator always have full access.
+</p>
+<form method="POST">
+    {% csrf_token %}
+    <table class="table table-striped">
+        <thead>
+            <tr><th>User group</th><th>No access</th><th>View</th><th>View &amp; edit</th></tr>
+        </thead>
+        <tbody>
+            {% for group, access in rows %}
+            <tr>
+                <td>{{ group.name }}</td>
+                <td><input type="radio" name="group-{{ group.id }}" value="none" {% if access == 'none' %}checked{% endif %}></td>
+                <td><input type="radio" name="group-{{ group.id }}" value="view" {% if access == 'view' %}checked{% endif %}></td>
+                <td><input type="radio" name="group-{{ group.id }}" value="edit" {% if access == 'edit' %}checked{% endif %}></td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4">No user groups exist yet.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a href="{% url 'targets:targetgrouping' %}" class="btn btn-secondary">Back to Target Groupings</a>
+</form>
+{% endblock %}

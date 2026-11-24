@@ -6,7 +6,7 @@ from .views import CSSFieldListView, GWListView, GRBListView, NeutrinoListView, 
 from .views import CSSFieldExportView, CSSFieldSubmitView, EventCandidateCreateView
 from tom_nonlocalizedevents.views import SupereventIdView
 from .views import SelectHostGalaxyView, ClearHostGalaxyView, TargetGroupingAddRemoveView, TargetGroupAddByNameView
-from .views import TargetGroupNameSuggestView
+from .views import TargetGroupNameSuggestView, TargetGroupPermissionsView
 
 
 
@@ -27,6 +27,7 @@ urlpatterns = [
     path('targets/<int:pk>/groups/', TargetGroupingAddRemoveView.as_view(), name='target-groups'),
     path('targets/groups/<int:pk>/add/', TargetGroupAddByNameView.as_view(), name='group-add-target'),
     path('targets/groups/<int:pk>/suggest/', TargetGroupNameSuggestView.as_view(), name='group-suggest-target'),
+    path('targets/groups/<int:pk>/permissions/', TargetGroupPermissionsView.as_view(), name='group-permissions'),
     path('targets/<int:pk>/vet/', TargetVettingView.as_view(), name='vet'),
     path('targets/<int:pk>/mpc/', TargetMPCView.as_view(), name='mpc'),
     path('targets/search/', TargetNameSearchView.as_view(), name='search'),
