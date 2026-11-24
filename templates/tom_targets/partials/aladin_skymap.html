@@ -1,0 +1,121 @@
+{% comment %}
+Override of the upstream tom_targets template. Upstream fetch()es aladin.js from a pinned version URL (3.8.2) that CDS
+no longer serves, and CDS sends no CORS header, so fetch() fails and the sky map stays blank. Load it with a plain
+script tag instead (no CORS needed), as templates/tom_nonlocalizedevents/partials/skymap.html does.
+{% endcomment %}
+<!-- embedding Aladin Lite example code found at: https://aladin.cds.unistra.fr/AladinLite/doc/  -->
+<div id="aladin-lite-div" style="width:auto; height:700px; margin:auto; margin-top: 20px;" ></div>
+
+<script src="https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.js" charset="utf-8"></script>
+<script type="text/javascript">
+(async function loadAladin() {
+    // Initialize Aladin after script loads
+
+    A.init.then(() => {
+        window.aladin = A.aladin("#aladin-lite-div", {
+            survey: "P/DSS2/color",
+            fov: 360,
+            projection: "MOL",
+            showReticle: false,
+            showCooGrid: true,
+            showCooGridControl: true,
+        });
+
+        aladin.setCooGrid({ color: 'grey', labelSize: 10 });
+
+        // Create a single catalog for all targets (instead of one per target).
+        // Stored on window so that updateAladinTargets() can replace its
+        // contents without rebuilding the viewer.
+        window.aladinTargetCatalog = A.catalog({
+            name: 'Targets', color: 'blue', sourceSize: 16
+        });
+        aladin.addCatalog(window.aladinTargetCatalog);
+
+        // Global function to update target markers on the existing viewer.
+        //
+        // NOTE: This pattern (Out-of-Band (OOB) data update instead of
+        // OOB DOM replacement) can be generalized for any HTMX table that
+        // needs to "side-load" updates to a companion widget.
+        // The key ingredients are:
+        //   1. A global JS update function registered on page load
+        //   2. An OOB <script> block in the partial that calls it with new data
+        window.updateAladinTargets = function(targets) {
+            if (!window.aladinTargetCatalog) return;
+            window.aladinTargetCatalog.removeAll();
+            for (var i = 0; i < targets.length; i++) {
+                var t = targets[i];
+                var popup = 'RA: ' + t.ra + '<br>Dec: ' + t.dec;
+                window.aladinTargetCatalog.addSources([
+                    A.marker(t.ra, t.dec, {popupTitle: t.name, popupDesc: popup})
+                ]);
+            }
+        };
+
+        // Initial target load from server-rendered context
+        updateAladinTargets({{ targets|safe }});
+
+        // extract Moon information from the context
+        const moonRaDeg = {{ moon_ra|safe }};
+        const moonDecDeg = {{ moon_dec|safe }};
+        const moonIllumination = {{ moon_illumination|safe }}.toFixed(3);
+        const moonGreyscale = 255 * moonIllumination;
+
+        // get a unicode representation of the Moon based on illumination fraction
+        var unicodeMoon;
+        if (moonIllumination <= 0.125 ) {
+            unicodeMoon = "\uD83C\uDF11";
+        } else if (moonIllumination <= 0.375) {
+            unicodeMoon = "\uD83C\uDF12";
+        } else if (moonIllumination <= 0.625) {
+            unicodeMoon = "\uD83C\uDF13";
+        } else if (moonIllumination <= 0.875) {
+            unicodeMoon = "\uD83C\uDF14";
+        } else if (moonIllumination <= 1.0) {
+            unicodeMoon = "\uD83C\uDF15";
+        }
+
+        // Create a text based symbol for the moon centered on the source coordinates
+        var drawMoon = function(source, canvasCtx) {
+            canvasCtx.globalAlpha = 1;
+            canvasCtx.font = '25px Arial';
+            canvasCtx.fillStyle = '#eee';
+            canvasCtx.textBaseline = 'middle';
+            canvasCtx.textAlign = 'center';
+            canvasCtx.fillText(unicodeMoon, source.x, source.y);
+        };
+
+        // create a catalog for the moon
+        const moonImage = A.catalog({shape: drawMoon, color: 'gray', name: 'Moon'});
+
+        const popupMoonDescription = `Illumination: ${moonIllumination} <br> RA: ${moonRaDeg.toFixed(4)} <br> Dec: ${moonDecDeg.toFixed(4)}`;
+
+        moonImage.addSources([A.marker(moonRaDeg, moonDecDeg,
+            {popupTitle: 'Moon (Geocentric)',
+            popupDesc: popupMoonDescription,
+            })]);
+
+        aladin.addCatalog(moonImage);
+
+        // now add the sun in its own catalog
+        const sunCatalog = A.catalog({
+            name: 'Sun',
+            shape: 'circle',
+            color: 'yellow',
+            sourceSize: 30}); // fontSize from Moon canvas plus 5 to match sizes
+
+        const sunRaDeg = {{ sun_ra|safe }};
+        const sunDecDeg = {{ sun_dec|safe }};
+
+        const popupSunDescription = `RA: ${sunRaDeg.toFixed(4)} <br> Dec: ${sunDecDeg.toFixed(4)}`;
+
+        sunCatalog.addSources([A.marker(sunRaDeg, sunDecDeg,
+            {popupTitle: 'Sun (Geocentric)',
+            popupDesc: popupSunDescription,
+            })]);
+
+        aladin.addCatalog(sunCatalog);
+
+    }); // closes A.init.then(() { ...
+
+})();
+</script>
